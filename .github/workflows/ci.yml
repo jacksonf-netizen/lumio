@@ -1,14 +1,17 @@
-# Runs the tests and a Release build on every push and pull request.
+# Runs the secrets check, the tests and a Release build.
 #
-# Not yet run on GitHub: the project is developed with Xcode 27, and GitHub's macOS images may
-# lag behind. If a run fails at "Select Xcode", pick a version listed in the runner image's
-# README, or use a self-hosted Mac.
+# Manual for now (Actions → CI → Run workflow): the project is built with Xcode 27 / Swift 6.4, and
+# GitHub's macOS runners only had Xcode 26.6 in October 2026, whose compiler crashes on this code.
+# Once `macos-latest` has Xcode 27, put back the automatic triggers:
+#
+#   on:
+#     push:
+#       branches: [main]
+#     pull_request:
 name: CI
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   build-and-test:

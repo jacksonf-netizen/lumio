@@ -440,9 +440,11 @@ It looks through every file git would publish for your providers' addresses (rea
 database), anything in `LocalSecrets.json`, and keys or tokens. Generated and private files are
 git-ignored: `build/`, the `.xcodeproj`, `LocalSecrets.json` and `Config/Local.xcconfig`.
 
-**CI.** `.github/workflows/ci.yml` runs the secrets check, the unit tests and a Release build on
-every push and pull request. It hasn't run on GitHub yet: this project uses Xcode 27, and GitHub's
-macOS runners may not have it yet (the file explains what to change).
+**CI.** `.github/workflows/ci.yml` runs the secrets check, the unit tests and a Release build.
+It's manual for now (GitHub → Actions → CI → Run workflow): GitHub's macOS runners only had Xcode
+26.6 when it was first tried, and that compiler crashes on this code (Xcode 27 is needed). The file
+shows how to turn the automatic runs back on once they have Xcode 27. Run the tests locally before
+publishing (`swift test --package-path Packages/IPTVKit`).
 
 ## Phase 7 notes (search, backup, polish)
 
