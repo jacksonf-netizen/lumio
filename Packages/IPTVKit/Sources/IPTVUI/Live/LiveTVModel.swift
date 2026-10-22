@@ -64,7 +64,16 @@ final class LiveTVModel {
         self.hub = hub
     }
 
+    @ObservationIgnored private var started = false
+
+    /// For a second copy (Favorites → List), started when first shown.
+    func startIfNeeded() {
+        guard !started else { return }
+        start()
+    }
+
     func start() {
+        started = true
         reloadGroups()
         // Reload when anything that affects the lists changes (sync, edits, matching).
         let region = DatabaseRegionObservation(tracking: [

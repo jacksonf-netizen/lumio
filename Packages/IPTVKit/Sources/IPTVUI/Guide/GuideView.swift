@@ -2,16 +2,18 @@ import AppKit
 import SwiftUI
 import IPTVCore
 
-/// Which channels a guide page shows: any group (the Guide, with a group picker), or a fixed list.
+/// Which channels a guide page shows: any group (the Guide window and the player overlay, with a
+/// group picker), the group selected in Live TV (its Guide view), or a fixed list.
 enum GuideScope: Equatable {
     case all
+    case liveTV
     case recents
     case favorites
 
     /// The group shown, for the fixed scopes.
     var fixedGroup: ChannelGroup? {
         switch self {
-        case .all: nil
+        case .all, .liveTV: nil
         case .recents: ChannelGroup(id: "recents", name: "Recently Watched", kind: .recents)
         case .favorites: ChannelGroup(id: "favorites", name: "Favorites", kind: .favorites)
         }
@@ -60,7 +62,7 @@ final class GuideModel: GuideGridDataSource {
             ?? ChannelGroup(id: "all", name: "All", kind: .all, isHidden: false, categories: [])
         let catalog = state.liveCatalog
         // Recents and Favorites always list every provider's channels.
-        let filter = scope == .all ? state.live.filter : .all
+        let filter = scope.fixedGroup == nil ? state.live.filter : .all
         Task {
             let list = (try? await catalog.channels(in: group, filter: filter)) ?? []
             show(list)
@@ -100,7 +102,7 @@ final class GuideModel: GuideGridDataSource {
         switch scope {
         case .recents: Task { try? await library.removeRecent(channel) }
         case .favorites: Task { if channel.isFavorite { _ = try? await library.toggleFavorite(channel) } }
-        case .all: break
+        case .all, .liveTV: break
         }
     }
 
@@ -135,7 +137,7 @@ final class GuideModel: GuideGridDataSource {
             menu.addItem(ClosureMenuItem("Move to Bottom") { [weak self] in self?.moveToEdge(channel, top: false) })
             menu.addItem(.separator())
             menu.addItem(ClosureMenuItem("Remove from Favorites") { [weak self] in self?.removeFromList(channel) })
-        case .all:
+        case .all, .liveTV:
             menu.addItem(ClosureMenuItem(channel.isFavorite ? "Remove from Favorites" : "Add to Favorites") {
                 Task { try? await library.toggleFavorite(channel) }
             })
@@ -194,7 +196,7 @@ final class GuideModel: GuideGridDataSource {
     func select(_ channel: ChannelListItem, programme: Programme?, preview: Bool) {
         selectedChannel = channel
         selectedProgramme = programme
-        guard preview else { return }
+        guard preview, scope != .liveTV || state.live.previewEnabled else { return }
         previewTask?.cancel()
         previewTask = Task {
             try? await Task.sleep(for: .milliseconds(400))
@@ -249,6 +251,7 @@ private struct GuideContent: View {
     private var title: String {
         switch model.scope {
         case .all: "Guide"
+        case .liveTV: "Live TV"
         case .recents: "Recents"
         case .favorites: "Favorites"
         }
@@ -256,7 +259,7 @@ private struct GuideContent: View {
 
     var body: some View {
         Group {
-            if model.scope != .all, model.loaded, model.channels.isEmpty {
+            if model.scope.fixedGroup != nil, model.loaded, model.channels.isEmpty {
                 emptyList
             } else {
                 content
@@ -264,6 +267,10 @@ private struct GuideContent: View {
         }
         .navigationTitle(compact ? "" : title)
         .onChange(of: state.live.groups) { model.reloadChannels() }
+        .onChange(of: state.live.selectedGroupID) { _, id in
+            if model.scope == .liveTV { model.groupID = id ?? "all" }
+        }
+        .onChange(of: state.live.filter) { model.reloadChannels() }
         .onChange(of: state.live.libraryVersion) { model.reloadChannels() }
         .onChange(of: state.providers.syncing.isEmpty) { _, idle in if idle { model.invalidate() } }
     }
@@ -277,7 +284,7 @@ private struct GuideContent: View {
             }
         } else {
             EmptyState("No Favorite Channels", systemImage: "star",
-                       message: "Right-click a channel in Live TV, the Guide or Recents and choose Add to Favorites.") {
+                       message: "Right-click a channel in Live TV or Recents and choose Add to Favorites.") {
                 Button("Browse Live TV") { state.section = .liveTV }.buttonStyle(.borderedProminent)
             }
         }
@@ -320,6 +327,11 @@ private struct GuideContent: View {
                 }
                 .pickerStyle(.menu)
                 .frame(maxWidth: 260)
+            case .liveTV:
+                // The group list beside the guide picks the group.
+                Text(model.groups.first { $0.id == model.groupID }?.name ?? "")
+                    .font(.headline)
+                    .lineLimit(1)
             case .recents:
                 Label("Most recent first", systemImage: "clock.arrow.circlepath")
                     .font(.callout).foregroundStyle(.secondary)

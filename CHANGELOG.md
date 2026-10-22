@@ -8,6 +8,9 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Live TV and Favorites have a List / Guide switch at the top. Guide shows what's on later for
+  the group you've picked; Favorites opens as a guide until you choose List, and remembers it.
+  The separate Guide section is gone from the sidebar (Window → Guide and G in the player stay).
 - The background refresh indicator moved to the bottom of the sidebar. In the toolbar it pushed
   the Settings tabs out of sight while providers were refreshing.
 

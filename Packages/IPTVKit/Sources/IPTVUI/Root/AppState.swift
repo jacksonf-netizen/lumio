@@ -11,6 +11,8 @@ public final class AppState {
     public let hub: PlayerHub
     let providers: ProvidersViewModel
     let live: LiveTVModel
+    /// Favorites → Channels → List: a second Live TV browser fixed on the Favorites group.
+    let favoritesList: LiveTVModel
     let library: LibraryRepository
     let liveCatalog: LiveCatalog
     let guide: GuideRepository
@@ -46,9 +48,12 @@ public final class AppState {
         liveCatalog = LiveCatalog(database: environment.database)
         guide = GuideRepository(database: environment.database)
         live = LiveTVModel(environment: environment, catalog: liveCatalog, guide: guide, library: library, hub: hub)
+        favoritesList = LiveTVModel(environment: environment, catalog: liveCatalog, guide: guide, library: library, hub: hub)
+        favoritesList.selectedGroupID = "favorites"
         multiview = MultiviewModel(hub: hub, environment: environment)
         vod = VODCatalog(database: environment.database)
         live.state = self
+        favoritesList.state = self
         providers.start()
         live.start()
     }

@@ -323,9 +323,13 @@ public enum SmokeTest {
         // 6. Guide
         state.closePlayer()
         try? await Task.sleep(for: .seconds(1))
-        state.section = .guide
+        UserDefaults.standard.set(ChannelLayout.guide.rawValue, forKey: "liveTVLayout")
+        state.section = .liveTV
         try? await Task.sleep(for: .seconds(2.5))
         snapshot("3-guide")
+        log("\(t()) \(findGrid(in: NSApp.windows) == nil ? "FAIL " : "")Live TV guide view shows the grid")
+        UserDefaults.standard.set(ChannelLayout.list.rawValue, forKey: "liveTVLayout")
+        try? await Task.sleep(for: .seconds(1))
 
         // 7. Multiview: opened from the player, over the whole window; four tiles.
         let sectionBefore = state.section
@@ -573,9 +577,18 @@ public enum SmokeTest {
         let saved = ((try? await state.liveCatalog.channels(in: favoritesGroup)) ?? []).map(\.name)
         let wanted = Array(before.dropFirst()) + before.prefix(1)
         log("\(t()) \(saved == wanted ? "" : "FAIL ")favorites reordered \(before) → saved \(saved)")
+        // Favorites opens as a guide until the user picks List, which is then remembered.
+        UserDefaults.standard.removeObject(forKey: "favoritesLayout")
         state.section = .favorites
         try? await Task.sleep(for: .seconds(1.5))
+        log("\(t()) \(findGrid(in: NSApp.windows) == nil ? "FAIL " : "")Favorites opens as a guide")
         snapshot("9-favorites")
+        UserDefaults.standard.set(ChannelLayout.list.rawValue, forKey: "favoritesLayout")
+        try? await Task.sleep(for: .seconds(1.5))
+        let listed = state.favoritesList.channels.map(\.name)
+        log("\(t()) \(findGrid(in: NSApp.windows) == nil && listed == wanted ? "" : "FAIL ")Favorites as a list: \(listed)")
+        snapshot("9b-favorites-list")
+        UserDefaults.standard.removeObject(forKey: "favoritesLayout")
     }
 
     /// Multiview capacity across providers and cross-provider failover.
@@ -831,7 +844,9 @@ public enum SmokeTest {
         log("now/next for 60 rows in \(String(format: "%.0f", Date().timeIntervalSince(nnStart) * 1000)) ms")
 
         // Guide: draw time while scrolling.
-        state.section = .guide
+        UserDefaults.standard.set(ChannelLayout.guide.rawValue, forKey: "liveTVLayout")
+        defer { UserDefaults.standard.set(ChannelLayout.list.rawValue, forKey: "liveTVLayout") }
+        state.section = .liveTV
         try? await Task.sleep(for: .seconds(3))
         guard let grid = findGrid(in: NSApp.windows) else { return log("guide grid not found") }
         log("guide rows=\(grid.channels.count)")

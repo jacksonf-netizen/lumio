@@ -2,7 +2,7 @@ import SwiftUI
 import IPTVCore
 
 public enum SidebarItem: String, CaseIterable, Identifiable, Hashable, Sendable {
-    case recents, liveTV, guide, movies, series, favorites, search, settings
+    case recents, liveTV, movies, series, favorites, search, settings
 
     public var id: String { rawValue }
 
@@ -10,7 +10,6 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Hashable, Sendable 
         switch self {
         case .recents: "Recents"
         case .liveTV: "Live TV"
-        case .guide: "Guide"
         case .movies: "Movies"
         case .series: "Series"
         case .favorites: "Favorites"
@@ -20,13 +19,12 @@ public enum SidebarItem: String, CaseIterable, Identifiable, Hashable, Sendable 
     }
 
     /// Pages that show a live preview of the selected channel.
-    static let withPreview: Set<SidebarItem> = [.recents, .liveTV, .guide, .favorites]
+    static let withPreview: Set<SidebarItem> = [.recents, .liveTV, .favorites]
 
     var systemImage: String {
         switch self {
         case .recents: "clock.arrow.circlepath"
         case .liveTV: "tv"
-        case .guide: "calendar.day.timeline.left"
         case .movies: "film"
         case .series: "play.rectangle.on.rectangle"
         case .favorites: "star"
@@ -52,7 +50,7 @@ public struct RootView: View {
             NavigationSplitView {
                 List(selection: $state.section) {
                     Section {
-                        ForEach([SidebarItem.recents, .liveTV, .guide, .movies, .series]) { item in
+                        ForEach([SidebarItem.recents, .liveTV, .movies, .series]) { item in
                             Label(item.title, systemImage: item.systemImage).tag(item)
                         }
                     }
@@ -124,8 +122,6 @@ public struct RootView: View {
                 GuideView(state: state, scope: .recents)
             case .liveTV:
                 LiveTVView(model: state.live, state: state)
-            case .guide:
-                GuideView(state: state)
             case .favorites:
                 FavoritesView(state: state)
             case .settings:
@@ -149,6 +145,8 @@ struct FavoritesView: View {
 
     let state: AppState
     @State private var tab: Tab = .channels
+    /// Guide until the user picks List; remembered after that.
+    @AppStorage("favoritesLayout") private var layout: ChannelLayout = .guide
     @State private var movies: [VODItem] = []
     @State private var series: [VODItem] = []
     @State private var path: [VODRoute] = []
@@ -158,7 +156,10 @@ struct FavoritesView: View {
             Group {
                 switch tab {
                 case .channels:
-                    GuideView(state: state, scope: .favorites)
+                    switch layout {
+                    case .guide: GuideView(state: state, scope: .favorites)
+                    case .list: FavoriteChannelList(state: state)
+                    }
                 case .movies:
                     posters(movies, kind: "Movies", icon: "film")
                 case .series:
@@ -173,6 +174,11 @@ struct FavoritesView: View {
                     }
                     .pickerStyle(.segmented)
                     .fixedSize()
+                }
+                if tab == .channels {
+                    ToolbarItem(placement: .primaryAction) {
+                        ChannelLayoutPicker(layout: $layout)
+                    }
                 }
             }
             .navigationDestination(for: VODRoute.self) { route in

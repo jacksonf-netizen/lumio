@@ -206,7 +206,7 @@ private struct RegionsSettingsView: View {
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Turn a region off to hide every live group in it: its channels disappear from Live TV, the Guide and Search. Movies and Series aren't affected; right-click a category there to hide it. Groups the app can't place in a region are under Other Groups. New groups your provider adds follow these switches automatically. Favorites and Recents still show anything you picked.")
+                    Text("Turn a region off to hide every live group in it: its channels disappear from Live TV (list and guide) and Search. Movies and Series aren't affected; right-click a category there to hide it. Groups the app can't place in a region are under Other Groups. New groups your provider adds follow these switches automatically. Favorites and Recents still show anything you picked.")
                     Text("Click a region to see its groups and switch single ones on or off, for example if a group was put in the wrong region. Switching the whole region on or off again resets them.")
                     Text("Providers spell regions differently (US, USA, NA…). Common spellings are already combined; each row lists the ones it covers. If two rows are really the same region, use its ⋯ menu to merge them, or to split a spelling back out.")
                     if hasMerges {

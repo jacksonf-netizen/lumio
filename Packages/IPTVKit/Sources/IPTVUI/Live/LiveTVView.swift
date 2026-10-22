@@ -1,11 +1,33 @@
 import SwiftUI
 import IPTVCore
 
-/// Live TV: groups → channels → live preview. Double-click or Return plays full screen.
+/// How a page shows its channels: a list with a preview, or the guide's timeline.
+enum ChannelLayout: String {
+    case list, guide
+}
+
+/// The List / Guide switch at the top of Live TV and Favorites.
+struct ChannelLayoutPicker: View {
+    @Binding var layout: ChannelLayout
+
+    var body: some View {
+        Picker("View", selection: $layout) {
+            Text("List").tag(ChannelLayout.list)
+            Text("Guide").tag(ChannelLayout.guide)
+        }
+        .pickerStyle(.segmented)
+        .fixedSize()
+        .help("Show channels as a list with a preview, or as a guide of what's on later")
+    }
+}
+
+/// Live TV: groups → channels → live preview, or groups → guide. Double-click or Return plays
+/// full screen.
 struct LiveTVView: View {
     @Bindable var model: LiveTVModel
     let state: AppState
     @State private var sheet: ManagementSheet?
+    @AppStorage("liveTVLayout") private var layout: ChannelLayout = .list
 
     var body: some View {
         // Columns share the width so the page always fits the window. (HSplitView kept its column
@@ -16,15 +38,24 @@ struct LiveTVView: View {
                 GroupList(model: model, sheet: $sheet)
                     .frame(width: min(240, max(150, width * 0.2)))
                 Divider()
-                ChannelList(model: model, sheet: $sheet)
-                    .frame(maxWidth: .infinity)
-                Divider()
-                PreviewPane(model: model, state: state)
-                    .frame(width: min(560, max(260, width * 0.38)))
+                switch layout {
+                case .list:
+                    ChannelList(model: model, sheet: $sheet)
+                        .frame(maxWidth: .infinity)
+                    Divider()
+                    PreviewPane(model: model, state: state)
+                        .frame(width: min(560, max(260, width * 0.38)))
+                case .guide:
+                    GuideView(state: state, scope: .liveTV)
+                        .frame(maxWidth: .infinity)
+                }
             }
         }
         .navigationTitle("Live TV")
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                ChannelLayoutPicker(layout: $layout)
+            }
             ToolbarItemGroup {
                 ProviderFilterPicker(filter: $model.filter, providers: state.providers.providers)
                 Toggle(isOn: $model.showHidden) {
@@ -58,6 +89,29 @@ struct ProviderFilterPicker: View {
         .pickerStyle(.menu)
         .fixedSize()
         .help("Show all providers merged, or just one")
+    }
+}
+
+/// Favorite channels as a list with a preview (Favorites → Channels → List).
+struct FavoriteChannelList: View {
+    let state: AppState
+    @State private var sheet: ManagementSheet?
+
+    var body: some View {
+        let model = state.favoritesList
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                ChannelList(model: model, sheet: $sheet)
+                    .frame(maxWidth: .infinity)
+                Divider()
+                PreviewPane(model: model, state: state)
+                    .frame(width: min(560, max(260, geometry.size.width * 0.42)))
+            }
+        }
+        .onAppear { model.startIfNeeded() }
+        .sheet(item: $sheet) { sheet in
+            ManagementSheetView(sheet: sheet, model: model)
+        }
     }
 }
 
