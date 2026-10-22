@@ -450,7 +450,7 @@ final class GuideGridView: NSView {
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let dragRow, let dragStart else { return }
+        guard dragRow != nil, let dragStart else { return }
         let point = documentPoint(event)
         // Start reordering only after a deliberate move, so clicks still just select.
         guard dropIndex != nil || abs(point.y - dragStart.y) > 4 else { return }
