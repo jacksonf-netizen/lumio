@@ -1,16 +1,15 @@
-# Runs the secrets check, the tests and a Release build.
+# Runs the secrets check, the tests and a Release build on every push and pull request (and by
+# hand: Actions → CI → Run workflow).
 #
-# Manual for now (Actions → CI → Run workflow): the project is built with Xcode 27 / Swift 6.4, and
-# GitHub's macOS runners only had Xcode 26.6 in October 2026, whose compiler crashes on this code.
-# Once `macos-latest` has Xcode 27, put back the automatic triggers:
-#
-#   on:
-#     push:
-#       branches: [main]
-#     pull_request:
+# The project is developed with Xcode 27; GitHub's runners had Xcode 26.6 (October 2026), which
+# builds it too. Xcode 26.6's compiler crashes on a function passed straight to `Binding(set:)`,
+# so write `set: { update($0) }` rather than `set: update`.
 name: CI
 
 on:
+  push:
+    branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:

@@ -35,7 +35,7 @@ Settings → About.
 ## Requirements
 
 - Mac with Apple silicon, macOS 14 or later
-- Xcode (built with Xcode 27.1 / Swift 6.4)
+- Xcode 27.1 (Swift 6.4); Xcode 26.6 also builds it (that's what GitHub's CI uses)
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
 
 ## First-time setup
@@ -258,8 +258,6 @@ Honest list of gaps against the brief:
   Developer ID, so the first launch needs System Settings → Privacy & Security → Open Anyway
   (updates after that install without it). See
   [Publishing and updates](#publishing-and-updates) for signing with a Developer ID.
-- **CI runs by hand only.** GitHub's Mac runners use an older Xcode than this project; see the
-  CI paragraph under [Publishing and updates](#publishing-and-updates).
 
 ## Recents, Favorites, Regions and search
 
@@ -444,11 +442,10 @@ It looks through every file git would publish for your providers' addresses (rea
 database), anything in `LocalSecrets.json`, and keys or tokens. Generated and private files are
 git-ignored: `build/`, the `.xcodeproj`, `LocalSecrets.json` and `Config/Local.xcconfig`.
 
-**CI.** `.github/workflows/ci.yml` runs the secrets check, the unit tests and a Release build.
-It's manual for now (GitHub → Actions → CI → Run workflow): GitHub's macOS runners only had Xcode
-26.6 when it was first tried, and that compiler crashes on this code (Xcode 27 is needed). The file
-shows how to turn the automatic runs back on once they have Xcode 27. Run the tests locally before
-publishing (`swift test --package-path Packages/IPTVKit`).
+**CI.** `.github/workflows/ci.yml` runs the secrets check, the unit tests and a Release build on
+every push to `main` (results under the repository's Actions tab). GitHub's Mac runners use Xcode
+26.6, older than the Xcode 27 used here, and that compiler crashes on one Swift pattern: a function
+passed straight to `Binding(set:)`. Write `set: { update($0) }` instead of `set: update`.
 
 ## Phase 7 notes (search, backup, polish)
 
