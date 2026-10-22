@@ -184,7 +184,8 @@ Once per Mac: `Tools/Release/make_signing_certificate.sh` makes the signing cert
 2. In `project.yml`, bump `MARKETING_VERSION` (`0.1.0` → `0.2.0`, or `0.1.1` for small fixes) and
    `CURRENT_PROJECT_VERSION` (+1).
 3. In `CHANGELOG.md`, move the notes under `## Unreleased` into a new `## 0.2.0 — <date>` section.
-   They become the release notes, and their start is what Lumio shows in "update available".
+   Start the section with a one- or two-sentence summary paragraph, then the list. The summary
+   is all Lumio shows when it offers the update; the list is on the release page.
 4. Commit, then run `Tools/Release/publish.sh`.
 
 `publish.sh` refuses to run with uncommitted changes, an existing tag or no changelog section. It

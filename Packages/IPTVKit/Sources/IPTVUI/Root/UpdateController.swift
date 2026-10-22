@@ -133,9 +133,13 @@ public final class UpdateController {
         #endif
         let alert = NSAlert()
         alert.messageText = "Lumio \(update.version) Is Available"
-        // The release notes, without the install instructions published below a "---" line.
-        var notes = (update.notes.components(separatedBy: "\n---").first ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        if notes.count > 600 { notes = String(notes.prefix(600)) + "…" }
+        // Just the summary: the first paragraph of the release notes (the full list and install
+        // instructions are on the release page).
+        let summary = update.notes.components(separatedBy: "\n---").first ?? ""
+        var notes = (summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: "\n\n").first ?? "")
+            .replacingOccurrences(of: "\n", with: " ")
+        if notes.count > 300 { notes = String(notes.prefix(300)) + "…" }
         alert.informativeText = "You have version \(current)."
             + (installable ? " Lumio will download the update, install it and reopen." : "")
             + (notes.isEmpty ? "" : "\n\n\(notes)")

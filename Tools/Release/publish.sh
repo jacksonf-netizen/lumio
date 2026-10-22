@@ -3,9 +3,13 @@
 # to install the next time it opens.
 #
 #   1. Bump MARKETING_VERSION (and CURRENT_PROJECT_VERSION) in project.yml.
-#   2. Move the notes under "## Unreleased" in CHANGELOG.md to a new "## X.Y.Z — date" section.
-#      They become the release notes (and what Lumio shows in its "update available" message).
+#   2. Move the notes under "## Unreleased" in CHANGELOG.md to a new "## X.Y.Z — date" section,
+#      starting with a one- or two-sentence summary paragraph. They become the release notes; Lumio's
+#      "update available" message shows only the summary (everything above the first "---").
 #   3. Commit, then run:  Tools/Release/publish.sh
+#
+#   Tools/Release/publish.sh --print-notes   prints the release notes only (to fix a published
+#                                             release: gh release edit vX.Y.Z --notes-file FILE)
 #
 # It checks for secrets, builds and signs the release (make_release.sh), tags it vX.Y.Z, pushes
 # the branch and tag, and creates the GitHub release with the .dmg, .zip, .zip.sig and checksums.
@@ -22,15 +26,6 @@ TAG="v$VERSION"
 OUT="build/release"
 BASE="Lumio-$VERSION"
 
-[ -n "$REPOSITORY" ] || fail "UPDATE_REPOSITORY is empty in project.yml"
-[ -n "$(setting UPDATE_PUBLIC_KEY)" ] || fail "UPDATE_PUBLIC_KEY is empty, so the app couldn't install this update"
-command -v gh > /dev/null || fail "install the GitHub CLI first: brew install gh"
-gh auth status > /dev/null 2>&1 || fail "sign in to GitHub first: gh auth login"
-[ -z "$(git status --porcelain)" ] || fail "commit or stash your changes first (git status)"
-[ "$(git branch --show-current)" = "main" ] || fail "publish from the main branch"
-git rev-parse -q --verify "refs/tags/$TAG" > /dev/null && fail "$TAG already exists; bump MARKETING_VERSION in project.yml"
-gh release view "$TAG" --repo "$REPOSITORY" > /dev/null 2>&1 && fail "a $TAG release already exists on GitHub"
-
 # This version's section of CHANGELOG.md, without its heading.
 NOTES=$(awk -v version="$VERSION" '
     /^## / { if (found) exit; if (index($0, "## " version) == 1) { found = 1; next } }
@@ -38,20 +33,19 @@ NOTES=$(awk -v version="$VERSION" '
 ' CHANGELOG.md)
 [ -n "$(echo "$NOTES" | tr -d '[:space:]')" ] || fail "add a \"## $VERSION\" section to CHANGELOG.md"
 
-echo "==> Checking for secrets"
-python3 Tools/check_secrets.py
-
-Tools/Release/make_release.sh
-for file in "$BASE.dmg" "$BASE.zip" "$BASE.zip.sig" SHA256SUMS.txt; do
-    [ -f "$OUT/$file" ] || fail "$OUT/$file is missing"
-done
+# The first paragraph is the summary the app shows; the rest goes below a "---" line.
+SUMMARY=$(echo "$NOTES" | awk 'NF { found = 1 } found && !NF { exit } found { print }')
+DETAILS=$(echo "$NOTES" | awk 'NF { started = 1 } started && !NF { past = 1 } past { print }')
+[[ "$SUMMARY" != "- "* ]] || fail "start the $VERSION section with a short summary paragraph (the app shows only that)"
 
 NOTES_FILE=$(mktemp -t lumio-notes)
 trap 'rm -f "$NOTES_FILE"' EXIT
 cat > "$NOTES_FILE" <<EOF
-$NOTES
+$SUMMARY
 
 ---
+$DETAILS
+
 
 **Lumio doesn't provide any content.** It includes no channels, streams, playlists or logins. You
 need your own subscription from an IPTV provider and the Xtream Codes login they give you (server
@@ -71,6 +65,28 @@ entitled to.
 Source code for this version: [$TAG](https://github.com/$REPOSITORY/tree/$TAG). Third-party
 components and their licences: [THIRD-PARTY-NOTICES.md](https://github.com/$REPOSITORY/blob/$TAG/THIRD-PARTY-NOTICES.md).
 EOF
+
+if [ "${1:-}" = "--print-notes" ]; then
+    cat "$NOTES_FILE"
+    exit 0
+fi
+
+[ -n "$REPOSITORY" ] || fail "UPDATE_REPOSITORY is empty in project.yml"
+[ -n "$(setting UPDATE_PUBLIC_KEY)" ] || fail "UPDATE_PUBLIC_KEY is empty, so the app couldn't install this update"
+command -v gh > /dev/null || fail "install the GitHub CLI first: brew install gh"
+gh auth status > /dev/null 2>&1 || fail "sign in to GitHub first: gh auth login"
+[ -z "$(git status --porcelain)" ] || fail "commit or stash your changes first (git status)"
+[ "$(git branch --show-current)" = "main" ] || fail "publish from the main branch"
+git rev-parse -q --verify "refs/tags/$TAG" > /dev/null && fail "$TAG already exists; bump MARKETING_VERSION in project.yml"
+gh release view "$TAG" --repo "$REPOSITORY" > /dev/null 2>&1 && fail "a $TAG release already exists on GitHub"
+
+echo "==> Checking for secrets"
+python3 Tools/check_secrets.py
+
+Tools/Release/make_release.sh
+for file in "$BASE.dmg" "$BASE.zip" "$BASE.zip.sig" SHA256SUMS.txt; do
+    [ -f "$OUT/$file" ] || fail "$OUT/$file is missing"
+done
 
 echo "==> Tagging $TAG and pushing"
 git tag -a "$TAG" -m "Lumio $VERSION"

@@ -3,12 +3,17 @@
 Notable changes to Lumio (formerly IPTV Streamer). Versions follow [semantic versioning](https://semver.org):
 the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`) always match.
 
+Each version starts with a one- or two-sentence summary paragraph: that's all Lumio shows when it
+offers the update. The list below it appears on the release page.
+
 ## Unreleased
 
 ## 0.1.1 — 2026-10-22
 
-Your providers, favorites and settings stay as they are.
+Fixes and a shorter Acknowledgements page. After updating, macOS may ask once for your Mac
+password so Lumio can keep using its saved logins: enter it and click Always Allow.
 
+- Your providers, favorites and settings stay as they are.
 - After this update, macOS may ask once for your Mac password so Lumio can keep using its saved
   logins. Enter it and click Always Allow. Lumio is now signed the same way in every version,
   so later updates won't ask again.
