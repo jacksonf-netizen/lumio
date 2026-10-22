@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+<channel id="a.b"><display-name>Tom & Jerry TV</display-name></channel>
+<programme start="20261017200000 +0000" stop="20261017203000 +0000" channel="a.b"><title>Tom & Jerry</title><desc>Cats &amp; mice &#233; &hellip;</desc></programme>
+</tv>

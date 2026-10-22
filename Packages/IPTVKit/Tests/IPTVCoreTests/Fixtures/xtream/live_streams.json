@@ -1,0 +1,10 @@
+[
+ {"num":1,"name":"UK: BBC One HD","stream_type":"live","stream_id":101,"stream_icon":"http://logos.test/bbc one.png","epg_channel_id":"BBCOne.uk","added":"1600000000","is_adult":"0","category_id":"1","custom_sid":"","tv_archive":1,"direct_source":"","tv_archive_duration":"7"},
+ {"num":"2","name":"UK: BBC One SD","stream_id":"102","stream_icon":"","epg_channel_id":"bbcone.uk","added":"","is_adult":0,"category_id":1,"tv_archive":"0","tv_archive_duration":0},
+ {"num":null,"name":"UK: ITV 1 +1","stream_id":103,"stream_icon":null,"epg_channel_id":null,"added":1600000001,"category_id":null,"category_ids":[2],"tv_archive":false},
+ {"num":4,"name":null,"stream_id":104.0,"epg_channel_id":"","category_id":"2"},
+ {"num":5,"name":"Missing stream id is skipped"},
+ {"num":6,"name":"Sky Sports Main Event FHD","stream_id":"abc","epg_channel_id":"x"},
+ {"num":7,"name":"Sky Sports Main Event FHD","stream_id":107,"epg_channel_id":"SkySpMainEvHD.uk","category_id":"2","is_adult":"1"},
+ {"num":8,"name":"Duplicate","stream_id":101}
+]

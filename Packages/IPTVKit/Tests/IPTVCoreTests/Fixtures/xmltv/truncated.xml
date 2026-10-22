@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tv>
+  <programme start="20261017200000 +0000" stop="20261017203000 +0000" channel="a.b"><title>Complete</title></programme>
+  <programme start="20261017203000 +0000" stop="20261017210000 +0000" channel="a.b"><title>Also complete</title></programme>
+  <programme start="20261017210000 +0000" stop="20261017213000 +0000" channel="a.b"><title>Cut off mid-ele

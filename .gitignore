@@ -1,0 +1,19 @@
+# Xcode / SwiftPM build output
+DerivedData/
+build/
+.build/
+.swiftpm/
+*.xcodeproj/
+xcuserdata/
+*.xcuserstate
+
+# Local, never committed
+LocalSecrets.json
+Config/Local.xcconfig
+
+# macOS
+.DS_Store
+
+# Stream harness output
+Tools/StreamHarness/media/
+Tools/StreamHarness/__pycache__/

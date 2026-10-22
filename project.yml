@@ -1,0 +1,113 @@
+# XcodeGen spec. Run `xcodegen` in this folder to (re)generate IPTVStreamer.xcodeproj.
+# The .xcodeproj is generated output and is not committed; edit this file instead.
+name: IPTVStreamer
+options:
+  bundleIdPrefix: com.jackson
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ARCHS: arm64
+    MACOSX_DEPLOYMENT_TARGET: "14.0"
+    DEAD_CODE_STRIPPING: YES
+    # The version lives here only. Bump MARKETING_VERSION for each release (and tag it vX.Y.Z);
+    # bump CURRENT_PROJECT_VERSION for every build you hand out.
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  IPTVKit:
+    path: Packages/IPTVKit
+targets:
+  IPTVMac:
+    type: application
+    platform: macOS
+    sources:
+      - App/IPTVMac
+      # Shown in Settings → About → Acknowledgements.
+      - path: THIRD-PARTY-NOTICES.md
+        buildPhase: resources
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    dependencies:
+      - package: IPTVKit
+        product: IPTVCore
+      - package: IPTVKit
+        product: IPTVUI
+      # Installs signed updates (Contents/XPCServices); see App/LumioInstaller.
+      - target: LumioInstaller
+    settings:
+      base:
+        PRODUCT_NAME: Lumio
+        PRODUCT_BUNDLE_IDENTIFIER: com.jackson.iptvstreamer
+        # GitHub repository ("owner/repo") whose Releases the app checks for updates. Empty means
+        # the app never checks. See "Publishing and updates" in the README.
+        UPDATE_REPOSITORY: "jacksonf-netizen/lumio"
+        # Public half of the release signing key (Tools/Release/sign_update.swift). The app only
+        # installs updates signed with the matching private key, which never leaves your Keychain.
+        UPDATE_PUBLIC_KEY: "6qSGppJaHCU4x7R2KjtatKayZUXtVHrzy2jBPA9H3Jc="
+        ENABLE_HARDENED_RUNTIME: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Release:
+          # No get-task-allow in Release builds (Xcode adds it to locally signed builds otherwise),
+          # so other processes can't attach a debugger to the app you use day to day.
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+    info:
+      path: App/IPTVMac/Info.plist
+      properties:
+        CFBundleDisplayName: Lumio
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.video
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: "Copyright © 2026. For personal use."
+        IPTVUpdateRepository: $(UPDATE_REPOSITORY)
+        LumioUpdatePublicKey: $(UPDATE_PUBLIC_KEY)
+        # Many Xtream servers only speak plain HTTP.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+    entitlements:
+      path: App/IPTVMac/IPTVMac.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.files.user-selected.read-write: true
+  # Lumio's installer: an XPC service that replaces the app with a signed update. Not sandboxed
+  # (the app is), because it has to write to /Applications.
+  LumioInstaller:
+    type: xpc-service
+    platform: macOS
+    sources:
+      - App/LumioInstaller
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
+    dependencies:
+      - package: IPTVKit
+        product: LumioUpdate
+    settings:
+      base:
+        PRODUCT_NAME: LumioInstaller
+        PRODUCT_BUNDLE_IDENTIFIER: com.jackson.iptvstreamer.installer
+        ENABLE_HARDENED_RUNTIME: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: App/LumioInstaller/Info.plist
+      configs:
+        Release:
+          CODE_SIGN_INJECT_BASE_ENTITLEMENTS: NO
+schemes:
+  IPTVMac:
+    build:
+      targets:
+        IPTVMac: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - package: IPTVKit/IPTVCoreTests
+        - package: IPTVKit/IPTVPlaybackTests

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE tv SYSTEM "xmltv.dtd">
+<tv generator-info-name="fixture">
+  <channel id="BBCOne.uk">
+    <display-name lang="en">BBC One</display-name>
+    <display-name lang="en">BBC1</display-name>
+    <icon src="http://logos.test/bbc1.png"/>
+  </channel>
+  <channel id="SkySpMainEvHD.uk"><display-name>Sky Sports Main Event</display-name></channel>
+  <channel id="unreferenced.channel"><display-name>Nobody Carries This</display-name></channel>
+  <programme start="20261017180000 +0000" stop="20261017183000 +0000" channel="BBCOne.uk">
+    <title lang="en">News at Six</title>
+    <title lang="cy">Newyddion</title>
+    <desc lang="en">Headlines &amp; weather.</desc>
+    <category lang="en">News</category>
+  </programme>
+  <programme start="20261017193000 +0100" stop="20261017200000 +0100" channel="BBCOne.uk">
+    <title>The One Show</title>
+    <sub-title>Friday</sub-title>
+    <episode-num system="xmltv_ns">2.4.</episode-num>
+    <episode-num system="onscreen">S03E05</episode-num>
+    <icon src="http://img.test/one.jpg"/>
+  </programme>
+  <programme start="20261017190000" stop="20261017210000" channel="SKYSPMAINEVHD.UK">
+    <title>Live Football</title>
+    <episode-num system="xmltv_ns">.11.</episode-num>
+  </programme>
+  <programme start="20261010120000 +0000" stop="20261010130000 +0000" channel="BBCOne.uk">
+    <title>Last week, outside the window</title>
+  </programme>
+  <programme start="20261017200000 +0000" channel="BBCOne.uk"><title>No stop time, skipped</title></programme>
+  <programme start="20261017210000 +0000" stop="20261017220000 +0000" channel="unreferenced.channel"><title>Not stored</title></programme>
+</tv>

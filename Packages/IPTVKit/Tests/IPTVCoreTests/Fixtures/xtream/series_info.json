@@ -1,0 +1,8 @@
+{"seasons":[{"air_date":"2020-01-01","episode_count":2,"id":1,"name":"Season 1","overview":"","season_number":1,"cover":"http://img.test/s1.jpg"}],
+ "info":{"name":"Some Show","plot":"Full plot.","genre":"Drama","cast":"A, B","rating":"8.1","backdrop_path":["http://img.test/b.jpg"]},
+ "episodes":{"1":[
+   {"id":"9001","episode_num":1,"title":"Pilot","container_extension":"mkv","info":{"duration_secs":2700,"plot":"First.","movie_image":"http://img.test/e1.jpg","releasedate":"2020-01-01"},"season":1},
+   {"id":9002,"episode_num":"2","title":"Second","container_extension":"mp4","info":[],"season":"1"}
+ ],"2":[
+   {"id":"9003","episode_num":1,"title":"S2 opener","container_extension":"mkv","info":{}}
+ ]}}

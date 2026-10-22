@@ -1,0 +1,37 @@
+# Runs the tests and a Release build on every push and pull request.
+#
+# Not yet run on GitHub: the project is developed with Xcode 27, and GitHub's macOS images may
+# lag behind. If a run fails at "Select Xcode", pick a version listed in the runner image's
+# README, or use a self-hosted Mac.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)" && xcodebuild -version
+
+      - name: Check for secrets
+        run: python3 Tools/check_secrets.py
+
+      - name: Unit tests
+        run: swift test --package-path Packages/IPTVKit
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Release build
+        run: |
+          xcodegen
+          xcodebuild -project IPTVStreamer.xcodeproj -scheme IPTVMac -configuration Release \
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData.noindex \
+            CODE_SIGNING_ALLOWED=NO build

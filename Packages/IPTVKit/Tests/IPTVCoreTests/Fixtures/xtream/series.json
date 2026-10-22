@@ -1,0 +1,4 @@
+[
+ {"num":1,"name":"Some Show","series_id":"701","cover":"http://img.test/s.jpg","plot":"A show.","cast":"","director":"","genre":"Drama","releaseDate":"2020-01-01","last_modified":"1700000000","rating":"8","rating_5based":"4","backdrop_path":["http://img.test/b.jpg"],"youtube_trailer":"","episode_run_time":"45","category_id":"20"},
+ {"num":2,"name":"Other Show","series_id":702,"cover":null,"plot":null,"release_date":"2021","last_modified":0,"rating":0,"backdrop_path":"","category_id":20}
+]

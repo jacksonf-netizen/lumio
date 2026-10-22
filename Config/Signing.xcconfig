@@ -1,0 +1,12 @@
+// Code signing. By default the app is signed "to run locally" (ad-hoc), which needs no Apple
+// account. Ad-hoc signatures change on every build, so macOS may ask for Keychain access again
+// after a rebuild. To stop that, create Config/Local.xcconfig (git-ignored) containing:
+//
+//   DEVELOPMENT_TEAM = YOURTEAMID
+//
+// (Find the ID in Xcode > Settings > Accounts, select your Apple ID's "Personal Team".)
+CODE_SIGN_STYLE = Automatic
+CODE_SIGN_IDENTITY = -
+DEVELOPMENT_TEAM =
+
+#include? "Local.xcconfig"
