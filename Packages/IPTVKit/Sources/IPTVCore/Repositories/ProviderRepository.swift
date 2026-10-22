@@ -41,6 +41,23 @@ public struct ProviderRepository: Sendable {
         try database.writer.write { db in try provider.update(db) }
     }
 
+    /// Writes only what the user edits (name, address, on/off, guide offset, user-agent).
+    public func updateSettings(_ provider: Provider) throws {
+        try database.writer.write { db in try provider.update(db, columns: Self.settingColumns) }
+    }
+
+    /// Writes only what refreshes learn (account status, limits, last refresh and error).
+    ///
+    /// The user's edits and refreshes each write their own columns, so a refresh that started
+    /// before an edit and finishes after it can't put the old name or server address back.
+    public func updateStatus(_ provider: Provider) throws {
+        try database.writer.write { db in try provider.update(db, columns: Self.statusColumns) }
+    }
+
+    static let settingColumns = ["name", "serverURL", "isEnabled", "epgTimeOffsetMinutes", "userAgentOverride"]
+    static let statusColumns = ["accountStatus", "expiresAt", "maxConnections", "activeConnections",
+                                "allowedOutputFormats", "lastRefreshAt", "lastError"]
+
     /// Deletes the provider and, through `ON DELETE CASCADE`, every row it owns.
     @discardableResult
     public func delete(id: ProviderID) throws -> Bool {

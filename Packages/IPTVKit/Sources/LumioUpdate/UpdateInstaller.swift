@@ -6,9 +6,10 @@ public let installerServiceName = "com.jackson.iptvstreamer.installer"
 
 /// What the app asks the installer service to do.
 @objc public protocol InstallerServiceProtocol {
-    /// Installs the signed archive at `archivePath` over the app the service lives in. Replies with
-    /// the installed version, or an error message.
-    func installUpdate(archivePath: String, signature: String, reply: @escaping @Sendable (String?, String?) -> Void)
+    /// Installs the signed archive read from `archive` (an open file, so the service never needs to
+    /// look inside the app's sandbox container) over the app the service lives in. Replies with the
+    /// installed version, or an error message.
+    func installUpdate(archive: FileHandle, signature: String, reply: @escaping @Sendable (String?, String?) -> Void)
 }
 
 /// Replaces an installed app with the one in a signed update archive (.zip).
@@ -76,9 +77,35 @@ public struct UpdateInstaller: Sendable {
                   publicKey: info["LumioUpdatePublicKey"] as? String ?? "")
     }
 
-    /// Installs the update and returns its version.
+    /// Installs the update at `archive` and returns its version.
     @discardableResult
     public func install(archive: URL, signature: String) throws -> SemanticVersion {
+        let size = (try? FileManager.default.attributesOfItem(atPath: archive.path)[.size] as? Int) ?? 0
+        guard size <= maxArchiveBytes else { throw Failure.tooLarge }
+        return try install(signature: signature) { copy in try FileManager.default.copyItem(at: archive, to: copy) }
+    }
+
+    /// Installs the update read from `archive` (an open file) and returns its version.
+    @discardableResult
+    public func install(archive: FileHandle, signature: String) throws -> SemanticVersion {
+        try install(signature: signature) { copy in
+            guard FileManager.default.createFile(atPath: copy.path, contents: nil) else {
+                throw Failure.damaged("couldn't copy it")
+            }
+            let output = try FileHandle(forWritingTo: copy)
+            defer { try? output.close() }
+            try archive.seek(toOffset: 0)
+            var written = 0
+            while let chunk = try archive.read(upToCount: 1 << 20), !chunk.isEmpty {
+                written += chunk.count
+                guard written <= maxArchiveBytes else { throw Failure.tooLarge }
+                try output.write(contentsOf: chunk)
+            }
+        }
+    }
+
+    /// `copyArchive` puts the archive at the URL it's given, in a folder only the installer uses.
+    private func install(signature: String, copyArchive: (URL) throws -> Void) throws -> SemanticVersion {
         let fileManager = FileManager.default
         guard !appURL.path.contains("/AppTranslocation/") else { throw Failure.translocated }
         let folder = appURL.deletingLastPathComponent()
@@ -88,10 +115,8 @@ public struct UpdateInstaller: Sendable {
         let staging = try fileManager.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: appURL, create: true)
         defer { try? fileManager.removeItem(at: staging) }
 
-        let size = (try? fileManager.attributesOfItem(atPath: archive.path)[.size] as? Int) ?? 0
-        guard size <= maxArchiveBytes else { throw Failure.tooLarge }
         let copy = staging.appendingPathComponent("update.zip")
-        try fileManager.copyItem(at: archive, to: copy)
+        try copyArchive(copy)
         try UpdateSignature.verify(fileAt: copy, signature: signature, publicKey: publicKey)
 
         let unpacked = staging.appendingPathComponent("unpacked", isDirectory: true)

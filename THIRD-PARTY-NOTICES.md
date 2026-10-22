@@ -3,7 +3,7 @@
 Lumio's own code is copyright (c) 2026 jacksonf-netizen and released under the MIT licence (see
 [LICENSE](LICENSE)). Lumio also includes the open-source software listed below. Each component
 stays under its own licence, and thanks go to all of their authors. These notices ship inside the
-app (Settings → About → Acknowledgements).
+app (Settings → About → Acknowledgements → Full Licence Texts).
 
 Lumio is a player only. It doesn't include, sell or link to any channels, streams or other
 content; you use it with your own subscription from an IPTV provider.

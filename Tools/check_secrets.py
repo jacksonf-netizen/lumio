@@ -62,18 +62,25 @@ APP_DATA = os.path.expanduser(
 LOCAL_HOSTS = ("127.0.0.1", "localhost", "::1")
 
 
+# The hosts last read from the app's database, kept inside .git (never committed): once Lumio is
+# signed with its certificate, macOS stops other apps, Terminal included, from reading its data.
+HOSTS_CACHE = os.path.join(ROOT, ".git", "lumio-provider-hosts")
+
+
 def provider_hosts():
     """Server hosts of providers added in the app (Release and Debug databases)."""
     hosts = set()
+    unreadable = False
     for name in ("iptv.sqlite", "dev.sqlite"):
         path = os.path.join(APP_DATA, name)
-        if not os.path.exists(path):
-            continue
         try:
+            if not os.path.exists(path):
+                continue
             db = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
             rows = db.execute("SELECT serverURL FROM provider").fetchall()
             db.close()
-        except sqlite3.Error:
+        except (sqlite3.Error, OSError):
+            unreadable = True
             continue
         for (url,) in rows:
             host = re.sub(r"^[a-z]+://", "", str(url)).split("/")[0]
@@ -81,6 +88,19 @@ def provider_hosts():
             if bare and bare not in LOCAL_HOSTS and not bare.endswith((".test", "example.com")):
                 hosts.add(host)
                 hosts.add(bare)
+    if unreadable:
+        try:
+            with open(HOSTS_CACHE) as f:
+                hosts.update(line.strip() for line in f if line.strip())
+            print("Couldn't read Lumio's database (macOS protects it), so the provider addresses saved "
+                  "the last time it could are used.")
+        except OSError:
+            print("Couldn't read Lumio's database (macOS protects it), and no addresses were saved "
+                  "earlier: put your providers in LocalSecrets.json to have them checked.")
+    elif hosts:
+        with open(HOSTS_CACHE, "w") as f:
+            f.write("".join(f"{host}\n" for host in sorted(hosts)))
+        os.chmod(HOSTS_CACHE, 0o600)
     return sorted(hosts)
 
 

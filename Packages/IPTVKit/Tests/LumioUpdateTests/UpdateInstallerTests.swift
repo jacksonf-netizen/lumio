@@ -76,6 +76,24 @@ struct UpdateInstallerTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: app.deletingLastPathComponent().path) == ["Lumio.app"])
     }
 
+    /// The app hands the installer service an open file rather than a path.
+    @Test func installsFromAnOpenFile() throws {
+        let (app, installer) = try installed()
+        let (zip, signature) = try makeRelease(version: "0.2.0")
+        let handle = try FileHandle(forReadingFrom: zip)
+        defer { try? handle.close() }
+        _ = try handle.read(upToCount: 100) // Read from the start whatever the position.
+        #expect(try installer.install(archive: handle, signature: signature) == SemanticVersion("0.2.0"))
+        #expect(try installedVersion(app) == "0.2.0")
+
+        var small = try installed().1
+        small.maxArchiveBytes = 100
+        let (bigger, biggerSignature) = try makeRelease(version: "0.3.0")
+        #expect(throws: UpdateInstaller.Failure.tooLarge) {
+            try small.install(archive: try FileHandle(forReadingFrom: bigger), signature: biggerSignature)
+        }
+    }
+
     @Test func refusesAnythingElseAndLeavesTheAppAlone() throws {
         let (app, installer) = try installed()
         let (zip, signature) = try makeRelease(version: "0.2.0")

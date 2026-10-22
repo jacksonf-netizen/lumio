@@ -15,8 +15,8 @@ settings:
     DEAD_CODE_STRIPPING: YES
     # The version lives here only. Bump MARKETING_VERSION for each release (and tag it vX.Y.Z);
     # bump CURRENT_PROJECT_VERSION for every build you hand out.
-    MARKETING_VERSION: "0.1.0"
-    CURRENT_PROJECT_VERSION: "1"
+    MARKETING_VERSION: "0.1.1"
+    CURRENT_PROJECT_VERSION: "2"
 packages:
   IPTVKit:
     path: Packages/IPTVKit
@@ -64,7 +64,7 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.video
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
-        NSHumanReadableCopyright: "Copyright © 2026. For personal use."
+        NSHumanReadableCopyright: "Copyright © 2026 jacksonf-netizen. MIT licence."
         IPTVUpdateRepository: $(UPDATE_REPOSITORY)
         LumioUpdatePublicKey: $(UPDATE_PUBLIC_KEY)
         # Many Xtream servers only speak plain HTTP.

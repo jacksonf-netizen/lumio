@@ -451,9 +451,9 @@ private struct HiddenSettingsView: View {
     }
 }
 
-/// The notices (about 170 KB with every licence text) in a native text view, which lays out
+/// The full licence texts (about 170 KB) in a native text view, which lays out
 /// large text lazily; a SwiftUI Text would measure all of it up front.
-private struct NoticesTextView: NSViewRepresentable {
+struct NoticesTextView: NSViewRepresentable {
     let text: String
 
     func makeNSView(context: Context) -> NSScrollView {
@@ -465,8 +465,13 @@ private struct NoticesTextView: NSViewRepresentable {
             textView.backgroundColor = .textBackgroundColor
             textView.textContainerInset = NSSize(width: 10, height: 10)
             textView.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            // The file is already wrapped at 100 columns; wide table rows scroll sideways.
+            textView.isHorizontallyResizable = true
+            textView.textContainer?.widthTracksTextView = false
+            textView.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
             textView.string = text
         }
+        scrollView.hasHorizontalScroller = true
         return scrollView
     }
 
@@ -538,27 +543,62 @@ private struct AboutSettingsView: View {
     }
 }
 
-/// The bundled THIRD-PARTY-NOTICES.md, as plain text.
-private struct NoticesSheet: View {
+/// Credits for the open-source projects Lumio is built on, with the full licence texts (the
+/// bundled THIRD-PARTY-NOTICES.md, which the licences require shipping) one click away.
+struct NoticesSheet: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var showingFullTexts: Bool
 
-    private var text: String {
+    init(showingFullTexts: Bool = false) {
+        _showingFullTexts = State(initialValue: showingFullTexts)
+    }
+
+    private static let components: [(name: String, licence: String)] = [
+        ("mpv", "LGPL 2.1+"),
+        ("FFmpeg", "LGPL 2.1+"),
+        ("MPVKit", "LGPL 3.0"),
+        ("GRDB.swift", "MIT"),
+    ]
+
+    private static let libraries = "libplacebo, libass, FreeType, HarfBuzz, FriBidi, libunibreak, Little CMS, libdovi, dav1d, uavs3d, libbluray, uchardet, LuaJIT, OpenSSL, GnuTLS, Nettle, GMP, MoltenVK and shaderc"
+
+    private var fullTexts: String {
         Bundle.main.url(forResource: "THIRD-PARTY-NOTICES", withExtension: "md")
             .flatMap { try? String(contentsOf: $0, encoding: .utf8) }
-            ?? "The acknowledgements file is missing from this build."
+            ?? "The licence file is missing from this build."
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Acknowledgements").font(.title2.bold())
-            NoticesTextView(text: text)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            if showingFullTexts {
+                NoticesTextView(text: fullTexts)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else {
+                Text("Lumio is open source under the MIT licence. Playback and the library are built on these projects:")
+                    .fixedSize(horizontal: false, vertical: true)
+                Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 4) {
+                    ForEach(Self.components, id: \.name) { component in
+                        GridRow {
+                            Text(component.name)
+                            Text(component.licence).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Text("mpv and FFmpeg come with \(Self.libraries), each under its own open-source licence. The LGPL libraries are separate frameworks inside the app, so you can replace them with your own builds.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Thanks to everyone who works on them.")
+                    .font(.callout).foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+            }
             HStack {
+                Button(showingFullTexts ? "Back" : "Full Licence Texts") { showingFullTexts.toggle() }
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(20)
-        .frame(width: 640, height: 520)
+        .frame(width: showingFullTexts ? 760 : 480, height: showingFullTexts ? 560 : 340)
     }
 }

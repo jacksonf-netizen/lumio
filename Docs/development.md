@@ -55,7 +55,7 @@ unregister one after testing if it shows up in Spotlight:
 
 ```
 project.yml                 XcodeGen spec: the app, its installer service, versions, update settings
-Config/Signing.xcconfig     Code signing (ad-hoc by default; optional git-ignored Local.xcconfig)
+Config/Signing.xcconfig     Code signing for Xcode builds (ad-hoc; releases are re-signed by sign_app.sh)
 App/IPTVMac/                The macOS app target: entry point, windows, menus
 App/LumioInstaller/         XPC service that installs signed updates (the app is sandboxed)
 Packages/IPTVKit/           Swift package with all the app logic
@@ -67,7 +67,8 @@ Packages/IPTVKit/           Swift package with all the app logic
   Tests/                    Swift Testing suites and fixtures
 Docs/                       This guide, the schema, the core API, the reconnect state machine
 Tools/StreamHarness/        Fake Xtream provider with fault injection, for testing
-Tools/Release/              make_release.sh, publish.sh, sign_update.swift
+Tools/Release/              make_release.sh, publish.sh, sign_app.sh, sign_update.swift,
+                            make_signing_certificate.sh
 Tools/install.sh            Build and install your own copy in /Applications
 Tools/check_secrets.py      Fails if anything git would publish contains a credential
 Tools/AppIcon/              Icon artwork and the script that builds the icon set
@@ -90,12 +91,17 @@ The app is sandboxed, so its files are in its container:
 | Image cache | `~/Library/Containers/com.jackson.iptvstreamer/Data/Library/Caches/IPTVStreamer/Images` |
 
 To start over, quit Lumio, delete the `IPTVStreamer` folder and remove the Keychain items.
-`sqlite3 <path to iptv.sqlite> ".tables"` shows the database.
+`sqlite3 <path to iptv.sqlite> ".tables"` shows the database. Once Lumio is signed with its
+certificate (below), macOS keeps other apps out of its data folder, so this says "authorization
+denied" unless Terminal has Full Disk Access (System Settings → Privacy & Security).
 
-**Keychain prompts after rebuilding:** ad-hoc signatures change with every build, so macOS may ask
-"Lumio wants to use your confidential information". Click **Always Allow**. To stop the prompts,
-add your Apple ID in Xcode → Settings → Accounts (a free Personal Team is enough), then create
-`Config/Local.xcconfig` with `DEVELOPMENT_TEAM = YOURTEAMID` and run `xcodegen`.
+**Signing and Keychain prompts.** macOS lets an app read its Keychain items only while its
+signature matches the one that saved them. Releases and `Tools/install.sh` sign Lumio with the
+self-signed "Lumio Release Signing" certificate (`Tools/Release/sign_app.sh`), so every version
+has the same signature and reads the saved logins without asking. Builds run from Xcode are
+signed ad-hoc, which changes with every build: if one reads the real library, macOS asks for your
+password ("Lumio wants to use your confidential information"). That's why Debug runs use
+`-databaseName`, which keeps logins in memory.
 
 ## Debugging
 
@@ -171,6 +177,9 @@ size into `App/IPTVMac/Assets.xcassets/AppIcon.appiconset`. If the Dock keeps th
 Lumio is published at https://github.com/jacksonf-netizen/lumio. Friends install it from the
 Releases page, and their copies update themselves from there.
 
+Once per Mac: `Tools/Release/make_signing_certificate.sh` makes the signing certificate (see
+"Signing and Keychain prompts" above), and the update signing key must be in your Keychain (below).
+
 1. Test the changes (`swift test`, a smoke run, `Tools/install.sh` to use it yourself).
 2. In `project.yml`, bump `MARKETING_VERSION` (`0.1.0` → `0.2.0`, or `0.1.1` for small fixes) and
    `CURRENT_PROJECT_VERSION` (+1).
@@ -190,13 +199,22 @@ bring your own login" notice.
    `gh release delete vOLD --repo jacksonf-netizen/lumio --yes`. Keep its git tag, so its source
    stays available.
 
-**The signing key.** Updates are signed with an Ed25519 key made by
-`swift Tools/Release/sign_update.swift generate`. The private half is in your login Keychain (item
-"Lumio update signing key", account `release`) and never in the repository; the public half is
-`UPDATE_PUBLIC_KEY` in `project.yml`, built into every copy. `make_release.sh` refuses to sign if
-they don't match. **Back the key up** (Keychain Access → the item → Show password → your password
-manager): without it, existing copies won't accept new updates and everyone has to reinstall by
-hand. On a new Mac, add the item back with the same name and account.
+**The signing keys.** There are two, both only in your login Keychain, never in the repository.
+Back both up.
+
+- The update key (Ed25519, made by `swift Tools/Release/sign_update.swift generate`; item "Lumio
+  update signing key", account `release`). Its public half is `UPDATE_PUBLIC_KEY` in
+  `project.yml`, built into every copy, and `make_release.sh` refuses to sign if they don't match.
+  Without it, existing copies won't accept new updates and everyone has to reinstall by hand.
+  Back it up from Keychain Access (the item → Show password → your password manager); on a new
+  Mac, add the item back with the same name and account.
+- The code signing certificate "Lumio Release Signing" (Keychain Access → My Certificates).
+  Without it, a new one works, but everyone's copy asks for their password once more after the
+  next update. Back it up with File → Export Items… (a password-protected .p12) and import that
+  on a new Mac.
+
+`make_release.sh` won't make an ad-hoc signed release unless you set `ALLOW_ADHOC=1` (for test
+builds only).
 
 **Trying the install path locally**, without publishing: serve `build/release` with
 `python3 -m http.server 8123`, then run a Debug copy built with `MARKETING_VERSION=0.0.9` (copied

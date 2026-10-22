@@ -112,6 +112,26 @@ struct CatalogSyncTests {
         _ = await (a, b)
     }
 
+    @Test func aRefreshFinishingAfterAnEditKeepsTheEdit() async throws {
+        // The user renames the provider and changes its address while a slow refresh is running.
+        transportA.delay = .milliseconds(300)
+        async let running = service.refresh(providerA.id, parts: .catalog)
+        try await Task.sleep(for: .milliseconds(50))
+        let providers = ProviderService(database: database, secrets: InMemorySecretStore())
+        var edited = try #require(try providers.repository.provider(id: providerA.id))
+        edited.name = "Renamed"
+        try await providers.updateProvider(edited, serverURL: "http://new.example.com:8080")
+        let report = await running
+        #expect(report.error == nil)
+
+        let stored = try #require(try providers.repository.provider(id: providerA.id))
+        #expect(stored.name == "Renamed")
+        #expect(stored.serverURL.absoluteString == "http://new.example.com:8080")
+        // And the refresh's own results were still saved.
+        #expect(stored.lastRefreshAt != nil)
+        #expect(stored.maxConnections != nil)
+    }
+
     @Test func badCredentialsStopTheRefreshAndAreRecorded() async throws {
         transportA.set("auth", fixture: "xtream/auth_failed.json")
         let report = await service.refresh(providerA.id)

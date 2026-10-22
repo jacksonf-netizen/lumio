@@ -82,7 +82,7 @@ public enum SmokeTest {
         }
         guard let provider else { return log("FAIL could not add provider") }
         await state.environment.sync.refresh(provider.id, parts: [.account, .live])
-        try? state.environment.logicalChannels.rebuild()
+        _ = try? state.environment.logicalChannels.rebuild()
         let streamID = UserDefaults.standard.integer(forKey: "probeChannel")
         let seconds = max(10, UserDefaults.standard.integer(forKey: "probeSeconds"))
         guard let channel = ((try? await state.liveCatalog.allChannels()) ?? []).first(where: { $0.streamID == streamID })
@@ -364,6 +364,9 @@ public enum SmokeTest {
         if let moved = UserDefaults.standard.string(forKey: "smokeTestMoved") {
             await panelMove(state: state, providerID: provider.id, to: moved, t: t)
         }
+        // Settings → About → Acknowledgements, the short list and the full licence texts.
+        snapshot(NoticesSheet(), "12-acknowledgements")
+        snapshot(NoticesSheet(showingFullTexts: true), "12-acknowledgements-full")
         log("\(t()) done")
     }
 
@@ -897,6 +900,20 @@ public enum SmokeTest {
             }
         }
         return text
+    }
+
+    /// A view drawn on its own, at its ideal size (for sheets, which `snapshot(_:)` can't capture).
+    private static func snapshot(_ content: some View, _ name: String) {
+        let host = NSHostingView(rootView: content.background(Color(nsColor: .windowBackgroundColor)))
+        host.frame = CGRect(origin: .zero, size: host.fittingSize)
+        host.layoutSubtreeIfNeeded()
+        guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+            return log("snapshot \(name) unavailable")
+        }
+        host.cacheDisplay(in: host.bounds, to: rep)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("smoke-\(name).png")
+        try? rep.representation(using: .png, properties: [:])?.write(to: url)
+        log("snapshot \(url.path)")
     }
 
     private static func snapshot(_ name: String) {

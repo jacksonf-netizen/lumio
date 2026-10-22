@@ -41,7 +41,7 @@ public struct RootView: View {
     @Bindable private var state: AppState
     /// Seconds from process start to the main window's first appearance (launch performance).
     nonisolated(unsafe) public static var firstAppearance: Double?
-    public static var secondsSinceLaunch: Double { Date().timeIntervalSince(ProcessInfo.processInfo.launchDate) }
+    nonisolated public static var secondsSinceLaunch: Double { Date().timeIntervalSince(ProcessInfo.processInfo.launchDate) }
 
     public init(state: AppState) {
         self.state = state

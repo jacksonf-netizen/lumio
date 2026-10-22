@@ -39,7 +39,7 @@ public struct ProviderService: Sendable {
         var provider = provider
         if let serverURL { provider.serverURL = try ServerURL.normalize(serverURL) }
         if let credentials { try secrets.save(try Self.validated(credentials), for: provider.id) }
-        try repository.update(provider)
+        try repository.updateSettings(provider)
         await sync.localDataDidChange(.providers)
     }
 

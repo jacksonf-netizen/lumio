@@ -4,7 +4,9 @@
 # Tools/Release/publish.sh runs this and puts the files on GitHub; run it alone to try a build.
 #
 #   Tools/Release/make_release.sh
-#       Ad-hoc signed. Other Macs open it after System Settings → Privacy & Security → Open Anyway.
+#       Signed with the self-signed "Lumio Release Signing" certificate (sign_app.sh explains why;
+#       Tools/Release/make_signing_certificate.sh makes it once). Other Macs open it the first time
+#       after System Settings → Privacy & Security → Open Anyway.
 #
 #   DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)" Tools/Release/make_release.sh
 #       Signed for distribution with your Developer ID certificate (paid Apple Developer account).
@@ -37,25 +39,24 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 ditto "$BUILT" "$APP"
 
-if [ -n "${DEVELOPER_ID:-}" ]; then
-    echo "==> Signing with $DEVELOPER_ID"
-    # Inside out: the embedded frameworks first, then the app with its entitlements.
-    for framework in "$APP"/Contents/Frameworks/*.framework; do
-        codesign --force --options runtime --timestamp --sign "$DEVELOPER_ID" "$framework"
-    done
-    codesign --force --options runtime --timestamp --entitlements App/IPTVMac/IPTVMac.entitlements \
-        --sign "$DEVELOPER_ID" "$APP"
-    codesign --verify --strict --deep "$APP"
+# A build signed differently from the last release would make everyone's copy ask for their
+# password before it can read its saved logins, so an ad-hoc build only goes out on purpose.
+status=0
+Tools/Release/sign_app.sh "$APP" || status=$?
+if [ "$status" -eq 2 ] && [ "${ALLOW_ADHOC:-}" = 1 ]; then
+    echo "==> ALLOW_ADHOC=1: leaving the ad-hoc signature"
+elif [ "$status" -ne 0 ]; then
+    echo "Not signed, so no release was made. Run Tools/Release/make_signing_certificate.sh once," >&2
+    echo "or set ALLOW_ADHOC=1 for a test build." >&2
+    exit 1
+fi
 
-    if [ -n "${NOTARY_PROFILE:-}" ]; then
-        echo "==> Notarizing (this takes a few minutes)"
-        ditto -c -k --keepParent "$APP" "$OUT/notarize.zip"
-        xcrun notarytool submit "$OUT/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait
-        xcrun stapler staple "$APP"
-        rm "$OUT/notarize.zip"
-    fi
-else
-    echo "==> No DEVELOPER_ID set: ad-hoc signature (other Macs need Open Anyway the first time)."
+if [ -n "${DEVELOPER_ID:-}" ] && [ -n "${NOTARY_PROFILE:-}" ]; then
+    echo "==> Notarizing (this takes a few minutes)"
+    ditto -c -k --keepParent "$APP" "$OUT/notarize.zip"
+    xcrun notarytool submit "$OUT/notarize.zip" --keychain-profile "$NOTARY_PROFILE" --wait
+    xcrun stapler staple "$APP"
+    rm "$OUT/notarize.zip"
 fi
 
 echo "==> Packaging"

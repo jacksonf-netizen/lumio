@@ -122,12 +122,10 @@ public actor CatalogSyncService {
 
     // MARK: Refresh
 
-    /// Refreshes one provider. If a refresh is already running for it, waits for that one instead
-    /// of starting a second.
-    @discardableResult
     /// Refreshes one provider. A refresh already running for it is shared, unless `restart` is set
     /// (after its login or address changed, the running one still uses the old details): then it's
     /// cancelled and a new one starts.
+    @discardableResult
     public func refresh(_ providerID: ProviderID, parts: RefreshParts = .all, restart: Bool = false) async -> SyncReport {
         if restart, let existing = running[providerID] {
             existing.cancel()
@@ -206,7 +204,7 @@ public actor CatalogSyncService {
                 provider.maxConnections = account.maxConnections
                 provider.activeConnections = account.activeConnections
                 if !account.allowedOutputFormats.isEmpty { provider.allowedOutputFormats = account.allowedOutputFormats }
-                try? providers.update(provider)
+                try? providers.updateStatus(provider)
                 await connections.setLimit(account.maxConnections, for: providerID)
             } catch {
                 return finish(&report, provider: &provider, fatal: error, credentials: redact)
@@ -301,7 +299,7 @@ public actor CatalogSyncService {
         provider.lastError = report.partErrors.isEmpty
             ? nil
             : report.partErrors.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.key.rawValue): \($0.value)" }.joined(separator: "\n")
-        try? providers.update(provider)
+        try? providers.updateStatus(provider)
         emit(.finished(providerID, error: provider.lastError))
         Log.sync.info("Refresh \(providerID, privacy: .public) done; errors: \(report.partErrors.count)")
         return report
@@ -312,7 +310,7 @@ public actor CatalogSyncService {
         let text = message(error, credentials)
         report.error = text
         provider.lastError = text
-        try? providers.update(provider)
+        try? providers.updateStatus(provider)
         let id = provider.id
         Log.sync.error("Refresh \(id, privacy: .public) failed: \(text, privacy: .public)")
         emit(.finished(id, error: text))

@@ -1,10 +1,11 @@
-// Code signing. By default the app is signed "to run locally" (ad-hoc), which needs no Apple
-// account. Ad-hoc signatures change on every build, so macOS may ask for Keychain access again
-// after a rebuild. To stop that, create Config/Local.xcconfig (git-ignored) containing:
+// Code signing for builds made in Xcode: "Sign to Run Locally" (ad-hoc), which needs no Apple
+// account. Ad-hoc signatures change with every build, so macOS asks for your password if such a
+// build reads the real library's saved logins (Debug runs normally use -databaseName instead).
+// Releases and Tools/install.sh re-sign the app with the stable "Lumio Release Signing"
+// certificate (Tools/Release/sign_app.sh); see "Signing and Keychain prompts" in
+// Docs/development.md.
 //
-//   DEVELOPMENT_TEAM = YOURTEAMID
-//
-// (Find the ID in Xcode > Settings > Accounts, select your Apple ID's "Personal Team".)
+// Machine-specific overrides go in Config/Local.xcconfig (git-ignored).
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =

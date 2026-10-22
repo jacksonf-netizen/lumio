@@ -1,7 +1,8 @@
 #!/bin/bash
 # Builds Lumio (Release) and installs it as /Applications/Lumio.app, replacing any earlier copy
-# (including one from before the app was renamed from IPTV Streamer). This is the copy to open, pin in the Dock and find in Spotlight; your providers,
-# favorites and settings are kept (they live in the app's own data folder, not in the app).
+# (including one from before the app was renamed from IPTV Streamer). This is the copy to open, pin
+# in the Dock and find in Spotlight; your providers, favorites and settings are kept (they live in
+# the app's own data folder, not in the app).
 #
 #   Tools/install.sh
 #
@@ -40,6 +41,10 @@ rm -f "$LOG"
 echo "==> Installing to $TARGET"
 rm -rf "$TARGET"
 ditto "$BUILT" "$TARGET"
+# Signed like releases, so this copy and updates can read the saved logins without asking.
+if ! Tools/Release/sign_app.sh "$TARGET" > /dev/null; then
+    echo "    (left ad-hoc signed: macOS may ask for your password before Lumio can read its saved logins)"
+fi
 for old in "$OLD_TARGET" "$PWD/build/DerivedData.noindex/Build/Products/"*"/$OLD_NAME.app"; do
     rm -rf "$old"
     "$LSREGISTER" -u "$old" 2>/dev/null || true

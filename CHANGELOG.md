@@ -5,11 +5,20 @@ the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`
 
 ## Unreleased
 
-- The acknowledgements now credit every library bundled with Lumio, with its version, licence,
-  copyright notice and full licence text, and explain how to get the source of the LGPL libraries.
+## 0.1.1 — 2026-10-22
+
+Your providers, favorites and settings stay as they are.
+
+- After this update, macOS may ask once for your Mac password so Lumio can keep using its saved
+  logins. Enter it and click Always Allow. Lumio is now signed the same way in every version,
+  so later updates won't ask again.
+- Fixed: editing a provider while it was refreshing could put its old name or server address back.
+- Settings → About → Acknowledgements is now a short list of the open-source projects Lumio uses,
+  with the full licence texts one click away. They now cover every bundled library.
 - Lumio says more clearly that it doesn't provide any content: you need your own IPTV
   subscription and Xtream Codes login (on the welcome screen, when adding a provider, and in
   Settings → About).
+- The updater hands the download to its installer as an open file instead of a path.
 - The README is shorter and up to date; developer documentation moved to Docs/development.md.
 
 ## 0.1.0 — 2026-10-21

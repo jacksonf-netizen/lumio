@@ -223,7 +223,14 @@ public final class UpdateController {
             guard let proxy else {
                 return once.run { continuation.resume(throwing: InstallerFailure(message: "The installer is missing from this copy of Lumio.")) }
             }
-            proxy.installUpdate(archivePath: archive.path, signature: signature) { version, message in
+            let handle: FileHandle
+            do {
+                handle = try FileHandle(forReadingFrom: archive)
+            } catch {
+                return once.run { continuation.resume(throwing: error) }
+            }
+            proxy.installUpdate(archive: handle, signature: signature) { version, message in
+                try? handle.close()
                 once.run {
                     if let version { continuation.resume(returning: version) }
                     else { continuation.resume(throwing: InstallerFailure(message: message ?? "The installer failed.")) }
