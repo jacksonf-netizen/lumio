@@ -44,7 +44,7 @@ targets:
         PRODUCT_NAME: Lumio
         PRODUCT_BUNDLE_IDENTIFIER: com.jackson.iptvstreamer
         # GitHub repository ("owner/repo") whose Releases the app checks for updates. Empty means
-        # the app never checks. See "Publishing and updates" in the README.
+        # the app never checks. See "Releasing" in Docs/development.md.
         UPDATE_REPOSITORY: "jacksonf-netizen/lumio"
         # Public half of the release signing key (Tools/Release/sign_update.swift). The app only
         # installs updates signed with the matching private key, which never leaves your Keychain.

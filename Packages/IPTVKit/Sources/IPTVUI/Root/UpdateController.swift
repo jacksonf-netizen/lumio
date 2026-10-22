@@ -99,7 +99,7 @@ public final class UpdateController {
     public func check(userInitiated: Bool) async {
         guard let feed, let currentVersion else {
             if userInitiated {
-                inform("Updates Aren't Set Up", "This build has no release feed, so it can't check for new versions. See “Publishing and updates” in the README.")
+                inform("Updates Aren't Set Up", "This build has no release feed, so it can't check for new versions. See “Releasing” in Docs/development.md.")
             }
             return
         }

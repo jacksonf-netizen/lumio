@@ -232,6 +232,12 @@ private struct ProviderEditorSheet: View {
             .formStyle(.grouped)
             .autocorrectionDisabled()
 
+            if isNew {
+                Text("Enter the Xtream Codes details your IPTV provider gave you. Lumio doesn't provide any content or logins itself.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             if let error {
                 Label(error, systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.red)

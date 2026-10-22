@@ -228,7 +228,7 @@ struct NoProvidersView: View {
 
     var body: some View {
         EmptyState("No Providers", systemImage: "antenna.radiowaves.left.and.right",
-                   message: "Add your Xtream Codes account to get started.") {
+                   message: "Lumio doesn't include any channels. Add the Xtream Codes login (server address, username and password) from your own IPTV provider to get started.") {
             Button("Add Provider…", action: openSettings)
                 .buttonStyle(.borderedProminent)
         }

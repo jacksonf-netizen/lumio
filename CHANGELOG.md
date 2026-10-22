@@ -5,6 +5,13 @@ the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`
 
 ## Unreleased
 
+- The acknowledgements now credit every library bundled with Lumio, with its version, licence,
+  copyright notice and full licence text, and explain how to get the source of the LGPL libraries.
+- Lumio says more clearly that it doesn't provide any content: you need your own IPTV
+  subscription and Xtream Codes login (on the welcome screen, when adding a provider, and in
+  Settings → About).
+- The README is shorter and up to date; developer documentation moved to Docs/development.md.
+
 ## 0.1.0 — 2026-10-21
 
 The first public release.

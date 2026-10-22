@@ -451,6 +451,28 @@ private struct HiddenSettingsView: View {
     }
 }
 
+/// The notices (about 170 KB with every licence text) in a native text view, which lays out
+/// large text lazily; a SwiftUI Text would measure all of it up front.
+private struct NoticesTextView: NSViewRepresentable {
+    let text: String
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        if let textView = scrollView.documentView as? NSTextView {
+            textView.isEditable = false
+            textView.isSelectable = true
+            textView.drawsBackground = true
+            textView.backgroundColor = .textBackgroundColor
+            textView.textContainerInset = NSSize(width: 10, height: 10)
+            textView.font = .monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+            textView.string = text
+        }
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {}
+}
+
 /// Version, update checks and acknowledgements.
 private struct AboutSettingsView: View {
     @Bindable var updates: UpdateController
@@ -507,7 +529,7 @@ private struct AboutSettingsView: View {
 
             Section {
                 Button("Acknowledgements…") { showingNotices = true }
-                Text("Lumio is a player only. It includes no channels or content.")
+                Text("Lumio is a player only. It doesn't provide any channels, streams or other content: you need your own subscription and Xtream Codes login from an IPTV provider, and you're responsible for using it only with services you're entitled to.")
                     .font(.caption).foregroundStyle(.secondary)
             } header: { Text("Legal") }
         }
@@ -529,14 +551,8 @@ private struct NoticesSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Acknowledgements").font(.title2.bold())
-            ScrollView {
-                Text(text)
-                    .font(.system(.callout, design: .monospaced))
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            NoticesTextView(text: text)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }.keyboardShortcut(.defaultAction)

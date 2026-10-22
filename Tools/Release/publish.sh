@@ -53,6 +53,11 @@ $NOTES
 
 ---
 
+**Lumio doesn't provide any content.** It includes no channels, streams, playlists or logins. You
+need your own subscription from an IPTV provider and the Xtream Codes login they give you (server
+address, username and password), and you're responsible for using Lumio only with services you're
+entitled to.
+
 **Already have Lumio?** It offers this update the next time you open it (or use Lumio → Check for Updates…).
 
 **New to Lumio?** It needs a Mac with Apple silicon (M1 or later) and macOS 14 or later.
