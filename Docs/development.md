@@ -145,6 +145,11 @@ real ones (`-databaseName NAME` → `dev-NAME.sqlite`):
 | `-databaseName perf -perfTest YES` | Guide drawing timings |
 | `-databaseName clip -guideClipTest YES` (with `IPTV_DEV_SEED=1`) | Scrolls the guide and checks nothing is drawn outside it |
 
+Add `-openSection settings` (any sidebar section) to open on a section, and `-snapshotAfter 6`
+to save the whole window after that many seconds. Snapshots go to the container's tmp folder,
+which Terminal can't read once Lumio is certificate-signed; `-snapshotStdout YES` also prints
+each one as a `SNAPSHOT-PNG name base64` line.
+
 Also: `IPTV_TRACE_LAUNCH=1 IPTV_DEV_DATABASE=launch IPTV_DEV_SEED=1 "<app>/Contents/MacOS/Lumio"`
 prints launch timings (any build; a throwaway library with 300 synthetic channels), and
 `IPTV_PERF_PROGRAMMES=700000 swift test --filter largeGuideImportsWithFlatMemory` (in

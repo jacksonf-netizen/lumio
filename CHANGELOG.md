@@ -8,6 +8,9 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- The background refresh indicator moved to the bottom of the sidebar. In the toolbar it pushed
+  the Settings tabs out of sight while providers were refreshing.
+
 ## 0.1.1 — 2026-10-22
 
 Fixes and a shorter Acknowledgements page. After updating, macOS may ask once for your Mac

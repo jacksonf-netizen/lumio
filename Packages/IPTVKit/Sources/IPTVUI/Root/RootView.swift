@@ -67,13 +67,14 @@ public struct RootView: View {
                     }
                 }
                 .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
+                // Background refreshes show at the foot of the sidebar, like Mail's activity. (In
+                // the toolbar it took the space Settings needs for its tabs.)
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    SyncActivityIndicator(model: state.providers)
+                        .animation(.easeInOut(duration: 0.2), value: state.providers.isSyncing)
+                }
             } detail: {
                 detail(for: state.section)
-            }
-            .toolbar {
-                ToolbarItem(placement: .status) {
-                    SyncActivityIndicator(model: state.providers)
-                }
             }
             // The split view can end up wider than the window (its columns don't always shrink with
             // it). Report the window's size here so the player on top is sized to the window, not
@@ -204,20 +205,27 @@ struct FavoritesView: View {
     }
 }
 
-/// Subtle toolbar indicator while providers refresh in the background.
+/// Small activity row at the bottom of the sidebar while providers refresh in the background.
 struct SyncActivityIndicator: View {
     let model: ProvidersViewModel
 
     var body: some View {
         if model.isSyncing {
-            HStack(spacing: 6) {
+            HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
-                Text(model.syncSummary)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(model.syncTitle).font(.caption.weight(.medium))
+                    if let detail = model.syncDetail {
+                        Text(detail).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                .lineLimit(1)
+                .truncationMode(.tail)
+                Spacer(minLength: 0)
             }
-            .help("Updating in the background. Everything stays usable.")
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .help("Updating channels, movies and the guide in the background. Everything stays usable.")
             .transition(.opacity)
         }
     }

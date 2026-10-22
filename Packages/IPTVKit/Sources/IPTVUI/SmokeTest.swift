@@ -53,6 +53,24 @@ public enum SmokeTest {
             }
             return
         }
+        // `-openSection settings` (any sidebar section): open on that section.
+        if let section = UserDefaults.standard.string(forKey: "openSection").flatMap(SidebarItem.init(rawValue:)) {
+            state.section = section
+        }
+        // `-snapshotAfter SECONDS`: saves the whole window, toolbar included, as smoke-window.png.
+        let delay = UserDefaults.standard.double(forKey: "snapshotAfter")
+        if delay > 0 {
+            Task { @MainActor in
+                try? await Task.sleep(for: .seconds(delay))
+                snapshot("window", includingToolbar: true)
+                // As the window server draws it (materials included); an app may capture its
+                // own windows without screen-recording permission.
+                if let window = NSApp.windows.first(where: { $0.isVisible && $0.frame.width > 400 }),
+                   let image = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]) {
+                    save(NSBitmapImageRep(cgImage: image), to: FileManager.default.temporaryDirectory.appendingPathComponent("smoke-screen.png"))
+                }
+            }
+        }
         // `-harness URL`: add the harness as a provider and sync it, then leave the app for manual use.
         if let base = UserDefaults.standard.string(forKey: "harness"), let url = URL(string: base) {
             Task { @MainActor in
@@ -912,14 +930,27 @@ public enum SmokeTest {
         }
         host.cacheDisplay(in: host.bounds, to: rep)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("smoke-\(name).png")
-        try? rep.representation(using: .png, properties: [:])?.write(to: url)
-        log("snapshot \(url.path)")
+        save(rep, to: url)
     }
 
-    private static func snapshot(_ name: String) {
+    /// Writes a snapshot to the container's tmp folder. macOS keeps other apps out of the container
+    /// once Lumio is certificate-signed, so `-snapshotStdout YES` also prints it as base64
+    /// ("SNAPSHOT-PNG name data") for scripts to decode.
+    private static func save(_ rep: NSBitmapImageRep, to url: URL) {
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        try? png.write(to: url)
+        log("snapshot \(url.path)")
+        if UserDefaults.standard.bool(forKey: "snapshotStdout") {
+            print("SNAPSHOT-PNG \(url.deletingPathExtension().lastPathComponent) \(png.base64EncodedString())")
+            fflush(stdout)
+        }
+    }
+
+    private static func snapshot(_ name: String, includingToolbar: Bool = false) {
         let candidates = NSApp.windows.filter { $0.contentView != nil && $0.frame.width > 400 }
         guard let window = candidates.first(where: \.isVisible) ?? candidates.first,
-              let view = window.contentView,
+              let content = window.contentView,
+              case let view = includingToolbar ? (content.superview ?? content) : content,
               let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds)
         else {
             let windows = NSApp.windows.map { "\($0.title)|visible=\($0.isVisible)|\(Int($0.frame.width))x\(Int($0.frame.height))" }
@@ -927,8 +958,7 @@ public enum SmokeTest {
         }
         view.cacheDisplay(in: view.bounds, to: rep)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("smoke-\(name).png")
-        try? rep.representation(using: .png, properties: [:])?.write(to: url)
-        log("snapshot \(url.path)")
+        save(rep, to: url)
     }
 }
 #endif

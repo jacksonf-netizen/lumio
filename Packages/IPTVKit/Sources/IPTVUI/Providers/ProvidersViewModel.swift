@@ -20,10 +20,17 @@ final class ProvidersViewModel {
     var errorMessage: String?
 
     var isSyncing: Bool { !syncing.isEmpty }
-    var syncSummary: String {
-        guard let (id, step) = syncing.first else { return "" }
-        let name = providers.first { $0.id == id }?.name ?? "provider"
-        return syncing.count > 1 ? "Updating \(syncing.count) providers…" : "\(name): \(step)"
+    /// "Updating Provider A", or "Updating 2 providers".
+    var syncTitle: String {
+        guard let (id, _) = syncing.first else { return "" }
+        if syncing.count > 1 { return "Updating \(syncing.count) providers" }
+        return "Updating \(providers.first { $0.id == id }?.name ?? "provider")"
+    }
+
+    /// What a single refresh is doing ("Checking account…").
+    var syncDetail: String? {
+        guard syncing.count == 1, let (_, step) = syncing.first else { return nil }
+        return step
     }
 
     private let environment: AppEnvironment
