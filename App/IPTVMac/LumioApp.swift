@@ -99,7 +99,8 @@ private struct StartupErrorView: View {
 
     var body: some View {
         EmptyState("Couldn't open the library", systemImage: "exclamationmark.triangle",
-                   message: error.map { String(describing: $0) } ?? "Unknown error")
+                   message: "If macOS asked whether Lumio may access its data, quit Lumio (⌘Q), open it again and click Allow. Your providers and favorites are still there.\n\n"
+                       + (error.map { String(describing: $0) } ?? "Unknown error"))
     }
 }
 

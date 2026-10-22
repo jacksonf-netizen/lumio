@@ -30,6 +30,10 @@ public struct KeychainSecretStore: SecretStore {
     public static let defaultService = "com.jackson.iptvstreamer.provider"
 
     public let service: String
+    /// What an erased item holds (the Keychain doesn't store empty values).
+    static let erased = Data([0])
+    /// `SecItemDelete`, replaceable in tests.
+    var deleteItem: @Sendable (CFDictionary) -> OSStatus = { SecItemDelete($0) }
 
     public init(service: String = KeychainSecretStore.defaultService) {
         self.service = service
@@ -63,6 +67,8 @@ public struct KeychainSecretStore: SecretStore {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         switch status {
         case errSecSuccess:
+            // Erased by `delete` (see there): nothing saved.
+            if let data = result as? Data, data.isEmpty || data == Self.erased { return nil }
             guard let data = result as? Data,
                   let credentials = try? JSONDecoder().decode(ProviderCredentials.self, from: data)
             else { throw SecretStoreError.corruptItem }
@@ -76,7 +82,14 @@ public struct KeychainSecretStore: SecretStore {
     }
 
     public func delete(for providerID: ProviderID) throws {
-        let status = SecItemDelete(baseQuery(for: providerID) as CFDictionary)
+        var status = deleteItem(baseQuery(for: providerID) as CFDictionary)
+        if status == errSecInvalidOwnerEdit {
+            // Only the exact build that saved an item may delete it; later versions (signed by the
+            // same team) can still read and change it. So the login is erased instead, and nothing
+            // usable is left behind.
+            status = SecItemUpdate(baseQuery(for: providerID) as CFDictionary, [kSecValueData as String: Self.erased] as CFDictionary)
+            if status == errSecSuccess { Log.security.info("Keychain item from an earlier version erased (it can't be deleted)") }
+        }
         guard status == errSecSuccess || status == errSecItemNotFound else {
             Log.security.error("Keychain delete failed: \(status)")
             throw SecretStoreError.keychain(status: status)

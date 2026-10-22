@@ -43,7 +43,7 @@ rm -rf "$TARGET"
 ditto "$BUILT" "$TARGET"
 # Signed like releases, so this copy and updates can read the saved logins without asking.
 if ! Tools/Release/sign_app.sh "$TARGET" > /dev/null; then
-    echo "    (left ad-hoc signed: macOS may ask for your password before Lumio can read its saved logins)"
+    echo "    (left as Xcode signed it: macOS may ask for your password and whether Lumio may use its data)"
 fi
 for old in "$OLD_TARGET" "$PWD/build/DerivedData.noindex/Build/Products/"*"/$OLD_NAME.app"; do
     rm -rf "$old"

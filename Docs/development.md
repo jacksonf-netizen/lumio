@@ -67,8 +67,7 @@ Packages/IPTVKit/           Swift package with all the app logic
   Tests/                    Swift Testing suites and fixtures
 Docs/                       This guide, the schema, the core API, the reconnect state machine
 Tools/StreamHarness/        Fake Xtream provider with fault injection, for testing
-Tools/Release/              make_release.sh, publish.sh, sign_app.sh, sign_update.swift,
-                            make_signing_certificate.sh
+Tools/Release/              make_release.sh, publish.sh, sign_app.sh, sign_update.swift
 Tools/install.sh            Build and install your own copy in /Applications
 Tools/check_secrets.py      Fails if anything git would publish contains a credential
 Tools/AppIcon/              Icon artwork and the script that builds the icon set
@@ -91,17 +90,27 @@ The app is sandboxed, so its files are in its container:
 | Image cache | `~/Library/Containers/com.jackson.iptvstreamer/Data/Library/Caches/IPTVStreamer/Images` |
 
 To start over, quit Lumio, delete the `IPTVStreamer` folder and remove the Keychain items.
-`sqlite3 <path to iptv.sqlite> ".tables"` shows the database. Once Lumio is signed with its
-certificate (below), macOS keeps other apps out of its data folder, so this says "authorization
-denied" unless Terminal has Full Disk Access (System Settings → Privacy & Security).
+`sqlite3 <path to iptv.sqlite> ".tables"` shows the database. macOS keeps other apps out of a
+signed app's data folder, so this says "authorization denied" unless Terminal has Full Disk Access
+(System Settings → Privacy & Security).
 
-**Signing and Keychain prompts.** macOS lets an app read its Keychain items only while its
-signature matches the one that saved them. Releases and `Tools/install.sh` sign Lumio with the
-self-signed "Lumio Release Signing" certificate (`Tools/Release/sign_app.sh`), so every version
-has the same signature and reads the saved logins without asking. Builds run from Xcode are
-signed ad-hoc, which changes with every build: if one reads the real library, macOS asks for your
-password ("Lumio wants to use your confidential information"). That's why Debug runs use
-`-databaseName`, which keeps logins in memory.
+**Signing.** macOS ties a sandboxed app's Keychain items and its data folder to who signed it.
+Lumio is signed with the Apple Development certificate of one team (`RELEASE_TEAM_ID` in
+`project.yml`, a free Apple ID's Personal Team), so every version reads the saved logins and opens
+its data without asking. Ad-hoc or self-signed builds don't work for this: each build counts as a
+different app, so macOS asks for the Mac password before every update can read the logins. A
+build from another team also asks whether Lumio may access its own data.
+
+- Releases and `Tools/install.sh` sign with `Tools/Release/sign_app.sh`, which refuses a
+  certificate from another team.
+- Xcode builds on this Mac use the same certificate through the git-ignored
+  `Config/Local.xcconfig` (`CODE_SIGN_STYLE = Manual`, `CODE_SIGN_IDENTITY = Apple Development`,
+  `DEVELOPMENT_TEAM = <team>`). Without it, Xcode signs ad-hoc and macOS asks before such a build
+  may use Lumio's data folder.
+- A newer build can read and change a Keychain item an older build saved, but not delete it, so
+  removing a provider erases its stored login instead when deleting is refused.
+- The certificate is renewed in Xcode (Settings → Accounts → Manage Certificates) before it
+  expires each year; a renewed certificate of the same team keeps working.
 
 ## Debugging
 
@@ -182,8 +191,9 @@ size into `App/IPTVMac/Assets.xcassets/AppIcon.appiconset`. If the Dock keeps th
 Lumio is published at https://github.com/jacksonf-netizen/lumio. Friends install it from the
 Releases page, and their copies update themselves from there.
 
-Once per Mac: `Tools/Release/make_signing_certificate.sh` makes the signing certificate (see
-"Signing and Keychain prompts" above), and the update signing key must be in your Keychain (below).
+Once per Mac: add your Apple ID in Xcode and make its Apple Development certificate (Settings →
+Accounts → Manage Certificates → + → Apple Development; see "Signing" above), and put the update
+signing key in your Keychain (below).
 
 1. Test the changes (`swift test`, a smoke run, `Tools/install.sh` to use it yourself).
 2. In `project.yml`, bump `MARKETING_VERSION` (`0.1.0` → `0.2.0`, or `0.1.1` for small fixes) and
@@ -205,8 +215,7 @@ bring your own login" notice.
    `gh release delete vOLD --repo jacksonf-netizen/lumio --yes`. Keep its git tag, so its source
    stays available.
 
-**The signing keys.** There are two, both only in your login Keychain, never in the repository.
-Back both up.
+**The signing keys.** Both live only in your login Keychain, never in the repository.
 
 - The update key (Ed25519, made by `swift Tools/Release/sign_update.swift generate`; item "Lumio
   update signing key", account `release`). Its public half is `UPDATE_PUBLIC_KEY` in
@@ -214,13 +223,11 @@ Back both up.
   Without it, existing copies won't accept new updates and everyone has to reinstall by hand.
   Back it up from Keychain Access (the item → Show password → your password manager); on a new
   Mac, add the item back with the same name and account.
-- The code signing certificate "Lumio Release Signing" (Keychain Access → My Certificates).
-  Without it, a new one works, but everyone's copy asks for their password once more after the
-  next update. Back it up with File → Export Items… (a password-protected .p12) and import that
-  on a new Mac.
+- The Apple Development certificate. Xcode can make a new one for the same team at any time,
+  so it needs no backup; what must stay the same is the team.
 
-`make_release.sh` won't make an ad-hoc signed release unless you set `ALLOW_ADHOC=1` (for test
-builds only).
+`make_release.sh` won't make a release it couldn't sign for the team unless you set
+`ALLOW_ADHOC=1` (for test builds only).
 
 **Trying the install path locally**, without publishing: serve `build/release` with
 `python3 -m http.server 8123`, then run a Debug copy built with `MARKETING_VERSION=0.0.9` (copied

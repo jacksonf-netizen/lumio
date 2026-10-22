@@ -15,8 +15,8 @@ settings:
     DEAD_CODE_STRIPPING: YES
     # The version lives here only. Bump MARKETING_VERSION for each release (and tag it vX.Y.Z);
     # bump CURRENT_PROJECT_VERSION for every build you hand out.
-    MARKETING_VERSION: "0.1.2"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "0.1.3"
+    CURRENT_PROJECT_VERSION: "4"
 packages:
   IPTVKit:
     path: Packages/IPTVKit
@@ -49,6 +49,9 @@ targets:
         # Public half of the release signing key (Tools/Release/sign_update.swift). The app only
         # installs updates signed with the matching private key, which never leaves your Keychain.
         UPDATE_PUBLIC_KEY: "6qSGppJaHCU4x7R2KjtatKayZUXtVHrzy2jBPA9H3Jc="
+        # Apple team whose certificate signs releases (Tools/Release/sign_app.sh). Keep it the
+        # same: a different team makes every copy ask for passwords and data access again.
+        RELEASE_TEAM_ID: "WJ9633G98F"
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
       configs:

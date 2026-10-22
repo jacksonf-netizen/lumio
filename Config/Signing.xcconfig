@@ -1,11 +1,8 @@
-// Code signing for builds made in Xcode: "Sign to Run Locally" (ad-hoc), which needs no Apple
-// account. Ad-hoc signatures change with every build, so macOS asks for your password if such a
-// build reads the real library's saved logins (Debug runs normally use -databaseName instead).
-// Releases and Tools/install.sh re-sign the app with the stable "Lumio Release Signing"
-// certificate (Tools/Release/sign_app.sh); see "Signing and Keychain prompts" in
+// Code signing for builds made in Xcode. The default, "Sign to Run Locally" (ad-hoc), needs no
+// Apple account, so anyone can build Lumio. On the release Mac, Config/Local.xcconfig (git-ignored)
+// switches to the release team's Apple Development certificate, which Lumio's data folder and
+// saved logins are tied to; releases are signed by Tools/Release/sign_app.sh. See "Signing" in
 // Docs/development.md.
-//
-// Machine-specific overrides go in Config/Local.xcconfig (git-ignored).
 CODE_SIGN_STYLE = Automatic
 CODE_SIGN_IDENTITY = -
 DEVELOPMENT_TEAM =

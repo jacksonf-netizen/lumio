@@ -4,9 +4,8 @@
 # Tools/Release/publish.sh runs this and puts the files on GitHub; run it alone to try a build.
 #
 #   Tools/Release/make_release.sh
-#       Signed with the self-signed "Lumio Release Signing" certificate (sign_app.sh explains why;
-#       Tools/Release/make_signing_certificate.sh makes it once). Other Macs open it the first time
-#       after System Settings → Privacy & Security → Open Anyway.
+#       Signed with the release team's Apple Development certificate (sign_app.sh explains why).
+#       Other Macs open it the first time after System Settings → Privacy & Security → Open Anyway.
 #
 #   DEVELOPER_ID="Developer ID Application: Your Name (TEAMID)" Tools/Release/make_release.sh
 #       Signed for distribution with your Developer ID certificate (paid Apple Developer account).
@@ -46,8 +45,8 @@ Tools/Release/sign_app.sh "$APP" || status=$?
 if [ "$status" -eq 2 ] && [ "${ALLOW_ADHOC:-}" = 1 ]; then
     echo "==> ALLOW_ADHOC=1: leaving the ad-hoc signature"
 elif [ "$status" -ne 0 ]; then
-    echo "Not signed, so no release was made. Run Tools/Release/make_signing_certificate.sh once," >&2
-    echo "or set ALLOW_ADHOC=1 for a test build." >&2
+    echo "Not signed, so no release was made. Make the Apple Development certificate in Xcode" >&2
+    echo "(Settings → Accounts → Manage Certificates), or set ALLOW_ADHOC=1 for a test build." >&2
     exit 1
 fi
 

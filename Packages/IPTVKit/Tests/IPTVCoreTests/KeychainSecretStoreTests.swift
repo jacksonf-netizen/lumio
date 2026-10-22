@@ -25,6 +25,18 @@ struct KeychainSecretStoreTests {
         try store.delete(for: id)
     }
 
+    /// macOS refuses to let a newer build delete an item an older build saved; the login is
+    /// erased instead.
+    @Test func itemsThatCantBeDeletedAreErased() throws {
+        let id = ProviderID.make()
+        defer { try? store.delete(for: id) }
+        try store.save(ProviderCredentials(username: "alice", password: "secret"), for: id)
+        var refusing = store
+        refusing.deleteItem = { _ in errSecInvalidOwnerEdit }
+        try refusing.delete(for: id)
+        #expect(try store.load(for: id) == nil)
+    }
+
     @Test func itemsAreSeparatedByProvider() throws {
         let a = ProviderID.make()
         let b = ProviderID.make()

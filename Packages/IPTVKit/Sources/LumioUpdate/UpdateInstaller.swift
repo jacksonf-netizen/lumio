@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CoreServices)
+import CoreServices
+#endif
 
 /// Name of the installer XPC service inside Lumio.app (Contents/XPCServices). The app is sandboxed
 /// and can't replace itself, so this small unsandboxed helper does it, and only for a signed update.
@@ -146,20 +149,44 @@ public struct UpdateInstaller: Sendable {
         // checked against the release key above, which is what the quarantine prompt is for.
         try? Self.run("/usr/bin/xattr", ["-dr", "com.apple.quarantine", newApp.path])
 
-        // Swap: installed app aside, new app in, old copy deleted with the working folder.
-        let previous = staging.appendingPathComponent("previous.app")
-        do {
-            try fileManager.moveItem(at: appURL, to: previous)
-        } catch {
-            throw Failure.swapFailed(error.localizedDescription)
+        // Swap what's inside Lumio.app, so the app folder itself stays where it is: the Dock's
+        // pinned icon follows that folder, and after a whole-folder swap it kept pointing at the old
+        // copy (the updated app then showed up as a second icon). If macOS refuses, the whole
+        // folder is swapped instead. Either way the old copy goes with the working folder.
+        if (try? swapContents(with: newApp, staging: staging)) == nil {
+            let previous = staging.appendingPathComponent("previous.app")
+            do {
+                try fileManager.moveItem(at: appURL, to: previous)
+            } catch {
+                throw Failure.swapFailed(error.localizedDescription)
+            }
+            do {
+                try fileManager.moveItem(at: newApp, to: appURL)
+            } catch {
+                try? fileManager.moveItem(at: previous, to: appURL)
+                throw Failure.swapFailed(error.localizedDescription)
+            }
         }
-        do {
-            try fileManager.moveItem(at: newApp, to: appURL)
-        } catch {
-            try? fileManager.moveItem(at: previous, to: appURL)
-            throw Failure.swapFailed(error.localizedDescription)
-        }
+        #if canImport(CoreServices)
+        // Tell Launch Services the app at this path changed (version, icon, document types).
+        LSRegisterURL(appURL as CFURL, true)
+        #endif
         return version
+    }
+
+    /// Puts the new app's Contents folder in place of the installed one. Throws with the installed
+    /// app unchanged (or put back) when either move fails.
+    private func swapContents(with newApp: URL, staging: URL) throws {
+        let fileManager = FileManager.default
+        let installed = appURL.appendingPathComponent("Contents", isDirectory: true)
+        let previous = staging.appendingPathComponent("previous-Contents", isDirectory: true)
+        try fileManager.moveItem(at: installed, to: previous)
+        do {
+            try fileManager.moveItem(at: newApp.appendingPathComponent("Contents", isDirectory: true), to: installed)
+        } catch {
+            try? fileManager.moveItem(at: previous, to: installed)
+            throw error
+        }
     }
 
     static func info(of app: URL) throws -> [String: Any] {

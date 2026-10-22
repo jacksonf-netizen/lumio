@@ -76,6 +76,17 @@ struct UpdateInstallerTests {
         #expect(try FileManager.default.contentsOfDirectory(atPath: app.deletingLastPathComponent().path) == ["Lumio.app"])
     }
 
+    /// The Dock's pinned icon follows the app folder, so the folder itself must stay the same one.
+    @Test func keepsTheAppFolderItself() throws {
+        let (app, installer) = try installed()
+        let folderID = { try FileManager.default.attributesOfItem(atPath: app.path)[.systemFileNumber] as? Int }
+        let before = try folderID()
+        let (zip, signature) = try makeRelease(version: "0.2.0")
+        try installer.install(archive: zip, signature: signature)
+        #expect(try installedVersion(app) == "0.2.0")
+        #expect(try folderID() == before)
+    }
+
     /// The app hands the installer service an open file rather than a path.
     @Test func installsFromAnOpenFile() throws {
         let (app, installer) = try installed()

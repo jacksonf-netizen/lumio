@@ -8,6 +8,19 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+## 0.1.3 — 2026-10-22
+
+After this update macOS asks once whether Lumio may access its data (click Allow) and once more
+for your Mac password per provider (click Always Allow). From now on, updates shouldn't ask.
+
+- Lumio is now signed with an Apple developer certificate. The certificate from 0.1.1 didn't stop
+  macOS asking for your password after each update; this one does, because macOS recognises
+  every version as the same app.
+- After an update, Lumio reopens as the app pinned in your Dock instead of a second Dock icon.
+  This takes effect from the next update, because the updater in your current version does this
+  one.
+- Removing a provider now always clears its saved login, even one saved by an earlier version.
+
 ## 0.1.2 — 2026-10-22
 
 Live TV and Favorites can now switch between a list and a guide, and the Settings tabs no longer
