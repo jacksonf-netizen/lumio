@@ -15,8 +15,8 @@ settings:
     DEAD_CODE_STRIPPING: YES
     # The version lives here only. Bump MARKETING_VERSION for each release (and tag it vX.Y.Z);
     # bump CURRENT_PROJECT_VERSION for every build you hand out.
-    MARKETING_VERSION: "0.1.1"
-    CURRENT_PROJECT_VERSION: "2"
+    MARKETING_VERSION: "0.1.2"
+    CURRENT_PROJECT_VERSION: "3"
 packages:
   IPTVKit:
     path: Packages/IPTVKit

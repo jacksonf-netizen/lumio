@@ -8,6 +8,11 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+## 0.1.2 — 2026-10-22
+
+Live TV and Favorites can now switch between a list and a guide, and the Settings tabs no longer
+disappear while providers refresh.
+
 - Live TV and Favorites have a List / Guide switch at the top. Guide shows what's on later for
   the group you've picked; Favorites opens as a guide until you choose List, and remembers it.
   The separate Guide section is gone from the sidebar (Window → Guide and G in the player stay).
