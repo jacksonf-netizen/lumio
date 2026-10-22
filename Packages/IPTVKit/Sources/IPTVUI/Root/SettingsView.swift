@@ -361,7 +361,7 @@ private struct RegionRow: View {
                 .fixedSize()
                 .help("Merge or split this region")
             }
-            Toggle("Show \(region.name)", isOn: Binding(get: { !region.isHidden }, set: setShown))
+            Toggle("Show \(region.name)", isOn: Binding(get: { !region.isHidden }, set: { setShown($0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .help(region.isOther ? "Show or hide every group without a region, including new ones" : "Show or hide everything in \(region.name)")

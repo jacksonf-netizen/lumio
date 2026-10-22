@@ -254,9 +254,12 @@ Honest list of gaps against the brief:
   (see above) and the prompts stop.
 - **Catch-up, timeshift, recording, M3U/Stalker and cloud sync** are out of scope for v1. The data
   model (`tvArchive`, `SourceProvider`, `SyncProvider`) is ready for them.
-- **Updates are check-only.** The app can tell you a new version is out and open its release page;
-  it doesn't download and install by itself (see [Publishing and updates](#publishing-and-updates)).
-- **No licence chosen for the app's own code yet.** Pick one before making the repository public.
+- **New users see a macOS warning the first time.** Releases aren't signed with a paid Apple
+  Developer ID, so the first launch needs System Settings → Privacy & Security → Open Anyway
+  (updates after that install without it). See
+  [Publishing and updates](#publishing-and-updates) for signing with a Developer ID.
+- **CI runs by hand only.** GitHub's Mac runners use an older Xcode than this project; see the
+  CI paragraph under [Publishing and updates](#publishing-and-updates).
 
 ## Recents, Favorites, Regions and search
 
@@ -378,7 +381,8 @@ What protects your accounts and this Mac, and the audit of 2026-10-19:
 ## Publishing and updates
 
 Lumio is published at [github.com/jacksonf-netizen/lumio](https://github.com/jacksonf-netizen/lumio)
-(public, MIT licence). Friends install it from the Releases page, and their copies update
+(public). Lumio's own code is under the [MIT licence](LICENSE); the libraries bundled with the app
+keep their own licences ([THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)). Friends install it from the Releases page, and their copies update
 themselves from there.
 
 **Publishing a new version**

@@ -128,7 +128,7 @@ private struct ProviderRow: View {
                 }
             }
             Spacer()
-            Toggle("Enabled", isOn: Binding(get: { provider.isEnabled }, set: setEnabled))
+            Toggle("Enabled", isOn: Binding(get: { provider.isEnabled }, set: { setEnabled($0) }))
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .help(provider.isEnabled ? "Disable this provider" : "Enable this provider")
