@@ -25,16 +25,30 @@ final class LinkTransport: HTTPTransport, @unchecked Sendable {
     private var otherPanel: Set<String> = []
     /// Hosts that accept the connection and never answer.
     private var hanging: Set<String> = []
+    /// Hosts whose flood protection answers "not found" to their next request.
+    private var flooded: Set<String> = []
+    private var inFlight = 0
+    private(set) var mostAtOnce = 0
     func setUp(_ hosts: Set<String>) { lock.withLock { up = hosts } }
     func setOtherPanel(_ hosts: Set<String>) { lock.withLock { otherPanel = hosts } }
     func setHanging(_ hosts: Set<String>) { lock.withLock { hanging = hosts } }
+    func setFlooded(_ hosts: Set<String>) { lock.withLock { flooded = hosts } }
+    var mostRequestsAtOnce: Int { lock.withLock { mostAtOnce } }
     var requestedHosts: [String] { lock.withLock { hosts } }
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let host = request.url!.host!
-        let (isUp, offline, wrong, hangs) = lock.withLock { () -> (Bool, Bool, Bool, Bool) in
+        let (isUp, offline, wrong, hangs, flood) = lock.withLock { () -> (Bool, Bool, Bool, Bool, Bool) in
             hosts.append(host)
-            return (up.contains(host), _offline, _wrongPassword || otherPanel.contains(host), hanging.contains(host))
+            inFlight += 1
+            mostAtOnce = max(mostAtOnce, inFlight)
+            return (up.contains(host), _offline, _wrongPassword || otherPanel.contains(host), hanging.contains(host),
+                    flooded.remove(host) != nil)
+        }
+        defer { lock.withLock { inFlight -= 1 } }
+        try await Task.sleep(for: .milliseconds(5))
+        if flood {
+            return (Data(), HTTPURLResponse(url: request.url!, statusCode: 404, httpVersion: nil, headerFields: nil)!)
         }
         if hangs {
             try await Task.sleep(for: .seconds(60))
@@ -180,7 +194,7 @@ struct ServerLinkTests {
             service = ProviderService(database: database, secrets: secrets)
             transport = LinkTransport(up: up)
             clock = ManualClock(Date(timeIntervalSince1970: 1_800_000_000))
-            failover = ServerFailover(database: database, secrets: secrets, transport: transport, clock: clock, probeTimeout: 1)
+            failover = ServerFailover(database: database, secrets: secrets, transport: transport, clock: clock, probeTimeout: 1, pacing: 0)
             id = try await service.addProvider(name: "P", servers: links,
                                                credentials: ProviderCredentials(username: "u", password: "p")).id
         }
@@ -307,6 +321,27 @@ struct ServerLinkTests {
         await world.failover.recheckAllDown()
         #expect(world.active == "b.test")
         #expect(!world.links.allDown)
+    }
+
+    @Test func asksOneLinkAtATimeAndGivesNotFoundASecondChance() async throws {
+        // Three addresses of the same panel, whose flood protection says "not found" to a burst.
+        let world = try await World(links: "a.test\nb.test\nc.test", up: ["a.test", "b.test", "c.test"])
+        world.transport.setFlooded(["b.test", "c.test"])
+        #expect(await world.failover.recheck(world.id) == .working)
+        #expect(world.links.allSatisfy { !$0.isDown })
+        #expect(world.transport.mostRequestsAtOnce == 1)
+        #expect(world.transport.requestedHosts == ["a.test", "b.test", "b.test", "c.test", "c.test"])
+    }
+
+    @Test func oddRefusalsAreAServerAnswering() {
+        let login = ProviderCredentials(username: "u", password: "p")
+        // This panel answers 511 without a login and 513 to a wrong one.
+        #expect(ServerFailover.classify(.server(statusCode: 513), credentials: login) == .up(loggedIn: false))
+        #expect(ServerFailover.classify(.server(statusCode: 511), credentials: login) == .up(loggedIn: false))
+        #expect(ServerFailover.classify(.forbidden, credentials: login) == .up(loggedIn: false))
+        // Cloudflare can't reach the server behind it.
+        #expect(!ServerFailover.classify(.server(statusCode: 521), credentials: login).isUp)
+        #expect(!ServerFailover.classify(.notFound, credentials: login).isUp)
     }
 
     @Test func aLinkThatLogsInBeatsOneThatOnlyAnswers() async throws {

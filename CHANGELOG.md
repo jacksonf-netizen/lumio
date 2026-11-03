@@ -6,6 +6,20 @@ the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`
 Each version starts with a one- or two-sentence summary paragraph: that's all Lumio shows when it
 offers the update. The list below it appears on the release page.
 
+## 0.1.5 — 2026-11-03
+
+Backup server links that work no longer show as "Down" with providers that have flood
+protection. After updating, press Refresh on the provider once to recheck its links.
+
+- Fixed: backup server links that work could show as "Down". Lumio checked every link at the same
+  moment, and providers with flood protection answer a burst of requests with "not found". It
+  now checks one link at a time, with a short pause, and asks again before calling a link down.
+  Press Refresh on the provider once to clear links marked down by mistake.
+- Odd refusals some providers send (like 511 or 513 for a wrong login) count as the server
+  answering, so a wrong password no longer shows every link as down.
+- When a provider has no guide download, Settings says so plainly. Lumio asks once more first,
+  in case it was flood protection.
+
 ## 0.1.4 — 2026-11-03
 
 Paste every server link your seller sent, and Lumio moves to the next one by itself when the one

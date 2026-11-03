@@ -43,6 +43,17 @@ struct CatalogSyncTests {
         #expect(await connections.limit(for: providerA.id) == 2)
     }
 
+    @Test func aProviderWithoutAGuideDownloadSaysSoAndKeepsTheGuide() async throws {
+        await service.refresh(providerA.id)
+        transportA.set("xmltv", body: "<html>404 Not Found</html>", status: 404)
+        clock.advance(3600)
+        let report = await service.refresh(providerA.id, parts: .guide)
+        // Asked twice ("not found" can be flood protection), then explained.
+        #expect(transportA.requestedActions.filter { $0 == "xmltv" }.count == 3)
+        #expect(report.partErrors[.guide]?.contains("no guide download") == true)
+        #expect(try CatalogRepository(database: database).counts(providerID: providerA.id).programmes == 3)
+    }
+
     @Test func twoProvidersMergeIntoLogicalChannels() async throws {
         await service.refresh(providerA.id, parts: .catalog)
         await service.refresh(providerB.id, parts: .catalog)

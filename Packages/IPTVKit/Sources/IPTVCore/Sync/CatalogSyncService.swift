@@ -293,7 +293,15 @@ public actor CatalogSyncService {
         if parts.contains(.guide), !Task.isCancelled {
             emit(.step(providerID, .guide))
             do {
-                if let file = try await source.downloadGuide() {
+                let downloaded: URL?
+                do {
+                    downloaded = try await source.downloadGuide()
+                } catch XtreamError.notFound {
+                    // Flood protection on some panels answers "not found" after a run of requests.
+                    try await clock.sleep(for: .seconds(5))
+                    downloaded = try await source.downloadGuide()
+                }
+                if let file = downloaded {
                     defer { try? FileManager.default.removeItem(at: file) }
                     let window = EPGWindow(
                         pastDays: (try? settings.value(Double.self, for: .epgPastDays)) ?? 1,
@@ -305,6 +313,8 @@ public actor CatalogSyncService {
                     if let partial = summary.partialError { report.partErrors[.guide] = "Guide partly imported: \(partial)" }
                     try? settings.set(clock.now(), for: .epgLastRefreshAt, scope: .provider(providerID))
                 }
+            } catch XtreamError.notFound {
+                report.partErrors[.guide] = "The provider has no guide download at this address (\"not found\"). Lumio keeps the guide it already has."
             } catch {
                 report.partErrors[.guide] = message(error, redact)
             }

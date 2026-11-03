@@ -136,17 +136,25 @@ Every transition is logged with `os.Logger` (subsystem `com.jackson.iptvstreamer
 
 `ServerFailover` (IPTVCore/Services) keeps each provider on a working address from its
 `providerServer` list. A check sends `player_api.php` (the account request, no stream connection)
-to every link at once with an 8 s timeout (and a hard 10 s limit, for a server that keeps sending
-bytes without answering). Any real answer counts as up, even a wrong password or an expired account
-(those would be the same on every link); no connection, a timeout, a 5xx or a page that isn't
-Xtream JSON counts as down. If this Mac is offline nothing is marked. A link that accepts the login
-is preferred over one that only answers: "wrong password" from one link while another logs in means
-that address now runs someone else's panel. When no link logs in, the address in use stays.
+to the links one at a time, with an 8 s timeout (and a hard 10 s limit, for a server that keeps
+sending bytes without answering) and a 1 s pause after each request a server answered. A seller's
+addresses often lead to the same server, and panels with flood protection answer a burst (even
+three requests within a second) with 404 for a few seconds; a 404 is therefore asked once more
+after 3 s before it counts.
 
-- Quick check (`ensureWorking`): after a refresh couldn't connect, or a stream failed. Returns as
-  soon as the address in use logs in; otherwise moves to the first link in order that logs in,
-  without waiting for links below it. Login and connection-limit refusals (401, 456, 458, 509)
-  don't trigger it: the server answered those. The player shows "Reconnecting…" while it runs.
+Any real answer counts as up, even a wrong password or an expired account (those would be the same
+on every link), and so do odd refusals (403, 429, other 4xx, nonstandard 5xx such as 511 or 513,
+which some panels send for a missing or wrong login). Down: no such address, no connection, a
+timeout, 404 twice, a page that isn't Xtream JSON, or a server error / gateway code saying the
+server isn't working (500, 502–504, Cloudflare's 520–526 and 530). If this Mac is offline nothing
+is marked. A link that accepts the login is preferred over one that only answers: "wrong password"
+from one link while another logs in means that address now runs someone else's panel. When no link
+logs in, the address in use stays.
+
+- Quick check (`ensureWorking`): after a refresh couldn't connect, or a stream failed. Asks the
+  address in use first and stops if it logs in; otherwise asks the others in order and moves to
+  the first that logs in. Login and connection-limit refusals (401, 456, 458, 509) don't trigger
+  it: the server answered those. The player shows "Reconnecting…" while it runs.
 - Full check (`recheck`): at launch, every 6 hours, every 5 minutes while all of a provider's links
   are down, and on Refresh in Settings. Also moves back up to a higher link that answers again.
   Streams already playing keep their address; the next one opens on the new link.

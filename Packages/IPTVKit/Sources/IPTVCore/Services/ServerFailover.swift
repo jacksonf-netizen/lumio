@@ -18,8 +18,9 @@ public struct NoServerHealth: ServerHealth {
 /// provider's `serverURL`, so streams always start on it at once; this actor only checks in the
 /// background (at launch, every few hours, after a refresh couldn't connect, and when a stream
 /// fails) and moves the provider to the highest link in the user's order that answers. A check is
-/// one small `player_api.php` request per link, all links at the same time, so it takes a few
-/// seconds at most. It doesn't use one of the account's stream connections.
+/// one small `player_api.php` request per link, one link at a time: a seller's addresses often
+/// lead to the same server, and panels with flood protection answer a burst of requests with
+/// "not found". It doesn't use one of the account's stream connections.
 public actor ServerFailover: ServerHealth {
     public enum Outcome: Sendable, Equatable {
         /// The address in use answers (or is the best one that does).
@@ -39,6 +40,9 @@ public actor ServerFailover: ServerHealth {
     private let clock: any AppClock
     private let userAgent: @Sendable () -> String
     private let probeTimeout: TimeInterval
+    /// Pause after each request a server answered, so a check never looks like a flood. "Not
+    /// found" is asked again after three of these (flood protection lets go within seconds).
+    private let pacing: TimeInterval
 
     private var running: [ProviderID: Task<Outcome, Never>] = [:]
     /// When the address in use last answered; a stream failing soon after isn't the server's fault.
@@ -46,20 +50,21 @@ public actor ServerFailover: ServerHealth {
     static let trustAnswerFor: TimeInterval = 20
 
     public init(database: AppDatabase, secrets: any SecretStore, transport: any HTTPTransport = URLSessionTransport(),
-                clock: any AppClock = SystemClock(), probeTimeout: TimeInterval = 8,
+                clock: any AppClock = SystemClock(), probeTimeout: TimeInterval = 8, pacing: TimeInterval = 1,
                 userAgent: @escaping @Sendable () -> String = { XtreamClient.defaultUserAgent }) {
         providers = ProviderRepository(database: database)
         self.secrets = secrets
         self.transport = transport
         self.clock = clock
         self.probeTimeout = probeTimeout
+        self.pacing = pacing
         self.userAgent = userAgent
     }
 
     // MARK: Checks
 
-    /// Quick check after something failed: returns as soon as the address in use answers;
-    /// otherwise waits for the other links and switches to the first one (in order) that answers.
+    /// Quick check after something failed: asks the address in use first and stops there if it
+    /// logs in; otherwise asks the others in order and switches to the first one that logs in.
     @discardableResult
     public func ensureWorking(_ id: ProviderID) async -> Outcome {
         await shared(id) { await self.check(id, preferHigher: false) }
@@ -115,22 +120,16 @@ public actor ServerFailover: ServerHealth {
         let active = provider.serverURL
         let agent = provider.userAgentOverride ?? userAgent()
 
-        // Every link at once. Unless looking for a higher link, stop as soon as the answer is
-        // known: the link in use logs in, or it doesn't and every link above the first one that
-        // logs in has failed.
+        // One link at a time. A quick check starts with the address in use and stops at the first
+        // link that logs in; a full check asks every link, in the user's order.
+        let order = preferHigher ? links : links.filter { $0.url == active } + links.filter { $0.url != active }
         var results: [URL: Probe] = [:]
-        await withTaskGroup(of: (URL, Probe).self) { group in
-            for link in links {
-                group.addTask { (link.url, await self.probe(link.url, credentials: credentials, userAgent: agent)) }
-            }
-            for await (url, result) in group {
-                results[url] = result
-                if !preferHigher, let current = results[active],
-                   current == .up(loggedIn: true) || Self.decided(links, results) {
-                    group.cancelAll()
-                    break
-                }
-            }
+        for (index, link) in order.enumerated() {
+            if Task.isCancelled { return .skipped }
+            let (result, answered) = await probe(link.url, credentials: credentials, userAgent: agent)
+            results[link.url] = result
+            if !preferHigher, result == .up(loggedIn: true) { break }
+            if answered, index < order.count - 1 { try? await Task.sleep(for: .seconds(pacing)) }
         }
         if results.values.contains(.offline) && !results.values.contains(where: \.isUp) {
             Log.app.notice("Server check for \(id, privacy: .public) skipped: offline")
@@ -176,18 +175,6 @@ public actor ServerFailover: ServerHealth {
         return links
     }
 
-    /// True once a link logs in and every link above it has failed: nothing better can turn up.
-    static func decided(_ links: [ServerLink], _ results: [URL: Probe]) -> Bool {
-        for link in links {
-            switch results[link.url] {
-            case .up(loggedIn: true): return true
-            case .down?: continue
-            default: return false
-            }
-        }
-        return false
-    }
-
     // MARK: Probe
 
     enum Probe: Equatable, Sendable {
@@ -201,30 +188,40 @@ public actor ServerFailover: ServerHealth {
     }
 
     /// Asks the server for the account. Any real answer, even "wrong password" or "expired", means
-    /// the server is up: those are the same on every link, so switching wouldn't help. Gives up
-    /// after a little more than the request timeout even if the server keeps trickling bytes.
-    private func probe(_ url: URL, credentials: ProviderCredentials, userAgent: String) async -> Probe {
+    /// the server is up: those are the same on every link, so switching wouldn't help. "Not found"
+    /// may be flood protection, so it's asked once more after a pause. `answered` is whether the
+    /// request reached a server (then the next one waits a moment).
+    private func probe(_ url: URL, credentials: ProviderCredentials, userAgent: String) async -> (Probe, answered: Bool) {
         var configured = XtreamClient(serverURL: url, credentials: credentials, transport: transport, userAgent: userAgent)
         configured.requestTimeout = probeTimeout
         let client = configured
+        var error = await ask(client)
+        if error == .notFound {
+            try? await Task.sleep(for: .seconds(3 * pacing))
+            error = await ask(client)
+        }
+        guard let error else { return (.up(loggedIn: true), true) }
+        return (Self.classify(error, credentials: credentials), Self.reachedServer(error))
+    }
+
+    /// One account request; nil when it logged in. Gives up after a little more than the request
+    /// timeout even if the server keeps trickling bytes.
+    private func ask(_ client: XtreamClient) async -> XtreamError? {
         let deadline = probeTimeout + 2
-        return await withTaskGroup(of: Probe?.self) { group in
+        return await withTaskGroup(of: XtreamError??.self) { group in
             group.addTask {
                 do {
                     _ = try await client.authenticate()
-                    return .up(loggedIn: true)
-                } catch let error as XtreamError {
-                    return Self.classify(error, credentials: credentials)
+                    return .some(nil)
                 } catch {
-                    return Task.isCancelled ? .cancelled
-                        : .down(CredentialRedactor.redact(error.localizedDescription, credentials: [credentials]))
+                    return .some(Task.isCancelled ? .cancelled : XtreamError.from(error))
                 }
             }
             group.addTask {
                 try? await Task.sleep(for: .seconds(deadline))
-                return Task.isCancelled ? nil : .down("No answer within \(Int(deadline)) seconds")
+                return Task.isCancelled ? nil : .some(.timeout)
             }
-            var outcome = Probe.cancelled
+            var outcome: XtreamError? = .cancelled
             for await result in group {
                 guard let result else { continue }
                 outcome = result
@@ -235,12 +232,29 @@ public actor ServerFailover: ServerHealth {
         }
     }
 
+    static func reachedServer(_ error: XtreamError) -> Bool {
+        switch error {
+        case .timeout, .offline, .cannotConnect, .cancelled: false
+        default: true
+        }
+    }
+
+    /// Down means nothing answers there: no such address, no connection, a timeout, "not found"
+    /// twice, a page that isn't a panel, or a gateway saying the server behind it is down. Other
+    /// refusals are a server answering (panels use odd codes, like 511 or 513 for a bad login).
     static func classify(_ error: XtreamError, credentials: ProviderCredentials) -> Probe {
         switch error {
-        case .unauthorized, .accountExpired, .accountNotActive, .maxConnectionsReached, .rateLimited: .up(loggedIn: false)
+        case .unauthorized, .accountExpired, .accountNotActive, .maxConnectionsReached, .rateLimited, .forbidden,
+             .httpStatus:
+            .up(loggedIn: false)
+        case .server(let code) where !serverDownCodes.contains(code):
+            .up(loggedIn: false)
         case .offline: .offline
         case .cancelled: .cancelled
         default: .down(CredentialRedactor.redact(error.description, credentials: [credentials]))
         }
     }
+
+    /// 5xx codes that mean the server (or the one behind a gateway like Cloudflare) isn't working.
+    static let serverDownCodes: Set<Int> = [500, 502, 503, 504, 520, 521, 522, 523, 524, 525, 526, 530]
 }
