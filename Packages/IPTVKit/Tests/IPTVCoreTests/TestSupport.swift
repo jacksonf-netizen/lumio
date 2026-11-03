@@ -15,6 +15,7 @@ enum TestData {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let logicalID = "epg:bbc1.uk-\(providerID)"
         try Category(providerID: providerID, kind: .live, categoryID: "1", name: "News").insert(db)
+        try ServerLink(providerID: providerID, position: 0, url: URL(string: "http://\(providerID).test")!).insert(db)
         try Channel(providerID: providerID, streamID: 10, name: "BBC One HD", epgChannelID: "bbc1.uk",
                     categoryID: "1").insert(db)
         try LogicalChannel(id: logicalID, name: "BBC One").insert(db)

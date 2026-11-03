@@ -51,6 +51,8 @@ public struct PlaybackDependencies: Sendable {
     public var connections: ConnectionManager
     public var resolver: any StreamURLResolver
     public var history: any PlaybackHistoryStore
+    /// Moves a provider to a working server link when the one in use dies.
+    public var servers: any ServerHealth
     public var systemEvents: any SystemEventSource
     public var clock: any AppClock
     public var makeEngine: @MainActor @Sendable (EngineKind) -> any PlaybackEngine
@@ -58,13 +60,14 @@ public struct PlaybackDependencies: Sendable {
     public var random: @Sendable () -> Double
 
     public init(connections: ConnectionManager, resolver: any StreamURLResolver,
-                history: any PlaybackHistoryStore = NoPlaybackHistory(),
+                history: any PlaybackHistoryStore = NoPlaybackHistory(), servers: any ServerHealth = NoServerHealth(),
                 systemEvents: any SystemEventSource = NoSystemEvents(), clock: any AppClock = SystemClock(),
                 makeEngine: @escaping @MainActor @Sendable (EngineKind) -> any PlaybackEngine,
                 random: @escaping @Sendable () -> Double = { Double.random(in: 0..<1) }) {
         self.connections = connections
         self.resolver = resolver
         self.history = history
+        self.servers = servers
         self.systemEvents = systemEvents
         self.clock = clock
         self.makeEngine = makeEngine
@@ -262,6 +265,8 @@ public final class PlaybackController {
         var index = 0
         var lastFailure: EngineFailure?
         var noSlot = false
+        /// Server-link switches this session, so a flapping provider can't loop forever.
+        var serverSwitches = 0
 
         rungs: while index < plans.count {
             if Task.isCancelled { return }
@@ -333,6 +338,23 @@ public final class PlaybackController {
                         Attempt \(attempt + 1) of \(plan.description, privacy: .public) failed after \
                         \(Int(playedFor))s: \(failure.description, privacy: .public)
                         """)
+                    // The server itself may have gone down: if another of the provider's links
+                    // answers, retry this rung there at once. (Checking a dead server takes a few
+                    // seconds, so say we're reconnecting meanwhile.)
+                    if failure.mayMeanServerDown, serverSwitches < 5 {
+                        transition(to: .reconnecting(attempt: attempt + 1), reason: "checking the server")
+                        if await deps.servers.streamFailed(providerID: plan.source.providerID) {
+                            if Task.isCancelled { return }
+                            serverSwitches += 1
+                            reconnectCount += 1
+                            attempt = 0
+                            setNotice("Switched to a backup server link")
+                            Log.playback.notice("Retrying \(plan.description, privacy: .public) on another server link")
+                            transition(to: .reconnecting(attempt: 0), reason: "server link switched")
+                            continue attempts
+                        }
+                        if Task.isCancelled { return }
+                    }
                     if failure.skipsToNextRung {
                         await deps.history.recordFailure(plan, error: failure)
                         if failure.providerRefused,

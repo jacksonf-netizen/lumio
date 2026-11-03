@@ -13,18 +13,20 @@ public struct ProviderService: Sendable {
     }
 
     /// Validates input, stores the credentials in the secret store and inserts the provider.
-    /// If the database insert fails the credentials are removed again.
+    /// `servers` is one address or a pasted list, one per line (see `ServerURL.parseList`); a login
+    /// inside the links is ignored here (the editor offers it). If the database insert fails the
+    /// credentials are removed again.
     @discardableResult
-    public func addProvider(name: String, serverURL: String, credentials: ProviderCredentials) async throws -> Provider {
-        let url = try ServerURL.normalize(serverURL)
+    public func addProvider(name: String, servers: String, credentials: ProviderCredentials) async throws -> Provider {
+        let urls = try ServerURL.parseList(servers).urls
         let credentials = try Self.validated(credentials)
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let provider = Provider(name: trimmedName.isEmpty ? (url.host ?? "Provider") : trimmedName, serverURL: url)
+        let provider = Provider(name: trimmedName.isEmpty ? (urls[0].host ?? "Provider") : trimmedName, serverURL: urls[0])
 
         try secrets.save(credentials, for: provider.id)
         do {
-            let inserted = try repository.insert(provider)
-            Log.app.info("Added provider \(inserted.id, privacy: .public)")
+            let inserted = try repository.insert(provider, links: urls)
+            Log.app.info("Added provider \(inserted.id, privacy: .public) with \(urls.count) server links")
             await sync.localDataDidChange(.providers)
             return inserted
         } catch {
@@ -33,13 +35,18 @@ public struct ProviderService: Sendable {
         }
     }
 
-    /// Updates name / URL and, when given, credentials.
-    public func updateProvider(_ provider: Provider, serverURL: String? = nil,
+    @discardableResult
+    public func addProvider(name: String, serverURL: String, credentials: ProviderCredentials) async throws -> Provider {
+        try await addProvider(name: name, servers: serverURL, credentials: credentials)
+    }
+
+    /// Updates the settings and, when given, the server links (one per line) and credentials.
+    public func updateProvider(_ provider: Provider, servers: String? = nil,
                                credentials: ProviderCredentials? = nil) async throws {
-        var provider = provider
-        if let serverURL { provider.serverURL = try ServerURL.normalize(serverURL) }
+        let urls = try servers.map { try ServerURL.parseList($0).urls }
         if let credentials { try secrets.save(try Self.validated(credentials), for: provider.id) }
         try repository.updateSettings(provider)
+        if let urls { try repository.setLinks(urls, for: provider.id) }
         await sync.localDataDidChange(.providers)
     }
 

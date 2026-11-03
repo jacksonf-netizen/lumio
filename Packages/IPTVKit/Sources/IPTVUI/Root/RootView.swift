@@ -60,8 +60,20 @@ public struct RootView: View {
                         }
                     }
                     Section {
-                        Label(SidebarItem.settings.title, systemImage: SidebarItem.settings.systemImage)
-                            .tag(SidebarItem.settings)
+                        Label {
+                            HStack {
+                                Text(SidebarItem.settings.title)
+                                Spacer()
+                                if !state.providers.unreachable.isEmpty {
+                                    Circle().fill(.red).frame(width: 7, height: 7)
+                                        .help("A provider's server links are all down")
+                                        .accessibilityLabel("Problem with a provider")
+                                }
+                            }
+                        } icon: {
+                            Image(systemName: SidebarItem.settings.systemImage)
+                        }
+                        .tag(SidebarItem.settings)
                     }
                 }
                 .navigationSplitViewColumnWidth(min: 170, ideal: 190, max: 240)
@@ -197,7 +209,7 @@ struct FavoritesView: View {
     private func posters(_ items: [VODItem], kind: String, icon: String) -> some View {
         if items.isEmpty {
             EmptyState("No Favorite \(kind)", systemImage: icon,
-                       message: "Use the heart on a \(kind == "Movies" ? "movie" : "series") page to add it here.")
+                       message: "Use the star on a \(kind == "Movies" ? "movie" : "series") page to add it here.")
         } else {
             PosterGrid(items: items, state: state) { item in
                 path.append(item.kind == .movie ? .movie(item) : .series(item))

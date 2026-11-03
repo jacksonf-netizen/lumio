@@ -13,6 +13,8 @@ public struct AppEnvironment: Sendable {
     public let logicalChannels: LogicalChannelStore
     public let connections: ConnectionManager
     public let sync: CatalogSyncService
+    /// Keeps providers on a server link that works.
+    public let servers: ServerFailover
     public let secrets: any SecretStore
     public let systemEvents: any SystemEventSource
     public let items: PlaybackItemBuilder
@@ -37,7 +39,11 @@ public struct AppEnvironment: Sendable {
             (try? settings.value(String.self, for: .userAgent)) ?? XtreamClient.defaultUserAgent
         })
         self.sources = sources
-        sync = CatalogSyncService(database: database, sources: sources, connections: connections, clock: clock)
+        let servers = ServerFailover(database: database, secrets: secrets, transport: transport, clock: clock, userAgent: {
+            (try? settings.value(String.self, for: .userAgent)) ?? XtreamClient.defaultUserAgent
+        })
+        self.servers = servers
+        sync = CatalogSyncService(database: database, sources: sources, connections: connections, servers: servers, clock: clock)
     }
 
     /// The real app: on-disk database, the macOS Keychain and URLSession.
@@ -95,19 +101,33 @@ public struct AppEnvironment: Sendable {
         AppEnvironment(database: try! AppDatabase.inMemory(), secrets: InMemorySecretStore(), transport: OfflineTransport())
     }
 
-    /// Call once at launch: restores connection limits from cached account info, then refreshes
-    /// stale providers in the background. Returns immediately.
+    /// Call once at launch: restores connection limits from cached account info, checks every
+    /// provider's server links, then refreshes stale providers in the background. Returns
+    /// immediately; streams don't wait for any of it (they start on the link last known to work).
     public func startBackgroundWork() {
         let environment = self
         Task.detached(priority: .utility) {
             for provider in (try? environment.providers.repository.all()) ?? [] {
                 await environment.connections.setLimit(provider.maxConnections, for: provider.id)
             }
+            await environment.servers.recheckAll()
             await environment.sync.refreshStale()
-            // Re-check every 30 minutes while the app runs.
+            // While the app runs: stale refreshes every 30 minutes, all links every 6 hours, and
+            // every 5 minutes for a provider whose links are all down, so it recovers soon after.
+            var lastLinkCheck = Date()
+            var lastRefresh = Date()
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(30 * 60))
-                await environment.sync.refreshStale()
+                try? await Task.sleep(for: .seconds(5 * 60))
+                if Date().timeIntervalSince(lastLinkCheck) >= 6 * 3600 {
+                    lastLinkCheck = Date()
+                    await environment.servers.recheckAll()
+                } else {
+                    await environment.servers.recheckAllDown()
+                }
+                if Date().timeIntervalSince(lastRefresh) >= 30 * 60 {
+                    lastRefresh = Date()
+                    await environment.sync.refreshStale()
+                }
             }
         }
     }

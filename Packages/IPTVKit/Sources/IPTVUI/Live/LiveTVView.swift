@@ -30,26 +30,9 @@ struct LiveTVView: View {
     @AppStorage("liveTVLayout") private var layout: ChannelLayout = .list
 
     var body: some View {
-        // Columns share the width so the page always fits the window. (HSplitView kept its column
-        // widths when the window got narrower and spilled past both edges.)
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            HStack(spacing: 0) {
-                GroupList(model: model, sheet: $sheet)
-                    .frame(width: min(240, max(150, width * 0.2)))
-                Divider()
-                switch layout {
-                case .list:
-                    ChannelList(model: model, sheet: $sheet)
-                        .frame(maxWidth: .infinity)
-                    Divider()
-                    PreviewPane(model: model, state: state)
-                        .frame(width: min(560, max(260, width * 0.38)))
-                case .guide:
-                    GuideView(state: state, scope: .liveTV)
-                        .frame(maxWidth: .infinity)
-                }
-            }
+        VStack(spacing: 0) {
+            UnreachableBanner(state: state)
+            columns
         }
         .navigationTitle("Live TV")
         .toolbar {
@@ -70,6 +53,32 @@ struct LiveTVView: View {
         }
         .sheet(item: $sheet) { sheet in
             ManagementSheetView(sheet: sheet, model: model)
+        }
+    }
+}
+
+extension LiveTVView {
+    // Columns share the width so the page always fits the window. (HSplitView kept its column
+    // widths when the window got narrower and spilled past both edges.)
+    private var columns: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            HStack(spacing: 0) {
+                GroupList(model: model, sheet: $sheet)
+                    .frame(width: min(240, max(150, width * 0.2)))
+                Divider()
+                switch layout {
+                case .list:
+                    ChannelList(model: model, sheet: $sheet)
+                        .frame(maxWidth: .infinity)
+                    Divider()
+                    PreviewPane(model: model, state: state)
+                        .frame(width: min(560, max(260, width * 0.38)))
+                case .guide:
+                    GuideView(state: state, scope: .liveTV)
+                        .frame(maxWidth: .infinity)
+                }
+            }
         }
     }
 }
@@ -264,10 +273,9 @@ struct ChannelRow: View {
                         Image(systemName: "star.fill").font(.caption2).foregroundStyle(.yellow)
                     }
                     if channel.sourceProviders.count > 1 {
-                        Text("\(channel.sourceProviders.count)")
-                            .font(.caption2.weight(.semibold))
-                            .padding(.horizontal, 4)
-                            .background(.quaternary, in: Capsule())
+                        Text("×\(channel.sourceProviders.count)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.tertiary)
                             .help("Available from \(channel.sourceProviders.count) providers")
                     }
                     if channel.isHidden {
@@ -336,7 +344,7 @@ private struct ChannelDetails: View {
 
     private var titles: some View {
         VStack(alignment: .leading) {
-            Text(channel.name).font(.title3.bold()).lineLimit(2)
+            Text(channel.name).font(.title3.weight(.semibold)).lineLimit(2)
             Text(channel.sourceProviders.map(model.providerName).joined(separator: " · "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }
@@ -395,7 +403,7 @@ struct ProgrammeSummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack {
-                Text(label.uppercased()).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+                Text(label).font(.caption.weight(.medium)).foregroundStyle(.secondary)
                 Text("\(programme.start.formatted(date: .omitted, time: .shortened)) – \(programme.stop.formatted(date: .omitted, time: .shortened))")
                     .font(.caption.monospacedDigit()).foregroundStyle(.secondary)
             }

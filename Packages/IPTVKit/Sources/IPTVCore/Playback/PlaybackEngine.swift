@@ -89,6 +89,16 @@ public struct EngineFailure: Error, Sendable, Equatable, CustomStringConvertible
         self.detail = detail
     }
 
+    /// Could be the server going down rather than this stream: worth checking the provider's links.
+    /// Not a login or connection-limit refusal: the server answered those.
+    public var mayMeanServerDown: Bool {
+        switch kind {
+        case .unsupported, .decoder: false
+        case .httpStatus(let code): ![401, 456, 458, 509].contains(code)
+        default: true
+        }
+    }
+
     /// Retrying the same URL won't help; move on to the next format / engine / provider.
     public var skipsToNextRung: Bool {
         switch kind {

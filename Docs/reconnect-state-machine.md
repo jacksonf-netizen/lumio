@@ -32,6 +32,9 @@ For each source, in ranked order (free slot, then provider priority, then reliab
 
 Then the next source (another provider). Duplicate plans are removed.
 
+Before any of that, a provider with several server links (sellers give several addresses for one
+login) stays on one that works: see "Server links" below.
+
 ## States (`PlaybackPhase`)
 
 | State | Meaning | UI |
@@ -76,6 +79,11 @@ for each rung in ladder:
         FAIL(e):
             stop engine (close before reopen)
             if it had been playing ≥ stableAfter (20 s): attempt = 0   (a working stream gets a fresh budget)
+            if e could be the server dying (anything but unsupported, decoder or 401) and fewer than
+                5 switches this session: ask ServerFailover. It checks the provider's server links
+                (skipped if the address in use answered in the last 20 s); if it moved the provider
+                to another link: notice "Switched to a backup server link", attempt = 0, retry this
+                rung at once (the resolver reads the new address)
             if e skips the rung (404, 401/403, 456/458/509, unsupported, decoder): record failure, then
                 if e is a provider refusal (401/403/404/456/458/509) and a later rung is on another provider:
                     jump straight to that provider's first rung (its other formats would fail the same way)
@@ -123,3 +131,27 @@ on the remembered configuration clears it, so the next play starts from the defa
 Every transition is logged with `os.Logger` (subsystem `com.jackson.iptvstreamer`, category
 `playback`): old state → new state and the reason. URLs and engine log lines are passed through
 `CredentialRedactor`. View them live in Console.app.
+
+## Server links
+
+`ServerFailover` (IPTVCore/Services) keeps each provider on a working address from its
+`providerServer` list. A check sends `player_api.php` (the account request, no stream connection)
+to every link at once with an 8 s timeout (and a hard 10 s limit, for a server that keeps sending
+bytes without answering). Any real answer counts as up, even a wrong password or an expired account
+(those would be the same on every link); no connection, a timeout, a 5xx or a page that isn't
+Xtream JSON counts as down. If this Mac is offline nothing is marked. A link that accepts the login
+is preferred over one that only answers: "wrong password" from one link while another logs in means
+that address now runs someone else's panel. When no link logs in, the address in use stays.
+
+- Quick check (`ensureWorking`): after a refresh couldn't connect, or a stream failed. Returns as
+  soon as the address in use logs in; otherwise moves to the first link in order that logs in,
+  without waiting for links below it. Login and connection-limit refusals (401, 456, 458, 509)
+  don't trigger it: the server answered those. The player shows "Reconnecting…" while it runs.
+- Full check (`recheck`): at launch, every 6 hours, every 5 minutes while all of a provider's links
+  are down, and on Refresh in Settings. Also moves back up to a higher link that answers again.
+  Streams already playing keep their address; the next one opens on the new link.
+- Streams never wait for a check: they open on `provider.serverURL`, the link last known to work.
+- When every link is down, Settings shows it on the provider, the sidebar puts a red dot on
+  Settings, and Live TV shows a banner, until a link answers.
+- Logos and posters on a dead link load from the one in use (`ServerAliases`), unless another
+  provider uses that address.

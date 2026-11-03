@@ -380,6 +380,7 @@ public enum SmokeTest {
             log("\(t()) backup \(backup.count) bytes, contains credentials=\(text.contains("\"password\"") || text.contains("test:test"))")
         }
 
+        await serverLinks(state: state, providerID: provider.id, harness: harness, t: t)
         if let second = UserDefaults.standard.string(forKey: "smokeTestB").flatMap(URL.init(string:)) {
             await twoProviders(state: state, a: harness, b: second, t: t)
         }
@@ -390,6 +391,51 @@ public enum SmokeTest {
         snapshot(NoticesSheet(), "12-acknowledgements")
         snapshot(NoticesSheet(showingFullTexts: true), "12-acknowledgements-full")
         log("\(t()) done")
+    }
+
+    /// The seller's link in use dies: the next stream must switch to the backup link by itself.
+    /// Then every link dies: Settings, the sidebar and Live TV must say so, and clear once one works.
+    private static func serverLinks(state: AppState, providerID: ProviderID, harness: URL, t: () -> String) async {
+        let service = state.environment.providers
+        let dead = URL(string: "http://127.0.0.1:9")!
+        guard let provider = try? service.repository.provider(id: providerID),
+              let channel = state.live.channels.first else { return log("FAIL server links: no provider or channel") }
+        try? await service.updateProvider(provider, servers: "\(dead.absoluteString)\n\(harness.absoluteString)")
+        try? service.repository.setActive(dead, for: providerID)
+        func active() -> URL? { try? service.repository.provider(id: providerID)?.serverURL }
+
+        let started = Date()
+        state.watch(channel, in: state.live.channels)
+        let played = await waitFor(30) { state.hub.main.phase == .playing }
+        let seconds = String(format: "%.1f", Date().timeIntervalSince(started))
+        let notice = state.hub.main.notice ?? "-"
+        let links = (try? service.repository.links(for: providerID)) ?? []
+        log("\(t()) \(played && active() == harness && links.first?.isDown == true ? "" : "FAIL ")dead link in use: playing=\(played) after \(seconds)s, now on link \(links.firstIndex { $0.url == active() }.map { $0 + 1 } ?? 0), notice=\(notice)")
+        state.closePlayer()
+        try? await Task.sleep(for: .seconds(1))
+
+        try? await service.updateProvider(provider, servers: "\(dead.absoluteString)\nhttp://127.0.0.1:7")
+        let outcome = await state.environment.servers.recheck(providerID)
+        let flagged = await waitFor(3) { state.providers.unreachable.contains { $0.id == providerID } }
+        log("\(t()) \(outcome == .allDown && flagged ? "" : "FAIL ")all links down: outcome=\(outcome) flagged=\(flagged)")
+        state.section = .liveTV
+        try? await Task.sleep(for: .seconds(1))
+        snapshot("13-live-tv-links-down")
+        UserDefaults.standard.set("providers", forKey: "settingsTab")
+        state.section = .settings
+        try? await Task.sleep(for: .seconds(1))
+        snapshot("13-settings-links-down")
+        if let current = try? service.repository.provider(id: providerID) {
+            snapshot(ProviderEditorSheet(model: state.providers, provider: current), "13-editor-links")
+        }
+
+        try? await service.updateProvider(provider, servers: "\(dead.absoluteString)\n\(harness.absoluteString)")
+        _ = await state.environment.servers.recheck(providerID)
+        let cleared = await waitFor(3) { state.providers.unreachable.isEmpty }
+        log("\(t()) \(cleared && active() == harness ? "" : "FAIL ")a link works again: cleared=\(cleared)")
+        try? await service.updateProvider(provider, servers: harness.absoluteString)
+        state.section = .liveTV
+        try? await Task.sleep(for: .seconds(1))
     }
 
     /// The provider moves to another panel (start a harness with --renumber): favorites, recents
@@ -412,7 +458,7 @@ public enum SmokeTest {
         log("\(t()) before panel move: favorites=\(before.favorites) recents=\(before.recents) progress=\(before.progress)")
 
         guard let provider = try? state.environment.providers.repository.provider(id: providerID) else { return }
-        try? await state.environment.providers.updateProvider(provider, serverURL: url)
+        try? await state.environment.providers.updateProvider(provider, servers: url)
         let report = await state.environment.sync.refresh(providerID, parts: .catalog)
         let after = (favorites: rows(String(format: query, "favorite")), recents: rows(String(format: query, "recentItem")),
                      progress: rows(String(format: query, "watchProgress")))

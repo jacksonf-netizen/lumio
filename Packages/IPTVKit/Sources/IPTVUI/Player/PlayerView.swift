@@ -80,7 +80,7 @@ public struct PlayerView: View {
                     .font(compact ? .title3 : .largeTitle)
                     .foregroundStyle(.orange)
                 Text(failure.noConnection ? "No free connection" : "Can't play this channel")
-                    .font(compact ? .caption.bold() : .headline)
+                    .font(compact ? .caption.weight(.semibold) : .headline)
                 Text(failure.message)
                     .font(compact ? .caption2 : .callout)
                     .foregroundStyle(.secondary)

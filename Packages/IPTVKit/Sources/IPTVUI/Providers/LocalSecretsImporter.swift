@@ -8,6 +8,8 @@ public enum LocalSecretsImporter {
         struct Entry: Decodable {
             var name: String?
             var serverURL: String
+            /// Backup links after `serverURL`, in order.
+            var backupURLs: [String]?
             var username: String
             var password: String
         }
@@ -28,7 +30,7 @@ public enum LocalSecretsImporter {
             }
             if duplicate { continue }
             let provider = try await environment.providers.addProvider(
-                name: entry.name ?? "", serverURL: entry.serverURL,
+                name: entry.name ?? "", servers: ([entry.serverURL] + (entry.backupURLs ?? [])).joined(separator: "\n"),
                 credentials: ProviderCredentials(username: entry.username, password: entry.password))
             added += 1
             let sync = environment.sync

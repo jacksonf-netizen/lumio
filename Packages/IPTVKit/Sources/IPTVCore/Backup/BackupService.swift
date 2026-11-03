@@ -35,7 +35,10 @@ public struct BackupService: Sendable {
     public struct ProviderInfo: Codable, Sendable {
         public var id: ProviderID
         public var name: String
+        /// The address in use when exported.
         public var serverURL: URL
+        /// Every link in order (backups from before 0.1.4 only have `serverURL`).
+        public var serverURLs: [URL]?
         public var priority: Int
         public var isEnabled: Bool
         public var epgTimeOffsetMinutes: Int
@@ -67,9 +70,12 @@ public struct BackupService: Sendable {
         let backup = try await database.reader.read { db in
             Backup(
                 format: Self.format, version: Self.currentVersion, exportedAt: Date(),
-                providers: try Provider.fetchAll(db).map {
-                    ProviderInfo(id: $0.id, name: $0.name, serverURL: $0.serverURL, priority: $0.priority, isEnabled: $0.isEnabled,
-                                 epgTimeOffsetMinutes: $0.epgTimeOffsetMinutes, userAgentOverride: $0.userAgentOverride)
+                providers: try Provider.fetchAll(db).map { provider in
+                    let links = try ServerLink.filter(Column("providerID") == provider.id).order(Column("position")).fetchAll(db)
+                    return ProviderInfo(id: provider.id, name: provider.name, serverURL: provider.serverURL,
+                                        serverURLs: links.isEmpty ? nil : links.map(\.url), priority: provider.priority,
+                                        isEnabled: provider.isEnabled, epgTimeOffsetMinutes: provider.epgTimeOffsetMinutes,
+                                        userAgentOverride: provider.userAgentOverride)
                 },
                 favorites: try Favorite.fetchAll(db),
                 watchProgress: try WatchProgress.fetchAll(db),
@@ -105,9 +111,16 @@ public struct BackupService: Sendable {
             let current = try Provider.fetchAll(db)
             // Exported provider id → provider in this library.
             var map: [ProviderID: ProviderID] = [:]
+            let currentLinks = try ServerLink.fetchAll(db)
+            func urls(of provider: Provider) -> Set<URL> {
+                Set(currentLinks.filter { $0.providerID == provider.id }.map(\.url) + [provider.serverURL])
+            }
             for info in backup.providers {
-                if var match = current.first(where: { $0.serverURL == info.serverURL && $0.name == info.name })
-                    ?? current.first(where: { $0.serverURL == info.serverURL }) {
+                // The same account here has any of the backup's links (the one in use may have moved).
+                let backupURLs = Set((info.serverURLs ?? []) + [info.serverURL])
+                let sharesLink = { (provider: Provider) in !urls(of: provider).isDisjoint(with: backupURLs) }
+                if var match = current.first(where: { sharesLink($0) && $0.name == info.name })
+                    ?? current.first(where: sharesLink) {
                     map[info.id] = match.id
                     summary.matchedProviders.append(info.name)
                     match.priority = info.priority

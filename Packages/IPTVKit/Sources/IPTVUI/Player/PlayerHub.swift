@@ -27,6 +27,7 @@ public final class PlayerHub {
             connections: environment.connections,
             resolver: resolver,
             history: DatabasePlaybackHistory(database: environment.database),
+            servers: environment.servers,
             systemEvents: environment.systemEvents,
             makeEngine: { kind in PlaybackEngines.make(kind) })
         let settings = PlayerHub.loadSettings(environment.settings)

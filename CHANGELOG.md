@@ -8,6 +8,19 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Backup server links. Paste every link your seller sent into a provider (one per line; M3U or
+  stream links with the username and password inside work too, and fill in the login). Lumio
+  keeps using the link that works, and when it goes down moves to the next one by itself,
+  mid-stream included.
+  It checks the links at launch and every few hours, in the background. If none of them answer,
+  Settings says so, Settings gets a red dot in the sidebar, and Live TV shows a banner. Your
+  current address becomes the first link.
+- A quieter look in a few places. Programmes on air show a red dot and "Live" (the same red as
+  the guide's now line) instead of a red LIVE badge, and Now/Next labels are no longer in capitals.
+- Favourite movies and series use the star, like channels, instead of a heart.
+- Headings are a little lighter. Posters no longer grow on hover, and a poster that's still
+  loading no longer shows its title twice.
+
 ## 0.1.3 — 2026-10-22
 
 After this update macOS asks once whether Lumio may access its data (click Allow) and once more

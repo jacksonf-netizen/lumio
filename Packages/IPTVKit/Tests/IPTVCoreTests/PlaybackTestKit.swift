@@ -205,6 +205,7 @@ final class PlaybackWorld {
     private(set) var engines: [String: FakeEngine] = [:]
     /// Scripts applied to engines when they're created, by kind.
     var scripts: [EngineKind: [FakeEngine.Behavior]] = [:]
+    var servers: any ServerHealth = NoServerHealth()
 
     func engine(_ kind: EngineKind, for purpose: ConnectionPurpose = .main) -> FakeEngine? {
         engines["\(purpose)-\(kind.rawValue)"]
@@ -212,7 +213,7 @@ final class PlaybackWorld {
 
     func makeController(_ purpose: ConnectionPurpose = .main, settings: PlaybackSettings = PlaybackSettings()) -> PlaybackController {
         let deps = PlaybackDependencies(
-            connections: connections, resolver: FakeResolver(), history: history, systemEvents: system, clock: clock,
+            connections: connections, resolver: FakeResolver(), history: history, servers: servers, systemEvents: system, clock: clock,
             makeEngine: { [unowned self] kind in
                 let engine = FakeEngine(kind: kind, script: self.scripts[kind] ?? [.play], counter: self.counter)
                 self.engines["\(purpose)-\(kind.rawValue)"] = engine

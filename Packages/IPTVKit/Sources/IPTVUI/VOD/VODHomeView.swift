@@ -211,25 +211,16 @@ struct VODHomeView: View {
 
 // MARK: - Shelves and cards
 
-/// Artwork stand-in: a soft gradient with the title, so missing posters still look intentional.
+/// Artwork stand-in: a soft grey tone with an icon. The title is already under the card.
 struct PosterPlaceholder: View {
-    let title: String
     let systemImage: String
 
     var body: some View {
         ZStack {
             LinearGradient(colors: [Color.primary.opacity(0.10), Color.primary.opacity(0.04)], startPoint: .top, endPoint: .bottom)
-            VStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(.tertiary)
-                Text(title)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(3)
-            }
-            .padding(12)
+            Image(systemName: systemImage)
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(.tertiary)
         }
     }
 }
@@ -240,7 +231,7 @@ struct ShelfHeader: View {
 
     var body: some View {
         HStack {
-            Text(title).font(.title2.bold())
+            Text(title).font(.title2.weight(.semibold))
             Spacer()
             if let action {
                 Button(action: action) {
@@ -289,7 +280,7 @@ struct PosterCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottom) {
-                    PosterPlaceholder(title: item.displayName, systemImage: item.kind == .movie ? "film" : "play.rectangle.on.rectangle")
+                    PosterPlaceholder(systemImage: item.kind == .movie ? "film" : "play.rectangle.on.rectangle")
                     RemoteImage(url: item.posterURL, maxPixelSize: 400, contentMode: .fill, placeholder: nil)
                     if let progress = item.progress, progress > 0 {
                         GeometryReader { geometry in
@@ -309,14 +300,13 @@ struct PosterCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.08)))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.accentColor.opacity(hovering ? 0.9 : 0), lineWidth: 2))
-                .scaleEffect(hovering ? 1.04 : 1)
-                .shadow(color: .black.opacity(hovering ? 0.3 : 0.15), radius: hovering ? 10 : 3, y: hovering ? 6 : 2)
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 2)
 
                 Text(item.displayName).font(.callout.weight(.medium)).lineLimit(2).frame(width: width, alignment: .leading)
                 HStack(spacing: 6) {
                     if let year = item.year { Text(String(year)) }
                     if let rating = item.rating { Label(String(format: "%.1f", rating), systemImage: "star.fill") }
-                    if item.isFavorite { Image(systemName: "heart.fill").foregroundStyle(.pink) }
+                    if item.isFavorite { Image(systemName: "star.fill").foregroundStyle(.yellow) }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -339,7 +329,7 @@ struct RecentCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 ZStack(alignment: .bottomLeading) {
-                    PosterPlaceholder(title: item.displayTitle, systemImage: item.kind == .movie ? "film" : "play.rectangle.on.rectangle")
+                    PosterPlaceholder(systemImage: item.kind == .movie ? "film" : "play.rectangle.on.rectangle")
                     RemoteImage(url: item.imageURL, maxPixelSize: 500, contentMode: .fill, placeholder: nil)
                     LinearGradient(colors: [.clear, .black.opacity(0.7)], startPoint: .center, endPoint: .bottom)
                     Image(systemName: item.canResume ? "play.circle.fill" : "info.circle.fill")
@@ -369,8 +359,7 @@ struct RecentCard: View {
                 .frame(width: 260, height: 146)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Color.accentColor.opacity(hovering ? 0.9 : 0), lineWidth: 2))
-                .scaleEffect(hovering ? 1.03 : 1)
-                .shadow(color: .black.opacity(hovering ? 0.3 : 0.15), radius: hovering ? 10 : 3, y: hovering ? 6 : 2)
+                .shadow(color: .black.opacity(0.15), radius: 3, y: 2)
                 Text(item.displayTitle).font(.callout.weight(.medium)).lineLimit(1)
                 if !detail.isEmpty {
                     Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)

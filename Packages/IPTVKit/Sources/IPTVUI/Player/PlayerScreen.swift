@@ -488,19 +488,12 @@ struct ControlSeparator: View {
     }
 }
 
-/// Red LIVE pill; greys out while paused.
+/// Red dot and "Live"; the dot greys out while paused.
 private struct LiveBadge: View {
     let isPaused: Bool
 
     var body: some View {
-        Text("LIVE")
-            .font(.system(size: 10, weight: .heavy))
-            .tracking(0.6)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(isPaused ? Color.white.opacity(0.25) : Color.red, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
-            .foregroundStyle(.white)
-            .help(isPaused ? "Paused" : "Live")
+        LiveMarker(isPaused: isPaused).foregroundStyle(.white)
     }
 }
 

@@ -56,6 +56,20 @@ extension AppDatabase {
                 t.primaryKey(["providerID", "episodeID"])
             }
         }
+        migrator.registerMigration("v9-provider-servers") { db in
+            // Every address the seller gave for an account, in the user's order (see ServerFailover).
+            // The address in use stays in provider.serverURL and becomes the first link.
+            try db.create(table: "providerServer") { t in
+                t.column("providerID", .text).notNull().references("provider", onDelete: .cascade)
+                t.column("position", .integer).notNull()
+                t.column("url", .text).notNull()
+                t.column("lastCheckedAt", .double)
+                t.column("downSince", .double)
+                t.column("lastFailure", .text)
+                t.primaryKey(["providerID", "url"])
+            }
+            try db.execute(sql: "INSERT INTO providerServer (providerID, position, url) SELECT id, 0, serverURL FROM provider")
+        }
         return migrator
     }
 

@@ -32,6 +32,9 @@ it and reopens. You can turn the check off in Settings → About.
 - Live TV with channel numbers, logos, what's on now and next, and a live preview of the selected
   channel. Channels carried by more than one of your providers are merged, and if one provider's
   stream fails, Lumio switches to another.
+- Backup server links: paste every link your seller sent (one per line, M3U links too). Lumio uses
+  the first one that works and moves to the next by itself when one goes down, and Settings tells
+  you if none of them answer.
 - A guide of what's on later: switch Live TV or Favorites between List and Guide at the top.
   Recents shows as a guide too, and you can reorder Favorites.
 - Movies and series with posters, details, seasons and episodes. Lumio remembers where you stopped.

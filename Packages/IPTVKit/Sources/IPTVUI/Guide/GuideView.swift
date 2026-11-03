@@ -378,7 +378,7 @@ private struct ProgrammeDetail: View {
                 }
             }
             if let programme {
-                Text(programme.title).font(.title2.bold()).lineLimit(2)
+                Text(programme.title).font(.title2.weight(.semibold)).lineLimit(2)
                 HStack(spacing: 8) {
                     Text("\(programme.start.formatted(.dateTime.weekday(.abbreviated).hour().minute())) – \(programme.stop.formatted(date: .omitted, time: .shortened))")
                     if let episode = programme.episodeNumber { Text(episode) }
@@ -397,7 +397,7 @@ private struct ProgrammeDetail: View {
                 Text("No programme selected").foregroundStyle(.secondary)
                 Button("Watch Channel", action: watch)
             } else {
-                Text("Select a programme in the guide.").foregroundStyle(.secondary)
+                Text("Select a programme to see what it is").foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: 520, alignment: .leading)

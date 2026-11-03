@@ -104,7 +104,7 @@ struct ProviderServiceTests {
         let resolver = ProviderStreamResolver(database: database, secrets: secrets)
         let source = PlaybackSource(providerID: provider.id, itemID: "7", providerName: "P")
         #expect(try resolver.url(for: source, content: .live, format: .ts).absoluteString == "http://old.test:8080/live/olduser/oldpass/7.ts")
-        try await service.updateProvider(provider, serverURL: "http://new.test:8080",
+        try await service.updateProvider(provider, servers: "http://new.test:8080",
                                           credentials: ProviderCredentials(username: "newuser", password: "newpass"))
         #expect(try resolver.url(for: source, content: .live, format: .ts).absoluteString == "http://new.test:8080/live/newuser/newpass/7.ts")
     }

@@ -80,12 +80,14 @@ public actor CatalogSyncService {
     private let sources: any SourceFactory
     private let connections: ConnectionManager
     private let clock: any AppClock
+    private let servers: ServerFailover?
 
     private var running: [ProviderID: Task<SyncReport, Never>] = [:]
     private var subscribers: [UUID: AsyncStream<SyncEvent>.Continuation] = [:]
 
     public init(database: AppDatabase, sources: any SourceFactory, connections: ConnectionManager,
-                clock: any AppClock = SystemClock()) {
+                servers: ServerFailover? = nil, clock: any AppClock = SystemClock()) {
+        self.servers = servers
         self.database = database
         providers = ProviderRepository(database: database)
         catalog = CatalogRepository(database: database)
@@ -185,19 +187,29 @@ public actor CatalogSyncService {
             return report
         }
 
-        let source: any SourceProvider
+        var opened: any SourceProvider
         do {
-            source = try sources.source(for: provider)
+            opened = try sources.source(for: provider)
         } catch {
             return finish(&report, provider: &provider, fatal: error, credentials: [])
         }
-        let redact = source.redactionCredentials
+        let redact = opened.redactionCredentials
 
         // 1. Account: also validates credentials before downloading anything big.
         if parts.contains(.account) || parts.contains(.live) {
             emit(.step(providerID, .account))
             do {
-                let account = try await source.fetchAccount()
+                let account: AccountInfo
+                do {
+                    account = try await opened.fetchAccount()
+                } catch let error as XtreamError where Self.mayMeanServerDown(error) {
+                    // The address in use may have died: move to a working link and try once more.
+                    guard let servers, case .switched = await servers.ensureWorking(providerID),
+                          let moved = try? providers.provider(id: providerID) else { throw error }
+                    provider.serverURL = moved.serverURL
+                    opened = try sources.source(for: provider)
+                    account = try await opened.fetchAccount()
+                }
                 report.account = account
                 provider.accountStatus = account.status
                 provider.expiresAt = account.expiresAt
@@ -210,6 +222,8 @@ public actor CatalogSyncService {
                 return finish(&report, provider: &provider, fatal: error, credentials: redact)
             }
         }
+
+        let source = opened
 
         // 2–4. Catalog parts. One failing part doesn't stop the others.
         var catalogChanged = false
@@ -345,6 +359,13 @@ public actor CatalogSyncService {
         if stored == 0 || empty.remove(part) != nil { return }
         empty.insert(part)
         throw EmptyListKept()
+    }
+
+    static func mayMeanServerDown(_ error: XtreamError) -> Bool {
+        switch error {
+        case .timeout, .cannotConnect, .server, .httpStatus, .notFound, .forbidden, .invalidResponse, .decoding: true
+        default: false
+        }
     }
 
     private func message(_ error: Error, _ credentials: [ProviderCredentials]) -> String {

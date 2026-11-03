@@ -498,7 +498,7 @@ private struct AboutSettingsView: View {
                         .resizable()
                         .frame(width: 64, height: 64)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Lumio").font(.title2.bold())
+                        Text("Lumio").font(.title2.weight(.semibold))
                         Text(version).foregroundStyle(.secondary).textSelection(.enabled)
                         if let copyright = Bundle.main.infoDictionary?["NSHumanReadableCopyright"] as? String {
                             Text(copyright).font(.caption).foregroundStyle(.secondary)
@@ -570,7 +570,7 @@ struct NoticesSheet: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Acknowledgements").font(.title2.bold())
+            Text("Acknowledgements").font(.title2.weight(.semibold))
             if showingFullTexts {
                 NoticesTextView(text: fullTexts)
                     .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))

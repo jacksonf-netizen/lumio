@@ -6,6 +6,8 @@ public struct XtreamClient: Sendable {
     private let credentials: ProviderCredentials
     private let transport: any HTTPTransport
     public let userAgent: String
+    /// For `player_api.php` requests. Link checks use a few seconds, so a dead server is noticed fast.
+    public var requestTimeout: TimeInterval = 30
 
     static let maxGuideDownloadBytes = 2 << 30
     public static let defaultUserAgent = "Lumio/0.1 (Macintosh; Apple silicon)"
@@ -136,8 +138,8 @@ public struct XtreamClient: Sendable {
         return components.url!
     }
 
-    private func makeRequest(url: URL, timeout: TimeInterval = 30) -> URLRequest {
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)
+    private func makeRequest(url: URL, timeout: TimeInterval? = nil) -> URLRequest {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout ?? requestTimeout)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json, */*", forHTTPHeaderField: "Accept")
         return request

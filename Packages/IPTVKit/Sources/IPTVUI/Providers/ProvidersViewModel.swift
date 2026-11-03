@@ -15,11 +15,18 @@ final class ProvidersViewModel {
     /// False until the first database read completes, so empty-state UI doesn't flash on launch.
     private(set) var loaded = false
     private(set) var status: [ProviderID: ProviderStatus] = [:]
+    /// Each provider's server links in order, with what the last check found.
+    private(set) var links: [ProviderID: [ServerLink]] = [:]
     /// Providers currently refreshing, with their current step.
     private(set) var syncing: [ProviderID: String] = [:]
     var errorMessage: String?
 
     var isSyncing: Bool { !syncing.isEmpty }
+
+    /// Enabled providers none of whose server links answered the last check.
+    var unreachable: [Provider] {
+        providers.filter { $0.isEnabled && (links[$0.id] ?? []).allDown }
+    }
     /// "Updating Provider A", or "Updating 2 providers".
     var syncTitle: String {
         guard let (id, _) = syncing.first else { return "" }
@@ -52,9 +59,22 @@ final class ProvidersViewModel {
                     self.providers = providers
                     self.loaded = true
                     self.reloadStatus()
+                    self.updateAliases()
                 }
             } catch {
                 self?.errorMessage = "Couldn't read providers: \(error)"
+            }
+        })
+        let linkValues = service.repository.observeLinks()
+        tasks.append(Task { [weak self] in
+            do {
+                for try await links in linkValues {
+                    guard let self else { return }
+                    self.links = Dictionary(grouping: links, by: \.providerID)
+                    self.updateAliases()
+                }
+            } catch {
+                self?.errorMessage = "Couldn't read server links: \(error)"
             }
         })
         let sync = environment.sync
@@ -97,6 +117,12 @@ final class ProvidersViewModel {
         }
     }
 
+    /// Logos and posters on a link that isn't in use load from the one that is.
+    private func updateAliases() {
+        ServerAliases.shared.update(links.values.flatMap { $0 },
+                                    active: Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0.serverURL) }))
+    }
+
     private func reloadStatus() {
         for provider in providers {
             let counts = (try? environment.catalog.counts(providerID: provider.id)) ?? CatalogCounts()
@@ -116,11 +142,11 @@ final class ProvidersViewModel {
 
     // MARK: Actions
 
-    /// Returns nil on success, or a message to show in the editor.
-    func add(name: String, serverURL: String, username: String, password: String) async -> String? {
+    /// Returns nil on success, or a message to show in the editor. `servers` is one link per line.
+    func add(name: String, servers: String, username: String, password: String) async -> String? {
         do {
             let provider = try await service.addProvider(
-                name: name, serverURL: serverURL,
+                name: name, servers: servers,
                 credentials: ProviderCredentials(username: username, password: password))
             refresh(provider)
             return nil
@@ -129,8 +155,8 @@ final class ProvidersViewModel {
         }
     }
 
-    /// Updates name/URL and optionally credentials (empty password keeps the saved one).
-    func save(_ provider: Provider, name: String, serverURL: String, username: String, password: String) async -> String? {
+    /// Updates name, links and optionally credentials (empty password keeps the saved one).
+    func save(_ provider: Provider, name: String, servers: String, username: String, password: String) async -> String? {
         do {
             var updated = provider
             updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? provider.name : name
@@ -144,12 +170,19 @@ final class ProvidersViewModel {
             } else {
                 credentials = ProviderCredentials(username: username, password: password)
             }
-            try await service.updateProvider(updated, serverURL: serverURL, credentials: credentials)
+            try await service.updateProvider(updated, servers: servers, credentials: credentials)
             refresh(updated, restart: true)
             return nil
         } catch {
             return Self.message(for: error)
         }
+    }
+
+    /// The provider's links as the editor shows them, one per line. Read from the database, so
+    /// saving can't drop links that haven't reached `links` yet.
+    func serversText(for provider: Provider) -> String {
+        let urls = (try? service.repository.links(for: provider.id))?.map(\.url) ?? links[provider.id]?.map(\.url) ?? [provider.serverURL]
+        return urls.map(\.absoluteString).joined(separator: "\n")
     }
 
     func savedUsername(for provider: Provider) -> String {
@@ -191,14 +224,21 @@ final class ProvidersViewModel {
         }
     }
 
+    /// Checks the server links first, so the refresh runs on the best one that works.
     func refresh(_ provider: Provider, parts: RefreshParts = .all, restart: Bool = false) {
-        let sync = environment.sync
-        Task.detached(priority: .utility) { await sync.refresh(provider.id, parts: parts, restart: restart) }
+        let sync = environment.sync, servers = environment.servers
+        Task.detached(priority: .utility) {
+            await servers.recheck(provider.id)
+            await sync.refresh(provider.id, parts: parts, restart: restart)
+        }
     }
 
     func refreshAll() {
-        let sync = environment.sync
-        Task.detached(priority: .utility) { await sync.refreshStale(force: true) }
+        let sync = environment.sync, servers = environment.servers
+        Task.detached(priority: .utility) {
+            await servers.recheckAll()
+            await sync.refreshStale(force: true)
+        }
     }
 
     private static func message(for error: Error) -> String {

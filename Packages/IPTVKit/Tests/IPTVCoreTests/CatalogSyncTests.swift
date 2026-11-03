@@ -120,7 +120,7 @@ struct CatalogSyncTests {
         let providers = ProviderService(database: database, secrets: InMemorySecretStore())
         var edited = try #require(try providers.repository.provider(id: providerA.id))
         edited.name = "Renamed"
-        try await providers.updateProvider(edited, serverURL: "http://new.example.com:8080")
+        try await providers.updateProvider(edited, servers: "http://new.example.com:8080")
         let report = await running
         #expect(report.error == nil)
 

@@ -7,7 +7,7 @@ import Testing
 struct DatabaseTests {
     @Test func freshDatabaseAppliesAllMigrations() throws {
         let database = try AppDatabase.inMemory()
-        #expect(try database.appliedMigrations() == ["v1", "v2-epg-import", "v3-guide-index", "v4-category-region", "v5-category-region-prefix", "v6-region-readings", "v7-category-shown", "v8-episode-relink"])
+        #expect(try database.appliedMigrations() == ["v1", "v2-epg-import", "v3-guide-index", "v4-category-region", "v5-category-region-prefix", "v6-region-readings", "v7-category-shown", "v8-episode-relink", "v9-provider-servers"])
     }
 
     @Test func migratingTwiceIsANoOp() throws {
@@ -16,7 +16,7 @@ struct DatabaseTests {
         try queue.write { db in try TestData.provider().insert(db) }
         // Opening the same connection again must not fail or touch existing data.
         let reopened = try AppDatabase(queue)
-        #expect(try reopened.appliedMigrations() == ["v1", "v2-epg-import", "v3-guide-index", "v4-category-region", "v5-category-region-prefix", "v6-region-readings", "v7-category-shown", "v8-episode-relink"])
+        #expect(try reopened.appliedMigrations() == ["v1", "v2-epg-import", "v3-guide-index", "v4-category-region", "v5-category-region-prefix", "v6-region-readings", "v7-category-shown", "v8-episode-relink", "v9-provider-servers"])
         #expect(try queue.read { db in try Provider.fetchCount(db) } == 1)
     }
 

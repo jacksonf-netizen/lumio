@@ -113,6 +113,15 @@ External-content tables kept in sync by triggers: `channelFTS(name)`, `programme
   customGroupMember, playbackHistory, epgMappingOverride, channelLinkOverride, categoryOverride,
   and `solo:` logical IDs in logicalEPGOverride / channelLinkOverride) to new IDs.
 
+## Migration v9-provider-servers
+
+- `providerServer` (providerID, position, url, lastCheckedAt, downSince, lastFailure; key
+  providerID + url): every server address the seller gave for the account, in the user's order
+  (0 first). `provider.serverURL` stays the address in use and must be one of these; the
+  migration copies it in as position 0. `ServerFailover` writes the check columns and moves
+  `serverURL`; editing the list (`ProviderRepository.setLinks`) keeps the check columns of links
+  that stay. `downSince` is set on the first failed check and cleared when the link answers.
+
 ## Derived and rebuildable data
 
 `logicalChannel` and `logicalChannelMember` can be deleted and rebuilt at any time from `channel`,

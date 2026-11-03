@@ -67,6 +67,8 @@ final class ImageCache {
     /// point at local files), and never more than `maxImageBytes`, so a broken or hostile server
     /// can't exhaust memory.
     nonisolated static func fetch(_ url: URL, session: URLSession) async -> Data? {
+        // A logo on a provider's dead server link loads from the link in use.
+        let url = ServerAliases.shared.rewrite(url)
         guard url.isWebURL else { return nil }
         let request = URLRequest(url: url)
         let cache = session.configuration.urlCache

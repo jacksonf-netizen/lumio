@@ -15,7 +15,7 @@ struct MovieDetailView: View {
     var body: some View {
         DetailScaffold(backdrop: details?.backdropURL ?? item.posterURL, poster: details?.posterURL ?? item.posterURL) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(item.displayName).font(.largeTitle.bold())
+                Text(item.displayName).font(.largeTitle.weight(.semibold))
                 metaLine
                 if let progress, !progress.isWatched, progress.positionSeconds >= 30 {
                     ProgressView(value: progress.positionSeconds, total: max(progress.durationSeconds ?? 1, progress.positionSeconds))
@@ -32,7 +32,7 @@ struct MovieDetailView: View {
                         Button("Start Over") { start(at: nil) }.controlSize(.large)
                     }
                     Button { toggleFavorite() } label: {
-                        Image(systemName: isFavorite ? "heart.fill" : "heart")
+                        Image(systemName: isFavorite ? "star.fill" : "star")
                     }
                     .controlSize(.large)
                     .help(isFavorite ? "Remove from Favorites" : "Add to Favorites")
@@ -149,7 +149,7 @@ struct SeriesDetailView: View {
     var body: some View {
         DetailScaffold(backdrop: item.posterURL, poster: series?.coverURL ?? item.posterURL) {
             VStack(alignment: .leading, spacing: 12) {
-                Text(item.displayName).font(.largeTitle.bold())
+                Text(item.displayName).font(.largeTitle.weight(.semibold))
                 HStack(spacing: 10) {
                     if let year = item.year { Text(String(year)) }
                     Text("\(seasons.count) season\(seasons.count == 1 ? "" : "s")")
@@ -167,7 +167,7 @@ struct SeriesDetailView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.large)
                     }
-                    Button { toggleFavorite() } label: { Image(systemName: isFavorite ? "heart.fill" : "heart") }
+                    Button { toggleFavorite() } label: { Image(systemName: isFavorite ? "star.fill" : "star") }
                         .controlSize(.large)
                 }
                 if let plot = series?.plot {

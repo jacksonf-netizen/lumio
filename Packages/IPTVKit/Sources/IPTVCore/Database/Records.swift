@@ -44,6 +44,10 @@ extension Provider: AppRecord {
     public static let databaseTableName = "provider"
 }
 
+extension ServerLink: AppRecord {
+    public static let databaseTableName = "providerServer"
+}
+
 extension Category: AppRecord {
     public static let databaseTableName = "category"
 }

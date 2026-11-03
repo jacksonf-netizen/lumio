@@ -198,7 +198,7 @@ private struct ProviderHeader: View {
             Image(systemName: "antenna.radiowaves.left.and.right")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            Text(name).font(.title.bold())
+            Text(name).font(.title.weight(.semibold))
             Text("\(count) result\(count == 1 ? "" : "s")")
                 .font(.callout)
                 .foregroundStyle(.secondary)
@@ -231,13 +231,7 @@ private struct ProgrammeHitRow: View {
                 HStack {
                     Text(hit.programme.title).font(.body.weight(.medium))
                     if isOn {
-                        Text("LIVE")
-                            .font(.system(size: 9, weight: .heavy))
-                            .tracking(0.5)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(.red, in: RoundedRectangle(cornerRadius: 3, style: .continuous))
-                            .foregroundStyle(.white)
+                        LiveMarker().foregroundStyle(.secondary)
                     }
                 }
                 Text([hit.channel?.name, hit.programme.subtitle ?? hit.programme.episodeNumber].compactMap { $0 }.joined(separator: " · "))
