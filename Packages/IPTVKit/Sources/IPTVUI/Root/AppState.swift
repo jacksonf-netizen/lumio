@@ -22,8 +22,11 @@ public final class AppState {
     public let updates = UpdateController()
     @ObservationIgnored private var vodTracker: Task<Void, Never>?
 
-    /// Selected sidebar section in the main window. The app opens on Recents.
+    /// Selected sidebar section in the main window. The app opens on Recents (or the first section
+    /// the user hasn't switched off).
     public var section: SidebarItem = .recents
+    /// Sections switched off in Settings → General. Settings itself can't be.
+    public private(set) var hiddenSections: Set<SidebarItem> = []
     /// The full-screen player overlay in the main window.
     public var isPlayerPresented = false
     /// Multiview, shown over the main window in place of the player.
@@ -54,8 +57,34 @@ public final class AppState {
         vod = VODCatalog(database: environment.database)
         live.state = self
         favoritesList.state = self
+        loadHiddenSections()
         providers.start()
         live.start()
+    }
+
+    // MARK: Sidebar
+
+    func isShown(_ item: SidebarItem) -> Bool { !hiddenSections.contains(item) }
+
+    func setSection(_ item: SidebarItem, shown: Bool) {
+        guard item != .settings else { return }
+        if shown { hiddenSections.remove(item) } else { hiddenSections.insert(item) }
+        let raw = SidebarItem.allCases.filter(hiddenSections.contains).map(\.rawValue)
+        try? environment.settings.set(raw.isEmpty ? nil : raw, for: .hiddenSidebarItems)
+        leaveHiddenSection()
+    }
+
+    /// Reads the switched-off sections (at launch and after a backup is restored).
+    func loadHiddenSections() {
+        let raw = (try? environment.settings.value([String].self, for: .hiddenSidebarItems)) ?? []
+        hiddenSections = Set(raw.compactMap(SidebarItem.init(rawValue:))).subtracting([.settings])
+        leaveHiddenSection()
+    }
+
+    /// Moves off a section that's switched off, to the first one that isn't (Settings at worst).
+    private func leaveHiddenSection() {
+        guard hiddenSections.contains(section) else { return }
+        section = SidebarItem.allCases.first(where: isShown) ?? .settings
     }
 
     // MARK: Watching live TV

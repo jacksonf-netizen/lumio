@@ -380,10 +380,8 @@ private struct ServerLinkList: View {
             Circle()
                 .fill(link.isDown ? Color.red : (link.url == active ? Color.green : Color.secondary.opacity(0.5)))
                 .frame(width: 6, height: 6)
-            if link.isDead, let since = link.downSince {
-                Text("Dead since \(Self.format(since))")
-            } else if let since = link.downSince {
-                Text("Down since \(Self.format(since))")
+            if link.isDown {
+                Text("Down")
             } else if link.url == active {
                 Text("In use")
             } else {

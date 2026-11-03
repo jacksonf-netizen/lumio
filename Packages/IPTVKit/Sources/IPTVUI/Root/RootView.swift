@@ -50,13 +50,16 @@ public struct RootView: View {
             NavigationSplitView {
                 List(selection: $state.section) {
                     Section {
-                        ForEach([SidebarItem.recents, .liveTV, .movies, .series]) { item in
+                        ForEach([SidebarItem.recents, .liveTV, .movies, .series].filter(state.isShown)) { item in
                             Label(item.title, systemImage: item.systemImage).tag(item)
                         }
                     }
-                    Section {
-                        ForEach([SidebarItem.favorites, .search]) { item in
-                            Label(item.title, systemImage: item.systemImage).tag(item)
+                    let second = [SidebarItem.favorites, .search].filter(state.isShown)
+                    if !second.isEmpty {
+                        Section {
+                            ForEach(second) { item in
+                                Label(item.title, systemImage: item.systemImage).tag(item)
+                            }
                         }
                     }
                     Section {

@@ -40,7 +40,7 @@ extension AppDatabase {
             try RegionPrefix.recompute(in: db, keepHidden: true)
         }
         migrator.registerMigration("v7-category-shown") { db in
-            // Lets one group stay visible when its region is switched off (Settings → Regions).
+            // Lets one group stay visible when its region is switched off (Settings → Content).
             try db.alter(table: "categoryOverride") { t in t.add(column: "isShown", .boolean).notNull().defaults(to: false) }
         }
         migrator.registerMigration("v8-episode-relink") { db in

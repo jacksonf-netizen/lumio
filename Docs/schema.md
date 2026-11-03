@@ -97,7 +97,7 @@ External-content tables kept in sync by triggers: `channelFTS(name)`, `programme
 ## Migration v7-category-shown
 
 - `categoryOverride.isShown` (boolean, default false): the category stays visible even though its
-  region is hidden (Settings → Regions, for a group filed under the wrong region). Together with
+  region is hidden (Settings → Content, for a group filed under the wrong region). Together with
   `isHidden`, a category is shown when it isn't hidden by the user and either its region is on or
   `isShown` is set. Categories without a region count as the region `OTHER` ("Other Groups"),
   which can be hidden like any other. Switching a whole region resets both flags inside it.

@@ -370,7 +370,7 @@ extension LibraryRepository {
 
 // MARK: - Regions
 
-/// A region found in live group names, for Settings → Regions. (Region switches only apply to
+/// A region found in live group names, for Settings → Content. (Region switches only apply to
 /// Live TV; movie and series categories are hidden one by one.)
 public struct RegionSummary: Hashable, Sendable, Identifiable {
     public var id: String { code }
@@ -394,7 +394,7 @@ public struct RegionSummary: Hashable, Sendable, Identifiable {
     public var isOther: Bool { code == RegionPrefix.other }
 }
 
-/// One category in Settings → Regions, with its own switch.
+/// One category in Settings → Content, with its own switch.
 public struct RegionCategory: Hashable, Sendable, Identifiable {
     public var id: String { "\(providerID.rawValue)|\(kind.rawValue)|\(categoryID)" }
     public var providerID: ProviderID

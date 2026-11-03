@@ -40,7 +40,7 @@ it and reopens. You can turn the check off in Settings → About.
 - Movies and series with posters, details, seasons and episodes. Lumio remembers where you stopped.
 - Multiview: up to four channels at once, spread across your providers' connections.
 - Search across channels, programmes, movies and series.
-- Live TV regions: providers often name groups "UK | Sports" or "US: News". Settings → Regions
+- Live TV regions: providers often name groups "UK | Sports" or "US: News". Settings → Content
   lists every region it finds, so you can hide whole regions (or single groups) you don't watch.
 - Stream info in the player: resolution, frame rate, video format and more.
 - Backup and restore of favorites, layout and settings (your logins are never included).

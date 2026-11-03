@@ -2,32 +2,36 @@ import AppKit
 import SwiftUI
 import IPTVCore
 
-/// Settings: providers, playback, guide.
+/// Settings: providers, general, playback, content, about.
 struct SettingsView: View {
     let state: AppState
     /// Remembers the last tab, like the system's own settings windows.
     @AppStorage("settingsTab") private var tab = "providers"
+    static let tabs: Set<String> = ["providers", "general", "playback", "content", "about"]
+    /// Tabs from before 0.1.6 and the tab that holds them now.
+    static let movedTabs = ["guide": "general", "backup": "general", "regions": "content", "hidden": "content"]
+
+    private var selection: Binding<String> {
+        Binding(get: {
+            let current = Self.movedTabs[tab] ?? tab
+            return Self.tabs.contains(current) ? current : "providers"
+        }, set: { tab = $0 })
+    }
 
     var body: some View {
-        TabView(selection: $tab) {
+        TabView(selection: selection) {
             ProvidersView(model: state.providers)
                 .tabItem { Label("Providers", systemImage: "antenna.radiowaves.left.and.right") }
                 .tag("providers")
+            GeneralSettingsView(state: state)
+                .tabItem { Label("General", systemImage: "gearshape") }
+                .tag("general")
             PlaybackSettingsView(state: state)
                 .tabItem { Label("Playback", systemImage: "play.rectangle") }
                 .tag("playback")
-            GuideSettingsView(state: state)
-                .tabItem { Label("Guide", systemImage: "calendar") }
-                .tag("guide")
-            RegionsSettingsView(state: state)
-                .tabItem { Label("Regions", systemImage: "globe") }
-                .tag("regions")
-            HiddenSettingsView(state: state)
-                .tabItem { Label("Hidden", systemImage: "eye.slash") }
-                .tag("hidden")
-            BackupSettingsView(state: state)
-                .tabItem { Label("Backup", systemImage: "externaldrive") }
-                .tag("backup")
+            ContentSettingsView(state: state)
+                .tabItem { Label("Content", systemImage: "square.stack") }
+                .tag("content")
             AboutSettingsView(updates: state.updates)
                 .tabItem { Label("About", systemImage: "info.circle") }
                 .tag("about")
@@ -103,23 +107,51 @@ private struct PlaybackSettingsView: View {
     }
 }
 
-private struct GuideSettingsView: View {
+/// Sidebar sections, refresh schedule and backup.
+private struct GeneralSettingsView: View {
+    let state: AppState
+
+    var body: some View {
+        Form {
+            SidebarSettingsSection(state: state)
+            RefreshSettingsSection(state: state)
+            BackupSettingsSection(state: state)
+        }
+        .formStyle(.grouped)
+    }
+}
+
+private struct SidebarSettingsSection: View {
+    let state: AppState
+
+    var body: some View {
+        Section {
+            ForEach(SidebarItem.allCases.filter { $0 != .settings }) { item in
+                Toggle(isOn: Binding(get: { state.isShown(item) }, set: { state.setSection(item, shown: $0) })) {
+                    Label(item.title, systemImage: item.systemImage)
+                }
+            }
+        } header: { Text("Sidebar") } footer: {
+            Text("Switch off the sections you don't use. Settings always stays in the sidebar.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct RefreshSettingsSection: View {
     let state: AppState
     @State private var refreshHours: Double = 12
     @State private var catalogHours: Double = 12
     @State private var futureDays: Double = 7
 
     var body: some View {
-        Form {
-            Section {
-                Stepper("Refresh guide every \(Int(refreshHours)) h", value: $refreshHours, in: 2...48, step: 2)
-                Stepper("Refresh channels and VOD every \(Int(catalogHours)) h", value: $catalogHours, in: 2...72, step: 2)
-                Stepper("Keep \(Int(futureDays)) days of upcoming programmes", value: $futureDays, in: 1...14)
-                Text("Refreshes run in the background; the app always opens with what it has cached. Each provider's guide time offset is in Providers → Edit.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
+        Section {
+            Stepper("Refresh guide every \(Int(refreshHours)) h", value: $refreshHours, in: 2...48, step: 2)
+            Stepper("Refresh channels and VOD every \(Int(catalogHours)) h", value: $catalogHours, in: 2...72, step: 2)
+            Stepper("Keep \(Int(futureDays)) days of upcoming programmes", value: $futureDays, in: 1...14)
+            Text("Refreshes run in the background; the app always opens with what it has cached. Each provider's guide time offset is in Providers → Edit.")
+                .font(.caption).foregroundStyle(.secondary)
+        } header: { Text("Refresh") }
         .onAppear {
             let s = state.environment.settings
             refreshHours = (try? s.value(Double.self, for: .epgRefreshHours)) ?? 12
@@ -132,9 +164,22 @@ private struct GuideSettingsView: View {
     }
 }
 
+/// Live TV regions and hidden categories.
+private struct ContentSettingsView: View {
+    let state: AppState
+
+    var body: some View {
+        Form {
+            RegionsSettingsSection(state: state)
+            HiddenCategoriesSection(state: state)
+        }
+        .formStyle(.grouped)
+    }
+}
+
 /// Regions found in group names ("UK | Sports"), each with an on/off switch, plus "Other Groups"
 /// for the rest. Each row opens to list its groups, which can be switched on or off one by one.
-private struct RegionsSettingsView: View {
+private struct RegionsSettingsSection: View {
     let state: AppState
     @State private var regions: [RegionSummary] = []
     @State private var categories: [String: [RegionCategory]] = [:]
@@ -165,59 +210,56 @@ private struct RegionsSettingsView: View {
     private var multipleProviders: Bool { state.providers.providers.filter(\.isEnabled).count > 1 }
 
     var body: some View {
-        Form {
-            Section {
-                if loaded && regions.isEmpty {
-                    Text("Your providers haven't listed any groups yet.")
-                        .foregroundStyle(.secondary)
-                } else if !loaded {
-                    ProgressView().controlSize(.small).frame(maxWidth: .infinity)
-                } else if visible.isEmpty {
-                    Text("Nothing matches “\(trimmedQuery)”.").foregroundStyle(.secondary)
-                }
-                ForEach(visible, id: \.region.code) { entry in
-                    RegionRow(region: entry.region, isOpen: entry.open,
-                              others: regions.filter { $0.code != entry.region.code && !$0.isOther },
-                              toggleOpen: { toggleOpen(entry.region.code) },
-                              setShown: { shown in set(entry.region, shown: shown) },
-                              merge: { target in change { try await $0.mergeRegion(entry.region.code, into: target.code) } },
-                              separate: { spelling in change { try await $0.separateSpelling(spelling) } })
-                    if entry.open {
-                        RegionCategoryList(categories: entry.categories, showProvider: multipleProviders) { category, shown in
-                            set(category, shown: shown)
-                        }
-                    }
-                }
-            } header: {
-                HStack(spacing: 10) {
-                    Text("Live TV Regions")
-                    if !regions.isEmpty {
-                        Text("\(shownCount) of \(regions.count) shown").foregroundStyle(.secondary).font(.caption)
-                    }
-                    Spacer()
-                    TextField("Filter", text: $query, prompt: Text("Filter regions or groups"))
-                        .textFieldStyle(.roundedBorder)
-                        .labelsHidden()
-                        .frame(width: 190)
-                    Button("Show All") { setAll(hidden: false) }
-                        .disabled(regions.allSatisfy { !$0.isHidden && $0.shownCategories == $0.categoryCount })
-                    Button("Hide All") { setAll(hidden: true) }
-                        .disabled(regions.allSatisfy { $0.isHidden && $0.shownCategories == 0 })
-                }
-            } footer: {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Turn a region off to hide every live group in it: its channels disappear from Live TV (list and guide) and Search. Movies and Series aren't affected; right-click a category there to hide it. Groups the app can't place in a region are under Other Groups. New groups your provider adds follow these switches automatically. Favorites and Recents still show anything you picked.")
-                    Text("Click a region to see its groups and switch single ones on or off, for example if a group was put in the wrong region. Switching the whole region on or off again resets them.")
-                    Text("Providers spell regions differently (US, USA, NA…). Common spellings are already combined; each row lists the ones it covers. If two rows are really the same region, use its ⋯ menu to merge them, or to split a spelling back out.")
-                    if hasMerges {
-                        Button("Undo My Merges") { change { try await $0.resetRegionMerges() } }
-                            .controlSize(.small)
-                    }
-                }
-                .font(.caption).foregroundStyle(.secondary)
+        Section {
+            if loaded && regions.isEmpty {
+                Text("Your providers haven't listed any groups yet.")
+                    .foregroundStyle(.secondary)
+            } else if !loaded {
+                ProgressView().controlSize(.small).frame(maxWidth: .infinity)
+            } else if visible.isEmpty {
+                Text("Nothing matches “\(trimmedQuery)”.").foregroundStyle(.secondary)
             }
+            ForEach(visible, id: \.region.code) { entry in
+                RegionRow(region: entry.region, isOpen: entry.open,
+                          others: regions.filter { $0.code != entry.region.code && !$0.isOther },
+                          toggleOpen: { toggleOpen(entry.region.code) },
+                          setShown: { shown in set(entry.region, shown: shown) },
+                          merge: { target in change { try await $0.mergeRegion(entry.region.code, into: target.code) } },
+                          separate: { spelling in change { try await $0.separateSpelling(spelling) } })
+                if entry.open {
+                    RegionCategoryList(categories: entry.categories, showProvider: multipleProviders) { category, shown in
+                        set(category, shown: shown)
+                    }
+                }
+            }
+        } header: {
+            HStack(spacing: 10) {
+                Text("Live TV Regions")
+                if !regions.isEmpty {
+                    Text("\(shownCount) of \(regions.count) shown").foregroundStyle(.secondary).font(.caption)
+                }
+                Spacer()
+                TextField("Filter", text: $query, prompt: Text("Filter regions or groups"))
+                    .textFieldStyle(.roundedBorder)
+                    .labelsHidden()
+                    .frame(width: 190)
+                Button("Show All") { setAll(hidden: false) }
+                    .disabled(regions.allSatisfy { !$0.isHidden && $0.shownCategories == $0.categoryCount })
+                Button("Hide All") { setAll(hidden: true) }
+                    .disabled(regions.allSatisfy { $0.isHidden && $0.shownCategories == 0 })
+            }
+        } footer: {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Turn a region off to hide every live group in it: its channels disappear from Live TV (list and guide) and Search. Movies and Series aren't affected; right-click a category there to hide it. Groups the app can't place in a region are under Other Groups. New groups your provider adds follow these switches automatically. Favorites and Recents still show anything you picked.")
+                Text("Click a region to see its groups and switch single ones on or off, for example if a group was put in the wrong region. Switching the whole region on or off again resets them.")
+                Text("Providers spell regions differently (US, USA, NA…). Common spellings are already combined; each row lists the ones it covers. If two rows are really the same region, use its ⋯ menu to merge them, or to split a spelling back out.")
+                if hasMerges {
+                    Button("Undo My Merges") { change { try await $0.resetRegionMerges() } }
+                        .controlSize(.small)
+                }
+            }
+            .font(.caption).foregroundStyle(.secondary)
         }
-        .formStyle(.grouped)
         .task { await load() }
     }
 
@@ -402,39 +444,36 @@ private struct RegionCategoryList: View {
 }
 
 /// Hidden categories of every kind, with Unhide. (Hidden channels: Live TV → Show Hidden.)
-private struct HiddenSettingsView: View {
+private struct HiddenCategoriesSection: View {
     let state: AppState
     @State private var hidden: [HiddenCategory] = []
 
     var body: some View {
-        Form {
-            Section {
-                if hidden.isEmpty {
-                    Text("Nothing hidden. Right-click a group in Live TV, or a category in Movies or Series, to hide it.")
-                        .foregroundStyle(.secondary)
-                }
-                ForEach(hidden) { category in
-                    HStack {
-                        VStack(alignment: .leading) {
-                            Text(category.name)
-                            Text("\(label(category.kind)) · \(category.providerName)").font(.caption).foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Button("Unhide") {
-                            Task {
-                                try? await state.library.setCategoryHidden(false, providerID: category.providerID,
-                                                                           kind: category.kind, categoryID: category.categoryID)
-                                await load()
-                            }
+        Section {
+            if hidden.isEmpty {
+                Text("Nothing hidden. Right-click a group in Live TV, or a category in Movies or Series, to hide it.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(hidden) { category in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(category.name)
+                        Text("\(label(category.kind)) · \(category.providerName)").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Unhide") {
+                        Task {
+                            try? await state.library.setCategoryHidden(false, providerID: category.providerID,
+                                                                       kind: category.kind, categoryID: category.categoryID)
+                            await load()
                         }
                     }
                 }
-            } header: { Text("Hidden Categories") } footer: {
-                Text("Hidden channels are shown dimmed in Live TV when Show Hidden is on; right-click one to unhide it.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
+        } header: { Text("Hidden Categories") } footer: {
+            Text("Hidden channels are shown dimmed in Live TV when Show Hidden is on; right-click one to unhide it.")
+                .font(.caption).foregroundStyle(.secondary)
         }
-        .formStyle(.grouped)
         .task { await load() }
     }
 

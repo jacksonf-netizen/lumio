@@ -280,12 +280,16 @@ private struct GuideContent: View {
         if model.scope == .recents {
             EmptyState("Nothing Watched Yet", systemImage: "clock.arrow.circlepath",
                        message: "Channels you watch appear here, most recent first, with what's on now and next.") {
-                Button("Browse Live TV") { state.section = .liveTV }.buttonStyle(.borderedProminent)
+                if state.isShown(.liveTV) {
+                    Button("Browse Live TV") { state.section = .liveTV }.buttonStyle(.borderedProminent)
+                }
             }
         } else {
             EmptyState("No Favorite Channels", systemImage: "star",
                        message: "Right-click a channel in Live TV or Recents and choose Add to Favorites.") {
-                Button("Browse Live TV") { state.section = .liveTV }.buttonStyle(.borderedProminent)
+                if state.isShown(.liveTV) {
+                    Button("Browse Live TV") { state.section = .liveTV }.buttonStyle(.borderedProminent)
+                }
             }
         }
     }

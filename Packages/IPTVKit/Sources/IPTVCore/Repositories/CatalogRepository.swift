@@ -37,7 +37,7 @@ public struct CatalogRepository: Sendable {
                 .filter(Column("providerID") == providerID.rawValue && Column("kind") == kind.rawValue)
                 .fetchAll(db)
             // Read the region codes the way this provider uses them, with the user's merges
-            // (Settings → Regions) applied.
+            // (Settings → Content) applied.
             let regions = RegionPrefix.resolve(categories.map(\.name), aliases: try RegionPrefix.userAliases(db))
             let resolved = zip(categories, regions).map { category, region -> Category in
                 var category = category

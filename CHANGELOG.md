@@ -6,6 +6,18 @@ the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`
 Each version starts with a one- or two-sentence summary paragraph: that's all Lumio shows when it
 offers the update. The list below it appears on the release page.
 
+## 0.1.6 — 2026-11-03
+
+Settings is tidier, with five tabs instead of seven, and you can switch off sidebar sections you
+don't use, like Movies or Series.
+
+- Settings has five tabs instead of seven: Providers, General, Playback, Content and About.
+  General has the sidebar switches, the refresh schedule and Backup; Content has Live TV Regions
+  and Hidden Categories.
+- Switch off sidebar sections you don't use (Recents, Live TV, Movies, Series, Favorites, Search)
+  in Settings → General → Sidebar. Settings always stays.
+- Settings shows a server link that's down as just "Down", without the time it went down.
+
 ## 0.1.5 — 2026-11-03
 
 Backup server links that work no longer show as "Down" with providers that have flood

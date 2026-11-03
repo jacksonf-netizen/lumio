@@ -105,7 +105,7 @@ public struct CategoryOverride: Hashable, Sendable, Codable {
     public var kind: ContentKind
     public var categoryID: String
     public var isHidden: Bool
-    /// Shown even though its region is switched off (Settings → Regions), for when a group was
+    /// Shown even though its region is switched off (Settings → Content), for when a group was
     /// filed under the wrong region.
     public var isShown: Bool
     public var customName: String?

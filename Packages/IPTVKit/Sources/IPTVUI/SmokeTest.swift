@@ -367,6 +367,8 @@ public enum SmokeTest {
         await vod(state: state, providerID: provider.id, t: t)
         await libraryPages(state: state, t: t)
         await regions(state: state, t: t)
+        sidebarSections(state: state, t: t)
+        await settingsTabs(state: state, t: t)
 
         // Search and backup
         let searchStart = Date()
@@ -570,7 +572,7 @@ public enum SmokeTest {
         try? await Task.sleep(for: .seconds(1.5))
         let shown = state.live.groups.filter { $0.kind == .category }.map(\.name)
         log("\(t()) \(shown.contains { $0.hasPrefix("US") } ? "FAIL " : "")Live TV list after hiding US: \(shown)")
-        // One group switched back on inside the hidden region, as Settings → Regions does.
+        // One group switched back on inside the hidden region, as Settings → Content does.
         if let single = ((try? await state.library.regionCategories()) ?? [:])["US"]?.first(where: { $0.kind == .live }) {
             try? await state.library.setCategory(single, shown: true)
             try? await Task.sleep(for: .seconds(1.5))
@@ -579,7 +581,7 @@ public enum SmokeTest {
         }
         let other = ((try? await state.library.regions()) ?? []).first { $0.isOther }
         log("\(t()) other groups bucket: \(other.map { "\($0.categoryCount) categories, e.g. \($0.examples)" } ?? "none")")
-        UserDefaults.standard.set("regions", forKey: "settingsTab")
+        UserDefaults.standard.set("content", forKey: "settingsTab")
         UserDefaults.standard.set(["US"], forKey: "regionsExpanded")
         state.section = .settings
         try? await Task.sleep(for: .seconds(1.5))
@@ -589,6 +591,34 @@ public enum SmokeTest {
         UserDefaults.standard.set("providers", forKey: "settingsTab")
         let restored = ((try? await state.liveCatalog.allChannels()) ?? []).count
         log("\(t()) \(restored == before.count ? "" : "FAIL ")showed US again: \(restored) channels")
+    }
+
+    /// Settings → General → Sidebar: a section switched off leaves the sidebar, the window moves off
+    /// it, and it stays off after the setting is read again.
+    private static func sidebarSections(state: AppState, t: () -> String) {
+        state.section = .movies
+        state.setSection(.movies, shown: false)
+        state.setSection(.recents, shown: false)
+        state.setSection(.settings, shown: false)
+        let moved = state.section == .liveTV
+        state.loadHiddenSections()
+        let kept = state.hiddenSections == [.movies, .recents]
+        state.setSection(.movies, shown: true)
+        state.setSection(.recents, shown: true)
+        let back = state.hiddenSections.isEmpty
+        log("\(t()) \(moved && kept && back ? "" : "FAIL ")sidebar sections: moved off=\(moved) kept=\(kept) shown again=\(back)")
+    }
+
+    /// General and Content, opened from tab names remembered before they were merged.
+    private static func settingsTabs(state: AppState, t: () -> String) async {
+        for (stored, tab) in [("backup", "general"), ("hidden", "content")] {
+            UserDefaults.standard.set(stored, forKey: "settingsTab")
+            state.section = .settings
+            try? await Task.sleep(for: .seconds(1.5))
+            snapshot("14-settings-\(tab)")
+        }
+        UserDefaults.standard.set("providers", forKey: "settingsTab")
+        log("\(t()) settings tabs: general and content saved")
     }
 
     /// Recents and Favorites pages: newest first, removing, and drag-to-reorder.
@@ -736,7 +766,7 @@ public enum SmokeTest {
             let merged = Set(uk?.spellings ?? []) == ["UK", "GB"] && Set(us?.spellings ?? []) == ["US", "NA"]
                 && uk?.providers.count == 2 && us?.providers.count == 2
             log("\(t()) \(merged ? "" : "FAIL ")regions across providers: \(regions.map { "\($0.code) seen as \($0.spellings) on \($0.providers)" })")
-            UserDefaults.standard.set("regions", forKey: "settingsTab")
+            UserDefaults.standard.set("content", forKey: "settingsTab")
             state.section = .settings
             try? await Task.sleep(for: .seconds(1.5))
             snapshot("11-regions-two-providers")

@@ -61,6 +61,8 @@ public enum SettingKey: String, Sendable, CaseIterable {
     case regionAliases
     /// Per provider: catalog parts whose last refresh came back empty (see CatalogSyncService).
     case emptyCatalogParts
+    /// Sidebar sections switched off in Settings → General (`SidebarItem` raw values). `[String]`.
+    case hiddenSidebarItems
 }
 
 extension JSONEncoder {
