@@ -260,6 +260,55 @@ struct ServerLinkTests {
         #expect(world.links.allSatisfy { !$0.isDown })
     }
 
+    @Test func aLinkDownForADayIsDeadAndNoLongerChecked() async throws {
+        let world = try await World(links: "a.test\nb.test", up: ["b.test"])
+        func triesOfA() -> Int { world.transport.requestedHosts.filter { $0 == "a.test" }.count }
+        await world.failover.recheck(world.id)
+        #expect(world.links[0].isDown && !world.links[0].isDead)
+        // Down for a few hours isn't dead yet.
+        world.clock.advance(6 * 3600)
+        await world.failover.recheck(world.id)
+        #expect(!world.links[0].isDead)
+        world.clock.advance(19 * 3600)
+        await world.failover.recheck(world.id)
+        #expect(world.links[0].isDead)
+        let tries = triesOfA()
+        for _ in 0..<4 {
+            world.clock.advance(6 * 3600)
+            await world.failover.recheck(world.id)
+            await world.failover.ensureWorking(world.id)
+        }
+        #expect(triesOfA() == tries)
+        #expect(!world.links.allDown)
+        // Refresh in Settings tries it again, and a link that answers is back.
+        world.transport.setUp(["a.test", "b.test"])
+        #expect(await world.failover.recheck(world.id, includingDead: true) == .switched(to: URL(string: "http://a.test")!))
+        #expect(world.links.allSatisfy { !$0.isDown })
+    }
+
+    @Test func deadLinksGetOneTryADayWhenNothingElseWorks() async throws {
+        let world = try await World(links: "a.test\nb.test", up: [])
+        func tries() -> Int { world.transport.requestedHosts.count }
+        await world.failover.recheck(world.id)
+        world.clock.advance(25 * 3600)
+        await world.failover.recheck(world.id)
+        #expect(world.links.allSatisfy { $0.isDead })
+        let before = tries()
+        // The 5-minute checks for a provider that's down leave dead links alone...
+        for _ in 0..<12 {
+            world.clock.advance(300)
+            await world.failover.recheckAllDown()
+        }
+        #expect(tries() == before)
+        #expect(await world.failover.ensureWorking(world.id) == .allDown)
+        // ...until a day has passed: the seller's outage is over.
+        world.transport.setUp(["b.test"])
+        world.clock.advance(24 * 3600)
+        await world.failover.recheckAllDown()
+        #expect(world.active == "b.test")
+        #expect(!world.links.allDown)
+    }
+
     @Test func aLinkThatLogsInBeatsOneThatOnlyAnswers() async throws {
         // a.test is dead; b.test's domain now runs someone else's panel and refuses the login.
         let world = try await World(links: "a.test\nb.test\nc.test", up: ["b.test", "c.test"])

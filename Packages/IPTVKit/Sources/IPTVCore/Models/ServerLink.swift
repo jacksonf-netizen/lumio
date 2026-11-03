@@ -10,7 +10,8 @@ public struct ServerLink: Hashable, Sendable, Codable {
     /// Base URL like `http://host:8080`. Never contains credentials.
     public var url: URL
     public var lastCheckedAt: Date?
-    /// Set when a check found the server unreachable; cleared when it answers again.
+    /// Set when a check found the server unreachable; cleared when it answers again. Kept while it
+    /// stays down, so it's when the link went down.
     public var downSince: Date?
     /// Why the last check failed, for Settings.
     public var lastFailure: String?
@@ -26,6 +27,15 @@ public struct ServerLink: Hashable, Sendable, Codable {
     }
 
     public var isDown: Bool { downSince != nil }
+
+    /// Still down a day after it first failed (two checks at least a day apart). Automatic checks
+    /// skip a dead link unless none of the provider's other links work; see `ServerFailover`.
+    public var isDead: Bool {
+        guard let downSince, let lastCheckedAt else { return false }
+        return lastCheckedAt.timeIntervalSince(downSince) >= Self.deadAfter
+    }
+
+    public static let deadAfter: TimeInterval = 24 * 3600
 }
 
 extension Array where Element == ServerLink {

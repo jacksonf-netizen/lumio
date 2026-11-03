@@ -6,15 +6,18 @@ the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`
 Each version starts with a one- or two-sentence summary paragraph: that's all Lumio shows when it
 offers the update. The list below it appears on the release page.
 
-## Unreleased
+## 0.1.4 — 2026-11-03
+
+Paste every server link your seller sent, and Lumio moves to the next one by itself when the one
+in use stops working. Also a quieter look in a few places.
 
 - Backup server links. Paste every link your seller sent into a provider (one per line; M3U or
   stream links with the username and password inside work too, and fill in the login). Lumio
   keeps using the link that works, and when it goes down moves to the next one by itself,
-  mid-stream included.
-  It checks the links at launch and every few hours, in the background. If none of them answer,
-  Settings says so, Settings gets a red dot in the sidebar, and Live TV shows a banner. Your
-  current address becomes the first link.
+  mid-stream included. It checks the links at launch and every few hours, in the background. A
+  link that's still down a day later is marked dead and no longer checked (Refresh in Settings
+  tries it again). If none of the links answer, Settings says so, Settings gets a red dot in the
+  sidebar, and Live TV shows a banner. Your current address becomes the first link.
 - A quieter look in a few places. Programmes on air show a red dot and "Live" (the same red as
   the guide's now line) instead of a red LIVE badge, and Now/Next labels are no longer in capitals.
 - Favourite movies and series use the star, like channels, instead of a heart.

@@ -224,11 +224,12 @@ final class ProvidersViewModel {
         }
     }
 
-    /// Checks the server links first, so the refresh runs on the best one that works.
+    /// Checks the server links first (dead ones too: the user asked), so the refresh runs on the
+    /// best one that works.
     func refresh(_ provider: Provider, parts: RefreshParts = .all, restart: Bool = false) {
         let sync = environment.sync, servers = environment.servers
         Task.detached(priority: .utility) {
-            await servers.recheck(provider.id)
+            await servers.recheck(provider.id, includingDead: true)
             await sync.refresh(provider.id, parts: parts, restart: restart)
         }
     }
@@ -236,7 +237,7 @@ final class ProvidersViewModel {
     func refreshAll() {
         let sync = environment.sync, servers = environment.servers
         Task.detached(priority: .utility) {
-            await servers.recheckAll()
+            await servers.recheckAll(includingDead: true)
             await sync.refreshStale(force: true)
         }
     }

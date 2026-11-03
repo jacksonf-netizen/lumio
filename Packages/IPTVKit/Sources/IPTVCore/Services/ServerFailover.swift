@@ -65,18 +65,19 @@ public actor ServerFailover: ServerHealth {
         await shared(id) { await self.check(id, preferHigher: false) }
     }
 
-    /// Full check of every link. Also moves back up to a higher link that works again; streams
-    /// already playing keep their address, the next one uses the new link.
+    /// Full check of every link that isn't dead. Also moves back up to a higher link that works
+    /// again; streams already playing keep their address, the next one uses the new link.
+    /// `includingDead` (Refresh in Settings) tries dead links too.
     @discardableResult
-    public func recheck(_ id: ProviderID) async -> Outcome {
-        await shared(id) { await self.check(id, preferHigher: true) }
+    public func recheck(_ id: ProviderID, includingDead: Bool = false) async -> Outcome {
+        await shared(id) { await self.check(id, preferHigher: true, includingDead: includingDead) }
     }
 
     /// Rechecks every enabled provider (at launch and every few hours).
-    public func recheckAll() async {
+    public func recheckAll(includingDead: Bool = false) async {
         let ids = ((try? providers.all()) ?? []).filter(\.isEnabled).map(\.id)
         await withTaskGroup(of: Void.self) { group in
-            for id in ids { group.addTask { _ = await self.recheck(id) } }
+            for id in ids { group.addTask { _ = await self.recheck(id, includingDead: includingDead) } }
         }
     }
 
@@ -103,11 +104,14 @@ public actor ServerFailover: ServerHealth {
         return outcome
     }
 
-    private func check(_ id: ProviderID, preferHigher: Bool) async -> Outcome {
+    private func check(_ id: ProviderID, preferHigher: Bool, includingDead: Bool = false) async -> Outcome {
         guard let provider = try? providers.provider(id: id), provider.isEnabled,
               let credentials = try? secrets.load(for: id),
-              let links = try? providers.links(for: id), !links.isEmpty
+              let all = try? providers.links(for: id), !all.isEmpty
         else { return .skipped }
+        let links = includingDead ? all : Self.linksToCheck(all, now: clock.now())
+        // Every link is dead and had its daily try already.
+        guard !links.isEmpty else { return .allDown }
         let active = provider.serverURL
         let agent = provider.userAgentOverride ?? userAgent()
 
@@ -159,6 +163,17 @@ public actor ServerFailover: ServerHealth {
         lastAnswered[id] = now
         Log.app.notice("Provider \(id, privacy: .public) switched to server link \(links.firstIndex { $0.url == best }.map { $0 + 1 } ?? 0)")
         return .switched(to: best)
+    }
+
+    /// The links an automatic check tries: not dead ones (down for a day), unless none of the others
+    /// work. Then the dead ones get one try a day, so a seller's outage that lasted more than a day
+    /// doesn't leave the provider stuck after it ends.
+    static func linksToCheck(_ links: [ServerLink], now: Date) -> [ServerLink] {
+        let alive = links.filter { !$0.isDead }
+        guard alive.allSatisfy(\.isDown) else { return alive }
+        let lastTry = links.filter(\.isDead).compactMap(\.lastCheckedAt).max()
+        if let lastTry, now.timeIntervalSince(lastTry) < ServerLink.deadAfter { return alive }
+        return links
     }
 
     /// True once a link logs in and every link above it has failed: nothing better can turn up.

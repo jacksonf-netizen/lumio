@@ -150,6 +150,11 @@ that address now runs someone else's panel. When no link logs in, the address in
 - Full check (`recheck`): at launch, every 6 hours, every 5 minutes while all of a provider's links
   are down, and on Refresh in Settings. Also moves back up to a higher link that answers again.
   Streams already playing keep their address; the next one opens on the new link.
+- A link still down a day after it first failed (two failed checks at least a day apart) is dead:
+  Settings shows "Dead since …" and automatic checks skip it. Only when none of the provider's
+  other links work do the dead ones get a try, at most once a day, so a seller's outage that
+  lasted more than a day doesn't leave the provider stuck. Refresh in Settings (and saving the
+  provider) tries every link, dead ones too; one that answers is back in the list.
 - Streams never wait for a check: they open on `provider.serverURL`, the link last known to work.
 - When every link is down, Settings shows it on the provider, the sidebar puts a red dot on
   Settings, and Live TV shows a banner, until a link answers.

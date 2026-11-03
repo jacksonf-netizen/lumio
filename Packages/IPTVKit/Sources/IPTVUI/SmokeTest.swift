@@ -433,6 +433,21 @@ public enum SmokeTest {
         _ = await state.environment.servers.recheck(providerID)
         let cleared = await waitFor(3) { state.providers.unreachable.isEmpty }
         log("\(t()) \(cleared && active() == harness ? "" : "FAIL ")a link works again: cleared=\(cleared)")
+
+        // The dead address has been down for two days: it's dead, and checks leave it alone.
+        if var link = (try? service.repository.links(for: providerID))?.first(where: { $0.url == dead }) {
+            link.downSince = Date().addingTimeInterval(-2 * 86_400)
+            link.lastCheckedAt = Date()
+            let aged = link
+            try? await state.environment.database.writer.write { db in try aged.save(db) }
+        }
+        let markedDead = await waitFor(3) { state.providers.links[providerID]?.first?.isDead == true }
+        let checkedAt = (try? service.repository.links(for: providerID))?.first?.lastCheckedAt
+        _ = await state.environment.servers.recheck(providerID)
+        let skipped = (try? service.repository.links(for: providerID))?.first?.lastCheckedAt == checkedAt
+        log("\(t()) \(markedDead && skipped ? "" : "FAIL ")dead link: shown=\(markedDead) skipped by checks=\(skipped)")
+        try? await Task.sleep(for: .seconds(1))
+        snapshot("13-settings-dead-link")
         try? await service.updateProvider(provider, servers: harness.absoluteString)
         state.section = .liveTV
         try? await Task.sleep(for: .seconds(1))

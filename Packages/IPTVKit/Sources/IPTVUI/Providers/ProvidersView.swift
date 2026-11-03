@@ -96,6 +96,17 @@ private struct ProviderRow: View {
     let edit: () -> Void
     let remove: () -> Void
 
+    private var allDownMessage: String {
+        if links.allSatisfy(\.isDead) {
+            return links.count == 1
+                ? "The server has been down for over a day. Lumio tries it once a day. If your seller sent a new link, add it with Edit."
+                : "All \(links.count) server links have been down for over a day. Lumio tries them once a day. If your seller sent new links, add them with Edit."
+        }
+        return links.count == 1
+            ? "The server doesn't answer. Lumio checks again every 5 minutes. If your seller sent a new link, add it with Edit."
+            : "None of the \(links.count) server links answer. Lumio checks again every 5 minutes. If your seller sent new links, add them with Edit."
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "line.3.horizontal")
@@ -112,10 +123,7 @@ private struct ProviderRow: View {
                 ServerLinkList(links: links, active: provider.serverURL)
                 details
                 if provider.isEnabled, links.allDown {
-                    Label(links.count == 1
-                          ? "The server doesn't answer. Lumio checks again every 5 minutes. If your seller sent a new link, add it with Edit."
-                          : "None of the \(links.count) server links answer. Lumio checks again every 5 minutes. If your seller sent new links, add them with Edit.",
-                          systemImage: "exclamationmark.octagon.fill")
+                    Label(allDownMessage, systemImage: "exclamationmark.octagon.fill")
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -372,7 +380,9 @@ private struct ServerLinkList: View {
             Circle()
                 .fill(link.isDown ? Color.red : (link.url == active ? Color.green : Color.secondary.opacity(0.5)))
                 .frame(width: 6, height: 6)
-            if let since = link.downSince {
+            if link.isDead, let since = link.downSince {
+                Text("Dead since \(Self.format(since))")
+            } else if let since = link.downSince {
                 Text("Down since \(Self.format(since))")
             } else if link.url == active {
                 Text("In use")
@@ -382,7 +392,9 @@ private struct ServerLinkList: View {
         }
         .font(.caption)
         .foregroundStyle(.secondary)
-        .help(link.lastFailure ?? link.lastCheckedAt.map { "Answered at \(Self.format($0))" } ?? "Not checked yet")
+        .help(link.isDead
+              ? "Down for over a day, so Lumio no longer checks it. Refresh tries it again; Edit removes it."
+              : link.lastFailure ?? link.lastCheckedAt.map { "Answered at \(Self.format($0))" } ?? "Not checked yet")
     }
 
     private static func format(_ date: Date) -> String {
