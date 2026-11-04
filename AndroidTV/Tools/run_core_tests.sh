@@ -37,7 +37,7 @@ adb push "$RUNTIME"/*.so "$LIBCXX" "$PRODUCTS"/*-test-runner "$PRODUCTS"/*Tests.
 for bundle in "$PRODUCTS"/*.bundle; do adb push "$bundle" "$DEVICE_DIR/" > /dev/null; done
 
 status=0
-for suite in IPTVCoreTests LumioUpdateTests; do
+for suite in IPTVCoreTests IPTVBridgeTests LumioUpdateTests; do
     echo "==> Running $suite on $ABI"
     adb shell "cd $DEVICE_DIR && LD_LIBRARY_PATH=. TMPDIR=$DEVICE_DIR/tmp HOME=$DEVICE_DIR sh -c 'mkdir -p tmp; ./$suite-test-runner --testing-library swift-testing $*'" || status=$?
 done

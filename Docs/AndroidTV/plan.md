@@ -16,7 +16,7 @@ typing a code into the Downloader app.
 2. **Native screens and player per platform.** The Mac keeps SwiftUI and mpv. Android TV gets
    Kotlin screens built for the remote's arrow keys and Media3 (ExoPlayer), which uses the
    device's hardware decoders. Nothing about the Mac app's look or behaviour changes.
-3. **A thin bridge.** Kotlin talks to the core through `swift-java` (JNI). The bridge exposes a
+3. **A thin bridge.** Kotlin talks to the core through JNI (JSON requests; swift-java was the first plan, see "The bridge"). The bridge exposes a
    small set of coarse calls ("give me this screenful of guide rows"), never one call per cell
    or per frame.
 4. **A spike first, with a go/no-go.** Before any real work, a throwaway build measures app size,
@@ -151,10 +151,29 @@ Kotlin never sees GRDB, actors or Swift concurrency. It sees one facade, `LumioC
 - **Platform services passed in at start-up**: `SecretStore`, `SystemEvents`, the clock, the
   database file path, the cache directory.
 
-Data crosses as swift-java generated value types. If that turns out awkward for a type, it
-crosses as compact JSON. Neither is on a per-frame path, so either is fast enough. Threading:
-calls from Kotlin run on a background dispatcher; results come back to the main thread in
-Kotlin.
+Data crosses as compact JSON (decided 2026-11-04, in place of swift-java). swift-java was at 0.7
+and still changing every few weeks (its async support was being fixed release by release), and
+its generated wrappers would cost one JNI crossing per property: thousands for a channel list,
+where JSON is one. Nothing crosses per frame, so JSON's cost doesn't matter. swift-java can be
+reconsidered once it reaches 1.0.
+
+How it's built (phase 2):
+
+- `Shared/LumioCore/Sources/IPTVBridge`: `BridgeCore` takes `{"method", "params"}` requests and
+  answers `{"result"}` or `{"error"}` (a message fit to show, credentials removed), and pushes
+  events (`providers`, `live`, `guide`, `sync`). Its types (`BridgeModels.swift`) are the bridge's
+  own, so the core can change without the app noticing. Platform-neutral: its tests run on the Mac
+  and on Android.
+- `AndroidTV/core-bridge/Sources/CJNI/cjni.c`: the JNI entry points and callbacks, in C. Text
+  crosses as UTF-8 byte arrays, because JNI's string functions use "modified UTF-8", which breaks
+  on emoji (common in channel names). It also hooks Swift's main queue into the UI thread's
+  looper, so core code that runs on the main queue or the main actor works as on the Mac.
+- `AndroidTV/app/.../core/LumioCore.kt` and `BridgeModels.kt`: one suspend function per request
+  and one data class per type. Both sides' tests read the same fixtures
+  (`Shared/LumioCore/Tests/IPTVBridgeTests/Fixtures`), so a renamed field fails a test.
+- Logins: the core's `SecretStore` calls back into Kotlin's `LoginVault` (AES-GCM, key in the
+  Android Keystore, files in the no-backup folder).
+- Threading: Kotlin calls run on `Dispatchers.IO` and block that thread until the core answers.
 
 Rule for keeping two apps in step: **if it isn't drawing pixels or touching the platform, it
 belongs in `IPTVCore`.** No business logic in Kotlin. A Kotlin screen that needs a rule (sorting,
@@ -490,6 +509,25 @@ Done 2026-11-04:
 - Android app: navigation for the remote, Settings → Providers (add with links, refresh,
   status), Live TV groups and channel list from the shared core, background refresh schedule.
 
+Done 2026-11-04 (branch `android/phase-2-app-shell`):
+
+- The bridge as described in "The bridge" (JSON in place of swift-java).
+- Shared wiring: `AppEnvironment` (the services and the background schedule) and the provider
+  actions (add, save, remove, switch off, reorder, refresh) moved from the Mac app into the core
+  (`Shared/LumioCore/Sources/IPTVCore/App`), so both apps follow the same rules. The Mac app uses
+  them unchanged; its tests and smoke test pass.
+- The Android app (Compose for TV): a sidebar, Settings → Providers (add with backup links, edit,
+  switch off, move up/down, remove, refresh, status with counts, connections, expiry and each
+  link's state) and Live TV (merged groups, channels with numbers and now/next). Text fields open
+  the keyboard on OK only, so moving through a form never traps the remote.
+- Tests: 7 bridge tests (Mac and Android), and Android app tests on the emulator for the shared
+  fixtures, the login vault, and the real core through JNI (including emoji).
+- Compose needs compileSdk 37 (Android SDK platform 37.0 installed); the app still targets 36
+  and runs from Android 9.
+
+Still to do in phase 2: network-change and sleep events from Kotlin (`SystemEvents`), channel
+logos (the small image loader), and the Android app's acknowledgements of AndroidX and Media3.
+
 ### Phase 3: playback
 
 - ExoPlayer `PlaybackEngine`; the shared `PlaybackController` drives it (reconnect, format and
@@ -536,7 +574,7 @@ database library. For Android:
 |---|---|---|
 | Media3 ExoPlayer (+ HLS module) | the Android playback engine | Apache-2.0 |
 | AndroidX (core, activity, lifecycle, Compose for TV) | the platform UI toolkit | Apache-2.0 |
-| swift-java | the Kotlin ↔ Swift bridge | Apache-2.0 |
+| swift-java | the Kotlin ↔ Swift bridge (approved; not used for now, see "The bridge") | Apache-2.0 |
 | swift-crypto | Ed25519 update signatures on Android | Apache-2.0 |
 | Optional: Media3 FFmpeg audio extension | AC-3 on devices without a decoder | LGPL |
 | Optional: Coil | images, only if our own loader falls short | Apache-2.0 |

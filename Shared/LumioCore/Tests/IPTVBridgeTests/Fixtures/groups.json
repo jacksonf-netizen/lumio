@@ -1,0 +1,5 @@
+[
+  {"id": "favorites", "name": "Favorites", "kind": "favorites", "hidden": false},
+  {"id": "all", "name": "All Channels", "kind": "all", "hidden": false},
+  {"id": "cat:News", "name": "News", "kind": "category", "hidden": true}
+]

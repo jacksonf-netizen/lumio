@@ -93,6 +93,17 @@ public struct ProviderRepository: Sendable {
         try database.reader.read { db in try Self.links(for: id, db) }
     }
 
+    /// Every provider's links, in order.
+    public func allLinks() throws -> [ServerLink] {
+        try database.reader.read { db in try ServerLink.order(Column("providerID"), Column("position")).fetchAll(db) }
+    }
+
+    /// Calls `onChange` (on a database thread) after every change to providers or their links.
+    public func observeChanges(_ onChange: @escaping @Sendable () -> Void) -> AnyDatabaseCancellable {
+        DatabaseRegionObservation(tracking: Table(Provider.databaseTableName), Table(ServerLink.databaseTableName))
+            .start(in: database.writer, onError: { _ in }, onChange: { _ in onChange() })
+    }
+
     /// Every provider's links, for Settings.
     public func observeLinks() -> AsyncValueObservation<[ServerLink]> {
         ValueObservation

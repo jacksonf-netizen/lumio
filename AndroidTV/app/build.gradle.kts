@@ -2,6 +2,7 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.compose)
 }
 
 // The version is shared with the Mac app: version.properties at the top of the repository.
@@ -14,7 +15,7 @@ val versionParts = marketingVersion.split(".").map { it.toInt() }
 
 android {
     namespace = "com.jackson.lumio"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         // Permanent once released: Android only updates an app with the same ID and signing key.
@@ -24,8 +25,16 @@ android {
         versionName = marketingVersion
         versionCode = versionParts[0] * 1_000_000 + versionParts[1] * 1_000 + versionParts[2]
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            // The CPU types the app ships for. CI's emulator is x86_64, so its test build passes
+            // -PlumioAbis=x86_64 (with the core built for x86_64 by build_core.sh).
+            val abis = (project.findProperty("lumioAbis") as String?)?.split(",") ?: listOf("armeabi-v7a", "arm64-v8a")
+            abiFilters += abis
         }
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+    }
+
+    buildFeatures {
+        compose = true
     }
 
     buildTypes {
@@ -33,8 +42,8 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Phase 0 only: signed with the debug key so the test build installs. The real release
-            // key comes in phase 6 (plan, "The APK signing key").
+            // Until phase 6: signed with the debug key so test builds install. The real release key
+            // comes in phase 6 (plan, "The APK signing key").
             signingConfig = signingConfigs.getByName("debug")
         }
     }
@@ -43,6 +52,10 @@ android {
         getByName("main") {
             // liblumiocore.so and libc++_shared.so from AndroidTV/Tools/build_core.sh.
             jniLibs.directories.add(rootDir.resolve("build/jniLibs").path)
+        }
+        getByName("androidTest") {
+            // The bridge's JSON fixtures, shared with the Swift tests so both sides agree on every field.
+            assets.directories.add(rootDir.resolve("../Shared/LumioCore/Tests/IPTVBridgeTests/Fixtures").path)
         }
     }
 
@@ -65,4 +78,15 @@ dependencies {
     implementation(libs.media3.exoplayer)
     implementation(libs.media3.exoplayer.hls)
     implementation(libs.media3.ui)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.foundation)
+    implementation(libs.compose.ui)
+    implementation(libs.tv.material)
+    implementation(libs.activity.compose)
+    implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.runtime.compose)
+
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.junit)
 }

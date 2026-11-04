@@ -4,6 +4,8 @@
 //
 //   IPTVCore      Models, Xtream client, EPG, database, repositories, server links, playback
 //                 state machine. Foundation + GRDB only (no SwiftUI / AppKit / AVFoundation).
+//   IPTVBridge    The JSON door the Android TV app (Kotlin) talks to the core through. Platform-
+//                 neutral, so its tests run on the Mac too; the Android glue is in AndroidTV/core-bridge.
 //   LumioUpdate   Update signatures (CryptoKit on Apple platforms, swift-crypto elsewhere) and,
 //                 on the Mac, installing them; shared by the Mac app and its installer service.
 
@@ -19,6 +21,7 @@ let package = Package(
     products: [
         .library(name: "IPTVCore", targets: ["IPTVCore"]),
         .library(name: "LumioUpdate", targets: ["LumioUpdate"]),
+        .library(name: "IPTVBridge", targets: ["IPTVBridge"]),
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.11.1"),
@@ -39,6 +42,16 @@ let package = Package(
                 // Android's log (logcat), used by `Log` there.
                 .linkedLibrary("log", .when(platforms: [.android])),
             ]
+        ),
+        .target(
+            name: "IPTVBridge",
+            dependencies: ["IPTVCore", .product(name: "GRDB", package: "GRDB.swift")]
+        ),
+        .testTarget(
+            name: "IPTVBridgeTests",
+            dependencies: ["IPTVBridge"],
+            // Also read by the Android app's tests (AndroidTV/app/build.gradle.kts, androidTest assets).
+            resources: [.copy("Fixtures")]
         ),
         .testTarget(
             name: "IPTVCoreTests",

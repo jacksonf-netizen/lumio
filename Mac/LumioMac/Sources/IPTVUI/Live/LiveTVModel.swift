@@ -76,28 +76,19 @@ final class LiveTVModel {
         started = true
         reloadGroups()
         // Reload when anything that affects the lists changes (sync, edits, matching).
-        let region = DatabaseRegionObservation(tracking: [
-            Table("channel"), Table("category"), Table("channelOverride"), Table("categoryOverride"),
-            Table("favorite"), Table("recentItem"), Table("customGroup"), Table("customGroupMember"),
-            Table("logicalChannelMember"), Table("provider"), Table("logicalEPGOverride"), Table("epgMappingOverride"),
-            Table("setting"), // hidden regions
-        ])
-        observation = region.start(in: environment.database.writer, onError: { error in
-            Log.app.error("Live TV observation failed: \(String(describing: error), privacy: .public)")
-        }, onChange: { [weak self] _ in
+        observation = catalog.observeListChanges { [weak self] in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated { self?.scheduleReload() }
             }
-        })
+        }
         // Programme data changes after guide imports: refresh now/next.
-        let guideRegion = DatabaseRegionObservation(tracking: Table("programme"))
-        guideObservation = guideRegion.start(in: environment.database.writer, onError: { _ in }, onChange: { [weak self] _ in
+        guideObservation = catalog.observeGuideChanges { [weak self] in
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
                     self?.nowNextLoadedAt.removeAll()
                 }
             }
-        })
+        }
     }
 
     @ObservationIgnored private var guideObservation: AnyDatabaseCancellable?
