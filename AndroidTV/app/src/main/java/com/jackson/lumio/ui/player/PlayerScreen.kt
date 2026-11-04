@@ -50,14 +50,15 @@ import com.jackson.lumio.ui.LumioColors
 /**
  * Full-screen live TV. Up/down and CH+/CH- change channel (through the list playback started
  * from), number keys pick a channel by number, OK shows the info banner, the last-channel key
- * goes back to the previous channel, Back closes the player.
+ * goes back to the previous channel, Right (or Menu) opens audio and subtitles, Back closes the
+ * player.
  */
 @OptIn(UnstableApi::class)
 @Composable
 fun PlayerScreen(model: PlayerViewModel) {
     val state = model.state
     val focus = remember { FocusRequester() }
-    BackHandler { model.close() }
+    BackHandler { if (model.tracks != null) model.closeTracks() else model.close() }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     Box(
@@ -67,12 +68,13 @@ fun PlayerScreen(model: PlayerViewModel) {
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown || state?.phase == "failed") return@onPreviewKeyEvent false
+                if (event.type != KeyEventType.KeyDown || state?.phase == "failed" || model.tracks != null) return@onPreviewKeyEvent false
                 when (val code = event.key.nativeKeyCode) {
                     AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> model.zap(-1)
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_CHANNEL_UP -> model.zap(1)
                     AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> model.showBanner()
                     AndroidKeyEvent.KEYCODE_LAST_CHANNEL, AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS -> model.previous()
+                    AndroidKeyEvent.KEYCODE_DPAD_RIGHT, AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_CAPTIONS -> model.openTracks()
                     in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 -> model.digit(code - AndroidKeyEvent.KEYCODE_0)
                     else -> return@onPreviewKeyEvent false
                 }
@@ -83,7 +85,10 @@ fun PlayerScreen(model: PlayerViewModel) {
         Status(model)
         if (model.bannerVisible || state?.phase == "failed") Banner(model)
         TopRight(model)
+        model.tracks?.let { TracksPanel(it, onSelect = model::selectTrack) }
     }
+    // Focus comes back to the player when the tracks panel closes.
+    LaunchedEffect(model.tracks == null) { if (model.tracks == null) runCatching { focus.requestFocus() } }
 }
 
 @OptIn(UnstableApi::class)

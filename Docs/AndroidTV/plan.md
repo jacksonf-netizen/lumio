@@ -565,8 +565,11 @@ Done 2026-11-04 (branch `android/phase-3-playback`), on the emulator:
   emulator and the core moved to HLS by itself; a stalled stream reconnected in 1.8 s; closing
   released the provider connection; memory while playing 69.5 MB (PSS).
 
-Still to do: an audio and subtitle menu (the bridge has `player.tracks`/`selectTrack`), and the
-measurements on the onn HD stick.
+- Audio and subtitle panel: Right (or Menu) in the player.
+- Debug builds take a test provider from launch extras (`-e server -e username -e password`), so
+  the emulator or a TV can be set up without typing on the remote; release builds ignore them.
+
+Still to do: the measurements on the onn HD stick.
 
 ### Phase 4: guide, favorites, recents
 

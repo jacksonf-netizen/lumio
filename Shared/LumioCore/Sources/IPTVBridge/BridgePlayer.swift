@@ -40,8 +40,9 @@ final class BridgePlayer {
         try play(channel, in: channels)
     }
 
+    /// A one-channel list doesn't reopen the stream.
     func zap(by offset: Int) throws {
-        if let next = zap.channel(by: offset) { try play(next, debounce: true) }
+        if let next = zap.channel(by: offset), next.id != zap.current?.id { try play(next, debounce: true) }
     }
 
     func jump(toNumber number: Int) throws {

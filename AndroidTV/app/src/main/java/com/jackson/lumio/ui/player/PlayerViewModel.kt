@@ -9,6 +9,7 @@ import com.jackson.lumio.core.CoreException
 import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.NowNext
 import com.jackson.lumio.core.PlayerState
+import com.jackson.lumio.core.Track
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -32,6 +33,9 @@ class PlayerViewModel : ViewModel() {
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    /** The audio and subtitle tracks, while the tracks panel is open. */
+    var tracks by mutableStateOf<List<Track>?>(null)
+        private set
 
     private var bannerJob: Job? = null
     private var digitsJob: Job? = null
@@ -54,7 +58,24 @@ class PlayerViewModel : ViewModel() {
 
     fun retry() = run { LumioCore.retry() }
 
+    fun openTracks() {
+        viewModelScope.launch { tracks = runCatching { LumioCore.tracks() }.getOrDefault(emptyList()) }
+    }
+
+    fun closeTracks() {
+        tracks = null
+    }
+
+    fun selectTrack(kind: String, id: Int?) {
+        viewModelScope.launch {
+            runCatching { LumioCore.selectTrack(kind, id) }
+            delay(300)
+            tracks = runCatching { LumioCore.tracks() }.getOrDefault(tracks.orEmpty())
+        }
+    }
+
     fun close() {
+        tracks = null
         showing = false
         viewModelScope.launch { runCatching { LumioCore.stopPlayer() } }
     }

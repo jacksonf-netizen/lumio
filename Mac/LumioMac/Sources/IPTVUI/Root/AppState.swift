@@ -108,7 +108,8 @@ public final class AppState {
     /// Next / previous channel in the zap list (wraps around). Debounced so holding a key doesn't
     /// open every channel on the way.
     public func zap(by offset: Int) {
-        guard let next = zap.channel(by: offset) else { return }
+        // A one-channel list doesn't reopen the stream.
+        guard let next = zap.channel(by: offset), next.id != currentChannel?.id else { return }
         watch(next, debounce: true)
     }
 
