@@ -16,6 +16,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -34,8 +41,18 @@ import com.jackson.lumio.ui.LumioColors
 
 /** Groups on the left; moving onto a group shows its channels on the right, with what's on now. */
 @Composable
-fun LiveTvScreen(model: LiveTvViewModel = viewModel()) {
+fun LiveTvScreen(
+    onPlay: (channel: String, group: String) -> Unit,
+    playerShowing: Boolean,
+    model: LiveTvViewModel = viewModel(),
+) {
     val state = model.state
+    // Closing the player returns the remote to the channel that was playing.
+    var lastPlayed by rememberSaveable { mutableStateOf<String?>(null) }
+    val playedRow = remember { FocusRequester() }
+    LaunchedEffect(playerShowing) {
+        if (!playerShowing && lastPlayed != null) runCatching { playedRow.requestFocus() }
+    }
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.width(300.dp).fillMaxHeight().padding(vertical = 24.dp, horizontal = 12.dp),
@@ -63,7 +80,14 @@ fun LiveTvScreen(model: LiveTvViewModel = viewModel()) {
                     items(state.channels, key = { it.id }) { channel ->
                         val nowNext = channel.epg?.let { state.nowNext[it] }
                         LaunchedEffect(channel.epg) { channel.epg?.let(model::wantNowNext) }
-                        ChannelRow(channel, nowNext)
+                        ChannelRow(
+                            channel, nowNext,
+                            onClick = {
+                                lastPlayed = channel.id
+                                onPlay(channel.id, state.selectedGroup)
+                            },
+                            modifier = if (channel.id == lastPlayed) Modifier.focusRequester(playedRow) else Modifier,
+                        )
                     }
                 }
             }
@@ -72,12 +96,11 @@ fun LiveTvScreen(model: LiveTvViewModel = viewModel()) {
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, nowNext: NowNext?) {
+private fun ChannelRow(channel: Channel, nowNext: NowNext?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val now = System.currentTimeMillis() / 1000.0
     ListItem(
         selected = false,
-        // Playback arrives in phase 3.
-        onClick = {},
+        onClick = onClick,
         leadingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -99,6 +122,6 @@ private fun ChannelRow(channel: Channel, nowNext: NowNext?) {
                 }
             }
         },
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
     )
 }

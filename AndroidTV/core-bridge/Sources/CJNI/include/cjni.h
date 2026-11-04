@@ -18,6 +18,9 @@ void lumio_emit_event(const char *json);
 bool lumio_secret_save(const char *provider_id, const char *value);
 char *lumio_secret_load(const char *provider_id);
 bool lumio_secret_delete(const char *provider_id);
+/// A command for the app's player engine (JSON), answered at once (malloc'd JSON, or NULL). Called
+/// on the UI thread, where the core's main actor runs and ExoPlayer lives.
+char *lumio_player_command(const char *json);
 
 // Implemented in Swift (Bridge.swift).
 
@@ -25,3 +28,5 @@ bool lumio_secret_delete(const char *provider_id);
 char *lumio_swift_start(const char *database_path);
 /// Runs one request (JSON) and returns the reply (JSON, malloc'd).
 char *lumio_swift_call(const char *request);
+/// An event from the app's player engine (JSON). Returns at once.
+void lumio_swift_player_event(const char *json);

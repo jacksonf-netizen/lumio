@@ -39,8 +39,14 @@ public func lumio_swift_start(_ databasePath: UnsafePointer<CChar>?) -> UnsafeMu
         },
         delete: { id in lumio_secret_delete(id) })
     do {
-        let core = try BridgeCore.open(databasePath: String(cString: databasePath), secrets: secrets,
-                                       events: { json in lumio_emit_event(json) })
+        let core = try BridgeCore.open(
+            databasePath: String(cString: databasePath), secrets: secrets,
+            playerCommands: { json in
+                guard let reply = lumio_player_command(json) else { return nil }
+                defer { free(reply) }
+                return String(cString: reply)
+            },
+            events: { json in lumio_emit_event(json) })
         state.core = core
         Task { await core.start() }
         return nil
@@ -58,6 +64,12 @@ public func lumio_swift_call(_ request: UnsafePointer<CChar>?) -> UnsafeMutableP
         return await core.handle(text)
     }
     return strdup(reply)
+}
+
+@_cdecl("lumio_swift_player_event")
+public func lumio_swift_player_event(_ json: UnsafePointer<CChar>?) {
+    guard let json else { return }
+    EngineEvents.shared.deliver(String(cString: json))
 }
 
 /// Runs `work` on Swift's thread pool and blocks the calling (Kotlin background) thread until it's done.

@@ -20,15 +20,20 @@ public actor BridgeCore {
     private let liveCatalog: LiveCatalog
     private let guide: GuideRepository
     private var syncing: [ProviderID: String] = [:]
+    private nonisolated let players: Players
     private var observers: [AnyDatabaseCancellable] = []
     private var tasks: [Task<Void, Never>] = []
 
     /// `events` receives each event as JSON, on any thread.
+    /// `playerCommands` delivers player commands to the app's engine (see BridgedEngine); without
+    /// it there's no playback (tests of everything else).
     public init(environment: AppEnvironment, systemEvents: PushedSystemEvents = PushedSystemEvents(),
+                playerCommands: (@MainActor @Sendable (String) -> String?)? = nil,
                 events: @escaping @Sendable (String) -> Void) {
         self.environment = environment
         self.systemEvents = systemEvents
         send = events
+        players = Players(environment: environment, send: playerCommands, emit: { Self.emit($0, to: events) })
         liveCatalog = LiveCatalog(database: environment.database)
         guide = GuideRepository(database: environment.database)
     }
@@ -36,12 +41,13 @@ public actor BridgeCore {
     /// Opens the database at `databasePath` and wires the core with the app's secret store and the
     /// platform's networking.
     public static func open(databasePath: String, secrets: any SecretStore,
+                            playerCommands: @escaping @MainActor @Sendable (String) -> String?,
                             events: @escaping @Sendable (String) -> Void) throws -> BridgeCore {
         let database = try AppDatabase.open(at: URL(fileURLWithPath: databasePath))
         let systemEvents = PushedSystemEvents()
         let environment = AppEnvironment(database: database, secrets: secrets, transport: URLSessionTransport(),
                                          systemEvents: systemEvents)
-        return BridgeCore(environment: environment, systemEvents: systemEvents, events: events)
+        return BridgeCore(environment: environment, systemEvents: systemEvents, playerCommands: playerCommands, events: events)
     }
 
     /// Starts following changes and the background work every app runs (link checks and refreshes
@@ -141,6 +147,56 @@ public actor BridgeCore {
             case "willSleep": systemEvents.send(.willSleep)
             case "didWake": systemEvents.send(.didWake)
             default: throw BridgeError("Unknown system event \(p.type).")
+            }
+            return Empty()
+
+        case "player.watch":
+            // Plays a channel from a group; channel up/down then moves through that group.
+            struct P: Decodable { var player: String?; var channel: String; var group: String }
+            let p = try params.decode(P.self)
+            let player = try await players.player(p.player)
+            try await player.watch(channelID: p.channel, group: p.group)
+            return await player.state
+
+        case "player.zap":
+            struct P: Decodable { var player: String?; var by: Int }
+            let p = try params.decode(P.self)
+            let player = try await players.player(p.player)
+            try await player.zap(by: p.by)
+            return await player.state
+
+        case "player.number":
+            struct P: Decodable { var player: String?; var number: Int }
+            let p = try params.decode(P.self)
+            let player = try await players.player(p.player)
+            try await player.jump(toNumber: p.number)
+            return await player.state
+
+        case "player.previous", "player.stop", "player.retry", "player.state":
+            struct P: Decodable { var player: String? }
+            let player = try await players.player(try params.decode(P.self).player)
+            switch method {
+            case "player.previous": try await player.previous()
+            case "player.stop": await player.stop()
+            case "player.retry": await player.controller.retry()
+            default: break
+            }
+            return await player.state
+
+        case "player.tracks":
+            struct P: Decodable { var player: String? }
+            let player = try await players.player(try params.decode(P.self).player)
+            return await player.controller.tracks().map(TrackDTO.init)
+
+        case "player.selectTrack":
+            // Without an id: no track of that kind (subtitles off).
+            struct P: Decodable { var player: String?; var kind: String; var id: Int? }
+            let p = try params.decode(P.self)
+            guard let kind = MediaTrack.Kind(rawValue: p.kind) else { throw BridgeError("Unknown track kind \(p.kind).") }
+            let player = try await players.player(p.player)
+            await MainActor.run {
+                let track = player.controller.tracks().first { $0.kind == kind && $0.id == p.id }
+                player.controller.select(track, kind: kind)
             }
             return Empty()
 
@@ -256,6 +312,31 @@ public actor BridgeCore {
     private static func errorReply(_ message: String) -> String {
         let data = (try? encoder.encode(["error": message])) ?? Data(#"{"error":"Something went wrong."}"#.utf8)
         return String(decoding: data, as: UTF8.self)
+    }
+}
+
+/// The app's players, created on first use. "main" is the full-screen player.
+@MainActor
+final class Players {
+    private let environment: AppEnvironment
+    private let send: (@MainActor @Sendable (String) -> String?)?
+    private let emit: @Sendable (BridgeEvent) -> Void
+    private var players: [String: BridgePlayer] = [:]
+
+    nonisolated init(environment: AppEnvironment, send: (@MainActor @Sendable (String) -> String?)?,
+                     emit: @escaping @Sendable (BridgeEvent) -> Void) {
+        self.environment = environment
+        self.send = send
+        self.emit = emit
+    }
+
+    func player(_ id: String?) throws -> BridgePlayer {
+        let id = id ?? "main"
+        if let player = players[id] { return player }
+        guard let send else { throw BridgeError("This app has no player.") }
+        let player = BridgePlayer(id: id, environment: environment, send: send, emit: emit)
+        players[id] = player
+        return player
     }
 }
 

@@ -33,6 +33,8 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.ui.live.LiveTvScreen
+import com.jackson.lumio.ui.player.PlayerScreen
+import com.jackson.lumio.ui.player.PlayerViewModel
 import com.jackson.lumio.ui.providers.ProvidersScreen
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 
@@ -46,6 +48,7 @@ enum class Section(val title: String) {
 @Composable
 fun LumioApp() {
     val providers: ProvidersViewModel = viewModel()
+    val player: PlayerViewModel = viewModel()
     val state = providers.state
     var section by rememberSaveable { mutableStateOf(Section.Live) }
     // The first time, with no provider yet, Settings is where to start.
@@ -60,7 +63,7 @@ fun LumioApp() {
     // Back from a screen's content returns to the sidebar; Back on the sidebar leaves the app.
     val sidebarFocus = remember { FocusRequester() }
     var sidebarFocused by remember { mutableStateOf(false) }
-    BackHandler(enabled = !sidebarFocused) { runCatching { sidebarFocus.requestFocus() } }
+    BackHandler(enabled = !sidebarFocused && !player.showing) { runCatching { sidebarFocus.requestFocus() } }
 
     // A Surface gives everything inside the theme's text colour.
     Surface(colors = SurfaceDefaults.colors(containerColor = LumioColors.background, contentColor = LumioColors.text)) {
@@ -95,10 +98,11 @@ fun LumioApp() {
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
             when (shown) {
-                Section.Live -> LiveTvScreen()
+                Section.Live -> LiveTvScreen(onPlay = { channel, group -> player.watch(channel, group) }, playerShowing = player.showing)
                 Section.Settings -> ProvidersScreen(providers)
             }
         }
     }
+    if (player.showing) PlayerScreen(player)
     }
 }

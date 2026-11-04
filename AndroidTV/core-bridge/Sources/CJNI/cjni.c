@@ -14,7 +14,7 @@
 
 static JavaVM *vm;
 static jobject listener;            // global reference to the Kotlin CoreListener
-static jmethodID on_event, save_secret, load_secret, delete_secret;
+static jmethodID on_event, save_secret, load_secret, delete_secret, player_command;
 static pthread_key_t detach_key;
 
 // MARK: Threads
@@ -105,7 +105,8 @@ JNIEXPORT jbyteArray JNICALL Java_com_jackson_lumio_core_LumioCore_nativeStart(
     save_secret = (*env)->GetMethodID(env, listener_class, "saveSecret", "([B[B)Z");
     load_secret = (*env)->GetMethodID(env, listener_class, "loadSecret", "([B)[B");
     delete_secret = (*env)->GetMethodID(env, listener_class, "deleteSecret", "([B)Z");
-    if (clear_exception(env) || !on_event || !save_secret || !load_secret || !delete_secret) {
+    player_command = (*env)->GetMethodID(env, listener_class, "onPlayerCommand", "([B)[B");
+    if (clear_exception(env) || !on_event || !save_secret || !load_secret || !delete_secret || !player_command) {
         return bytes_from(env, "The app's core listener is missing a method.");
     }
 
@@ -134,6 +135,15 @@ JNIEXPORT jbyteArray JNICALL Java_com_jackson_lumio_core_LumioCore_nativeCall(JN
     jbyteArray result = bytes_from(env, reply);
     free(reply);
     return result;
+}
+
+/// LumioCore.nativePlayerEvent(event: ByteArray): an event from the app's player engine. Doesn't
+/// wait for the core.
+JNIEXPORT void JNICALL Java_com_jackson_lumio_core_LumioCore_nativePlayerEvent(JNIEnv *env, jclass type, jbyteArray event) {
+    (void)type;
+    char *text = text_from(env, event);
+    if (text != NULL) lumio_swift_player_event(text);
+    free(text);
 }
 
 // MARK: Called by Swift
@@ -167,6 +177,17 @@ char *lumio_secret_load(const char *provider_id) {
     char *text = clear_exception(env) ? NULL : text_from(env, value);
     (*env)->DeleteLocalRef(env, id);
     if (value != NULL) (*env)->DeleteLocalRef(env, value);
+    return text;
+}
+
+char *lumio_player_command(const char *json) {
+    JNIEnv *env = listener != NULL ? current_env() : NULL;
+    if (env == NULL) return NULL;
+    jbyteArray command = bytes_from(env, json);
+    jbyteArray reply = (jbyteArray)(*env)->CallObjectMethod(env, listener, player_command, command);
+    char *text = clear_exception(env) ? NULL : text_from(env, reply);
+    (*env)->DeleteLocalRef(env, command);
+    if (reply != NULL) (*env)->DeleteLocalRef(env, reply);
     return text;
 }
 

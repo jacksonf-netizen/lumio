@@ -23,6 +23,8 @@ public enum PlaybackEngines {
         switch kind {
         case .mpv: MPVEngine()
         case .avPlayer: AVPlayerEngine()
+        // Android only; the Mac's ladder never asks for it (PlaybackSettings.engines).
+        case .exoPlayer: MPVEngine()
         }
     }
 }

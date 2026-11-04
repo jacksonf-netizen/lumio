@@ -32,6 +32,24 @@ struct FallbackLadderTests {
         #expect(describe(FallbackLadder.plans(for: TestItems.live(sources: [source]))) == ["prov-a:mpv:ts", "prov-a:mpv:m3u8"])
     }
 
+    /// Android TV has one engine: the ladder moves through formats, then providers.
+    @Test func withOneEngineTheLadderGoesThroughFormatsThenProviders() {
+        let item = TestItems.live(sources: [TestItems.source(TestItems.a, 1), TestItems.source(TestItems.b, 2)])
+        let plans = FallbackLadder.plans(for: item, defaultEngine: .exoPlayer, engines: [.exoPlayer])
+        #expect(describe(plans) == ["prov-a:exoPlayer:ts", "prov-a:exoPlayer:m3u8", "prov-b:exoPlayer:ts", "prov-b:exoPlayer:m3u8"])
+        #expect(describe(FallbackLadder.plans(for: TestItems.movie(ext: "mkv"), defaultEngine: .exoPlayer, engines: [.exoPlayer]))
+                == ["prov-a:exoPlayer:-"])
+    }
+
+    @Test func savedEnginesThePlatformLacksAreIgnored() {
+        var source = TestItems.source(TestItems.a, 1)
+        source.engineOverride = .mpv
+        source.lastWorkingEngine = .avPlayer
+        source.lastWorkingFormat = .m3u8
+        let plans = FallbackLadder.plans(for: TestItems.live(sources: [source]), defaultEngine: .exoPlayer, engines: [.exoPlayer])
+        #expect(describe(plans) == ["prov-a:exoPlayer:m3u8", "prov-a:exoPlayer:ts"])
+    }
+
     @Test func otherProvidersFollowInOrder() {
         let item = TestItems.live(sources: [TestItems.source(TestItems.a, 1, formats: [.ts]), TestItems.source(TestItems.b, 2, formats: [.ts])])
         #expect(describe(FallbackLadder.plans(for: item)) == ["prov-a:mpv:ts", "prov-b:mpv:ts"])

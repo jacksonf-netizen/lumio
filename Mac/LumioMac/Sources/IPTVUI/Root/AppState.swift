@@ -36,10 +36,12 @@ public final class AppState {
     public var showDiagnostics = false
     public var showGuideOverlay = false
 
-    /// Channels the player zaps through (the list the user started playing from).
-    public private(set) var zapList: [ChannelListItem] = []
-    public private(set) var currentChannel: ChannelListItem?
-    public private(set) var previousChannel: ChannelListItem?
+    /// Channels the player zaps through (the list the user started playing from), with the
+    /// current and previous channel. The rules are the shared core's (ZapList).
+    public private(set) var zap = ZapList<ChannelListItem>()
+    public var zapList: [ChannelListItem] { zap.channels }
+    public var currentChannel: ChannelListItem? { zap.current }
+    public var previousChannel: ChannelListItem? { zap.previous }
     /// Bumped on every channel change so the info banner can show itself.
     public private(set) var channelChangeCount = 0
 
@@ -91,10 +93,7 @@ public final class AppState {
 
     /// Plays a channel in the main player and shows the player.
     public func watch(_ channel: ChannelListItem, in list: [ChannelListItem]? = nil, debounce: Bool = false) {
-        if let list, !list.isEmpty { zapList = list }
-        if zapList.isEmpty { zapList = [channel] }
-        if currentChannel?.id != channel.id { previousChannel = currentChannel }
-        currentChannel = channel
+        zap.watch(channel, in: list)
         channelChangeCount += 1
         guard let item = try? environment.items.liveItem(providerID: channel.providerID, streamID: channel.streamID) else {
             Log.app.error("No playable item for \(channel.id, privacy: .public)")
@@ -109,19 +108,13 @@ public final class AppState {
     /// Next / previous channel in the zap list (wraps around). Debounced so holding a key doesn't
     /// open every channel on the way.
     public func zap(by offset: Int) {
-        guard !zapList.isEmpty else { return }
-        let index = zapList.firstIndex { $0.id == currentChannel?.id } ?? 0
-        let next = (index + offset % zapList.count + zapList.count) % zapList.count
-        watch(zapList[next], debounce: true)
+        guard let next = zap.channel(by: offset) else { return }
+        watch(next, debounce: true)
     }
 
     /// Jumps to a channel by its number (provider numbering), or by position if no number matches.
     public func jump(toNumber number: Int) {
-        if let match = zapList.first(where: { $0.number == number }) {
-            watch(match)
-        } else if number >= 1, number <= zapList.count {
-            watch(zapList[number - 1])
-        }
+        if let match = zap.channel(number: number, numberOf: \.number) { watch(match) }
     }
 
     public func lastChannel() {
