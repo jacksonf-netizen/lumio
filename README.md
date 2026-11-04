@@ -123,10 +123,20 @@ Lumio is written in Swift and SwiftUI. You need Xcode 27 (26.6 also works) and
 
 ```bash
 brew install xcodegen
-xcodegen
-open IPTVStreamer.xcodeproj
+xcodegen --spec Mac/project.yml
+open Mac/Lumio.xcodeproj
 ```
 
-Then choose the IPTVMac scheme and press ⌘R. [Docs/development.md](Docs/development.md) covers
+Then choose the IPTVMac scheme and press ⌘R. [Docs/Mac/development.md](Docs/Mac/development.md) covers
 testing, the stream test harness, debugging and publishing releases, and
 [CHANGELOG.md](CHANGELOG.md) lists what changed in each version.
+
+### What's in each folder
+
+| Folder | What it is |
+|---|---|
+| `Shared/` | Code every Lumio app uses: providers, sync, the guide, the database, server links, the reconnect logic, and their tests |
+| `Mac/` | The Mac app only: Xcode project, app shell, Mac screens and players, Mac build scripts |
+| `AndroidTV/` | The Android TV app (planned; see [Docs/AndroidTV/plan.md](Docs/AndroidTV/plan.md)) |
+| `Tools/` | Tools for every app: the test servers, publishing releases, the secrets check |
+| `Docs/` | `Shared/`, `Mac/` and `AndroidTV/` docs, matching the folders above |

@@ -25,15 +25,18 @@ jobs:
       - name: Check for secrets
         run: python3 Tools/check_secrets.py
 
-      - name: Unit tests
-        run: swift test --package-path Packages/IPTVKit
+      - name: Unit tests (shared core)
+        run: swift test --package-path Shared/LumioCore
+
+      - name: Unit tests (Mac)
+        run: swift test --package-path Mac/LumioMac
 
       - name: Install XcodeGen
         run: brew install xcodegen
 
       - name: Release build
         run: |
-          xcodegen
-          xcodebuild -project IPTVStreamer.xcodeproj -scheme IPTVMac -configuration Release \
-            -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData.noindex \
+          xcodegen --spec Mac/project.yml
+          xcodebuild -project Mac/Lumio.xcodeproj -scheme IPTVMac -configuration Release \
+            -destination 'platform=macOS,arch=arm64' -derivedDataPath Mac/build/DerivedData.noindex \
             CODE_SIGNING_ALLOWED=NO build

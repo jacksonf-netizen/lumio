@@ -3,7 +3,7 @@
 //   swift Tools/Release/sign_update.swift generate      Make the key pair (once). The private key
 //                                                       goes into your login Keychain; the public
 //                                                       key is printed for UPDATE_PUBLIC_KEY in
-//                                                       project.yml.
+//                                                       Mac/project.yml.
 //   swift Tools/Release/sign_update.swift public-key    Print the public key again.
 //   swift Tools/Release/sign_update.swift sign FILE     Print FILE's signature (base64).
 //

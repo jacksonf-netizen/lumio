@@ -44,7 +44,7 @@ and a controllable clock), and with real engines by `HarnessIntegrationTests`:
 
 ```bash
 python3 Tools/StreamHarness/harness.py --port 8098 --quiet &
-cd Packages/IPTVKit && swift test --filter HarnessIntegrationTests
+swift test --package-path Mac/LumioMac --filter HarnessIntegrationTests
 ```
 
 ## Rendering check (four mpv players at once)
@@ -52,7 +52,7 @@ cd Packages/IPTVKit && swift test --filter HarnessIntegrationTests
 With the harness on 8098 and its limit raised (`curl "localhost:8098/control/maxconn?n=8"`), run:
 
 ```bash
-"build/DerivedData.noindex/Build/Products/Debug/Lumio.app/Contents/MacOS/Lumio" -spikeRender 4 -spikeURL http://127.0.0.1:8098
+"Mac/build/DerivedData.noindex/Build/Products/Debug/Lumio.app/Contents/MacOS/Lumio" -spikeRender 4 -spikeURL http://127.0.0.1:8098
 ```
 
 It prints the codec, decoder, dropped frames and memory for each tile every 2 s, then quits.

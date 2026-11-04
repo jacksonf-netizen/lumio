@@ -1,10 +1,27 @@
 # Changelog
 
 Notable changes to Lumio (formerly IPTV Streamer). Versions follow [semantic versioning](https://semver.org):
-the version in `project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`) always match.
+the version in `Mac/project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`) always match.
 
 Each version starts with a one- or two-sentence summary paragraph: that's all Lumio shows when it
 offers the update. The list below it appears on the release page.
+
+## 0.1.7 — 2026-11-04
+
+The guide download is more persistent: it retries timeouts, dropped downloads and flood
+protection, and switches to a working server link when the one in use has died.
+
+- If the Mac's hardware video decoder stops responding, Lumio switches to software decoding after
+  the first channel, instead of waiting about 15 seconds before every channel, multiview tile and
+  movie until the Mac restarts.
+- The guide download gives up less easily. A guide that times out, drops halfway or is refused by
+  flood protection is tried up to three more times over about a minute and a half, and if the
+  address in use has died, Lumio moves to a working link and downloads it from there. Lumio now
+  waits a few seconds after loading channels, movies and series before asking for the guide.
+- Large guides from slow providers no longer fail after 10 minutes: a download that keeps
+  receiving data can take up to an hour.
+- For developers: the repository is organised by app. `Shared/` has the code every Lumio app uses,
+  `Mac/` the Mac app, `AndroidTV/` the coming Android TV app, and `Docs/` follows the same split.
 
 ## 0.1.6 — 2026-11-03
 
