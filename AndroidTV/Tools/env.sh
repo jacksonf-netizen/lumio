@@ -20,7 +20,12 @@ else
     # Linux (CI): Java, the Android SDK and Swift 6.4.2 are set up by the workflow, which sets
     # JAVA_HOME and ANDROID_HOME and puts `swift` on the PATH.
     export LUMIO_SWIFT="${LUMIO_SWIFT:-swift}"
+    # Where SwiftPM keeps Swift SDKs differs between versions and setups; use the one that has it.
     LUMIO_SWIFT_SDKS="$HOME/.swiftpm/swift-sdks"
+    for candidate in "$HOME/.swiftpm/swift-sdks" "${XDG_CONFIG_HOME:-$HOME/.config}/swiftpm/swift-sdks" \
+                     "${XDG_DATA_HOME:-$HOME/.local/share}/swiftpm/swift-sdks"; do
+        if [ -d "$candidate/swift-6.4.2-RELEASE_android.artifactbundle" ]; then LUMIO_SWIFT_SDKS="$candidate"; break; fi
+    done
 fi
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$LUMIO_NDK_VERSION"
 # The Swift SDK for Android matching that compiler, and where SwiftPM installs it.
