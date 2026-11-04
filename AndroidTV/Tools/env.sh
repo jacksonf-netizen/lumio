@@ -28,6 +28,8 @@ else
     done
 fi
 export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$LUMIO_NDK_VERSION"
+# Some tools read ANDROID_NDK_ROOT instead (GitHub's runners point it at an older NDK).
+export ANDROID_NDK_ROOT="$ANDROID_NDK_HOME"
 # The Swift SDK for Android matching that compiler, and where SwiftPM installs it.
 export LUMIO_SWIFT_ANDROID_SDK="swift-6.4.2-RELEASE_android"
 export LUMIO_SWIFT_SDK_DIR="$LUMIO_SWIFT_SDKS/$LUMIO_SWIFT_ANDROID_SDK.artifactbundle"

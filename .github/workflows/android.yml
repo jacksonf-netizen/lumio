@@ -35,6 +35,10 @@ jobs:
     env:
       # Where avdmanager writes the emulator's virtual device and the emulator looks for it.
       ANDROID_AVD_HOME: /home/runner/.android/avd
+      # The runner points these at its own (older) NDK; the build uses r30 (AndroidTV/Tools/env.sh).
+      ANDROID_NDK_ROOT: /usr/local/lib/android/sdk/ndk/30.0.16248370
+      ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/30.0.16248370
+      ANDROID_NDK_LATEST_HOME: /usr/local/lib/android/sdk/ndk/30.0.16248370
     steps:
       - uses: actions/checkout@v4
 
@@ -52,9 +56,10 @@ jobs:
           url="https://download.swift.org/swift-$SWIFT_VERSION-release/ubuntu2404/swift-$SWIFT_VERSION-RELEASE/$base.tar.gz"
           curl -fsSL -o swift.tar.gz "$url"
           curl -fsSL -o swift.tar.gz.sig "$url.sig"
-          # swift.org's signing keys; retried, and checked to really be keys (one run got a web page).
+          # swift.org's signing keys. The server sends them gzip-compressed, so --compressed; retried,
+          # and checked to really be keys.
           for attempt in 1 2 3 4 5; do
-            curl -fsSL --retry 3 -o swift-keys.asc https://www.swift.org/keys/all-keys.asc && grep -q "BEGIN PGP PUBLIC KEY" swift-keys.asc && break
+            curl -fsSL --compressed --retry 3 -o swift-keys.asc https://www.swift.org/keys/all-keys.asc && grep -q "BEGIN PGP PUBLIC KEY" swift-keys.asc && break
             sleep 10
           done
           gpg --import swift-keys.asc
