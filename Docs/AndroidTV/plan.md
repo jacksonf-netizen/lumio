@@ -110,8 +110,8 @@ Rules that keep it this way:
 - A new file goes under the folder of the app that uses it. If both apps need it, it goes in
   `Shared/` (code) or `Tools/` (scripts), never in `Mac/` or `AndroidTV/`.
 - Each top folder has a short README saying what's in it.
-- The version number moves out of `Mac/project.yml` into a top-level `version.properties` in
-  phase 1. Both the Xcode project and Gradle read it, so neither app owns it.
+- The version number lives in a top-level `version.properties` (since phase 1). Both the Xcode
+  project and Gradle read it, so neither app owns it.
 
 ## How the shared core becomes portable
 
@@ -194,9 +194,14 @@ Same behaviour as the Mac, built for a remote:
 - Settings: providers, sidebar sections, regions and hidden categories, refresh schedule,
   playback basics, About with updates and acknowledgements.
 
-Not in the first release: Multiview (one HD decode is what these devices manage), extra
-windows, the AVPlayer engine, backup import/export (needs a file picker; maybe later through a
-local URL or QR code).
+- Multiview (phase 5b): 2 to 4 tiles, each its own ExoPlayer with a hardware decoder, the same
+  tile assignment across providers as the Mac. How many tiles a device gets comes from what its
+  decoder reports (`MediaCodecInfo` instance limit and supported frame rates at each tile's size),
+  not a fixed number; the onn HD stick may top out at 2, the 4K box should manage 4. Smaller
+  buffers per tile, audio from the focused tile only.
+
+Not on Android: extra windows, the AVPlayer engine, and backup import/export (Jackson,
+2026-11-04: not needed on the TV).
 
 ### Security and privacy, same rules as the Mac
 
@@ -266,6 +271,16 @@ local URL or QR code).
 
 ## How I'll work on both and keep them in step
 
+### Branches
+
+- `main` is always releasable for the Mac; `Tools/Release/publish.sh` releases from it.
+- Android work (and any larger change) goes on a branch named after the phase or feature, for
+  example `android/phase-2-app-shell`, pushed to GitHub with a pull request into `main`. CI runs on
+  the pull request; it's squash-merged once the workflows it triggers pass, and the branch is
+  deleted. Small Mac fixes can still go straight to `main`.
+- A release in the middle of Android work is no problem: Android code merged into `main` doesn't
+  change the Mac app, and the Mac tests prove it on every pull request.
+
 ### Every change
 
 1. Logic change in `IPTVCore`, with a test. The test runs on macOS and on Android (CI).
@@ -274,7 +289,7 @@ local URL or QR code).
 4. One changelog entry, with a platform prefix if it's one-sided.
 
 A feature isn't done until both apps have it, or the changelog says on purpose that one
-doesn't (for example Multiview).
+doesn't (for example backup import/export).
 
 ### Testing
 
@@ -325,11 +340,18 @@ commands, over Wi-Fi.
 
 ### CI (GitHub Actions)
 
-- Existing macOS job: secrets check, Swift tests, Mac Release build.
-- New Linux job: build the core for Android with the Swift SDK for Android, run the core tests on
-  an Android emulator (`skiptools/swift-android-action` or equivalent), build the APK with
-  Gradle, run Kotlin unit tests and Android lint.
-- Size check: CI fails if the APK grows past the hard limit.
+Three workflows, each running only when its part of the repository changes (set up 2026-11-04):
+
+- `mac.yml` (macOS runner): shared core tests, Mac tests, Mac Release build. Runs when `Shared/`,
+  `Mac/`, `Tools/`, `version.properties` or the notices change.
+- `android.yml` (Linux runner, x86_64 emulator): builds SQLite and the core for Android, runs the
+  core tests on the emulator, builds the APK for both ARM types and fails above the 50 MB size
+  limit. Runs when `Shared/`, `AndroidTV/` or `version.properties` change. Kotlin unit tests and
+  lint join it in phase 2.
+- `secrets.yml` (Linux): `Tools/check_secrets.py` on every push and pull request.
+
+A change to `Shared/` runs both app workflows, which is the point: the shared core must keep
+working on both platforms.
 
 ### Tooling on this Mac (installed 2026-11-03, not app dependencies)
 
@@ -447,6 +469,20 @@ Learned along the way:
 - `Package.swift` with Android; the seams from the audit table; `swift-crypto` for Android.
 - All core tests pass on Android in CI. Mac behaviour unchanged.
 
+Done 2026-11-04:
+
+- The seams and `swift-crypto` went in during phase 0.
+- `version.properties` holds the version for both apps (`Mac/Config/Version.xcconfig` includes it;
+  Gradle reads it as a properties file; comments use `//` because Xcode reads it too).
+- Network failures that Swift's Android networking (curl) reports as "unknown" are read from
+  curl's message and mapped like the Mac's (`XtreamError.fromTransportMessage`): certificate and
+  connection problems are "couldn't connect", so an unreachable server link now triggers link
+  failover on Android as it does on the Mac. Checked against real failures on the emulator.
+- 203 of 203 core tests pass on the emulator.
+- `.github/workflows/android.yml`: a Linux job that builds SQLite, runs the core tests on an
+  x86_64 emulator, builds the core for both ARM types, builds the APK and fails above 50 MB. The
+  Android scripts work on Linux as well as the Mac (`env.sh`). Not yet run on GitHub.
+
 ### Phase 2: bridge and app shell
 
 - `IPTVBridge` facade, swift-java generation in the Gradle build, Keystore `SecretStore`,
@@ -471,6 +507,13 @@ Learned along the way:
 
 - VOD shelves, details, resume; search; remaining settings (regions, hidden, sidebar sections,
   refresh, playback, About, acknowledgements).
+
+### Phase 5b: multiview
+
+- Read each device's decoder limits, offer only the tile counts it can play. Tiles share the
+  shared core's `SourceSelector` and connection accounting, so slots are never over-used.
+- Measure on both onn devices: tiles that play smoothly, memory, and what happens when one more
+  tile is asked for than the decoder allows (a clear message, never a frozen tile).
 
 ### Phase 6: updates and releasing
 

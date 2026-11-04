@@ -23,3 +23,8 @@ AndroidTV/core-bridge/Sources/LumioICUData/icudt76l-lumio.dat
 AndroidTV/.gradle/
 AndroidTV/.kotlin/
 AndroidTV/local.properties
+
+# Android signing keys and their passwords (kept in the Keychain and an offline backup, never here)
+*.jks
+*.keystore
+keystore.properties

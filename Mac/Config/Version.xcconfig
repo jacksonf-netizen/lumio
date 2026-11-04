@@ -1,0 +1,3 @@
+// The version number, shared with the Android TV app. Edit version.properties at the top of the
+// repository, not this file.
+#include "../../version.properties"

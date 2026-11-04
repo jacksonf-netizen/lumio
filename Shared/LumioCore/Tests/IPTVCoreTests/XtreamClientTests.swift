@@ -58,6 +58,35 @@ struct XtreamClientTests {
         await #expect(throws: expected) { try await client(transport).liveStreams() }
     }
 
+    /// On Android, Swift's networking (curl) reports these as an unknown error carrying curl's
+    /// message; they must map like the Mac's URLSession errors.
+    @Test(arguments: [
+        ("SSL certificate problem: self-signed certificate", XtreamError.cannotConnect(host: "panel.example")),
+        ("SSL certificate problem: certificate has expired", .cannotConnect(host: "panel.example")),
+        ("SSL: no alternative certificate subject name matches target host name 'panel.example'",
+         .cannotConnect(host: "panel.example")),
+        ("Failed to connect to panel.example port 80 after 3 ms: Could not connect to server",
+         .cannotConnect(host: "panel.example")),
+        ("Failed to connect to panel.example port 80: No route to host", .cannotConnect(host: "panel.example")),
+        ("Recv failure: Connection reset by peer", .offline),
+        ("transfer closed with 1048576 bytes remaining to read", .offline),
+        ("Connection timed out after 30001 milliseconds", .timeout),
+    ])
+    func curlFailuresMap(message: String, expected: XtreamError) async {
+        let url = URL(string: "http://panel.example/player_api.php")!
+        let underlying = NSError(domain: NSURLErrorDomain, code: NSURLErrorUnknown,
+                                 userInfo: [NSLocalizedDescriptionKey: message])
+        let error = URLError(.unknown, userInfo: [NSUnderlyingErrorKey: underlying, NSURLErrorFailingURLErrorKey: url])
+        let transport = StubTransport()
+        transport.fail("get_live_streams", with: error)
+        await #expect(throws: expected) { try await client(transport).liveStreams() }
+    }
+
+    @Test func anUnknownErrorWithoutAMessageStaysUnknown() {
+        #expect(XtreamError.from(URLError(.unknown)) == .invalidResponse("-1"))
+        #expect(XtreamError.fromTransportMessage("Failed writing body", host: nil) == nil)
+    }
+
     @Test func htmlInsteadOfJSONIsReportedClearly() async {
         let transport = StubTransport()
         transport.set("auth", body: "<html><body>Blocked</body></html>")

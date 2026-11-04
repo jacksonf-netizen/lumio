@@ -89,7 +89,7 @@ extension XtreamError: LocalizedError, CustomStringConvertible {
     }
 
     /// Maps transport errors to user-meaningful cases.
-    static func from(_ error: Error) -> XtreamError {
+    public static func from(_ error: Error) -> XtreamError {
         if let error = error as? XtreamError { return error }
         if error is CancellationError { return .cancelled }
         if let urlError = error as? URLError {
@@ -102,6 +102,11 @@ extension XtreamError: LocalizedError, CustomStringConvertible {
                  .serverCertificateUntrusted, .serverCertificateHasBadDate, .serverCertificateNotYetValid:
                 return .cannotConnect(host: urlError.failingURL?.host)
             case .userAuthenticationRequired: return .unauthorized
+            case .unknown:
+                if let mapped = fromTransportMessage(transportMessage(urlError), host: urlError.failingURL?.host) {
+                    return mapped
+                }
+                return .invalidResponse(urlError.code.rawValue.description)
             default: return .invalidResponse(urlError.code.rawValue.description)
             }
         }
@@ -109,6 +114,38 @@ extension XtreamError: LocalizedError, CustomStringConvertible {
             return .decoding(Self.describe(decoding))
         }
         return .invalidResponse(String(describing: type(of: error)))
+    }
+
+    /// Swift's networking outside Apple platforms (curl, on Android) reports many failures as
+    /// `.unknown`, with curl's own message as the description. This reads that message so those
+    /// failures get the same errors as on the Mac: certificate and connection problems become
+    /// `cannotConnect` (so a dead server link is noticed), dropped connections `offline`, as
+    /// URLSession's `networkConnectionLost` does on the Mac.
+    static func fromTransportMessage(_ message: String, host: String?) -> XtreamError? {
+        let text = message.lowercased()
+        func mentions(_ phrases: String...) -> Bool { phrases.contains { text.contains($0) } }
+        if mentions("timed out", "timeout") { return .timeout }
+        if mentions("ssl", "tls", "certificate", "could not resolve", "couldn't resolve", "failed to connect",
+                    "could not connect", "couldn't connect", "connection refused", "no route to host",
+                    "unreachable") {
+            return .cannotConnect(host: host)
+        }
+        if mentions("connection reset", "recv failure", "send failure", "failure when receiving",
+                    "failed sending", "transfer closed", "connection died", "broken pipe") {
+            return .offline
+        }
+        return nil
+    }
+
+    /// The descriptions carried by a transport error and the error underneath it.
+    private static func transportMessage(_ error: URLError) -> String {
+        var messages: [String] = []
+        if let text = error.userInfo[NSLocalizedDescriptionKey] as? String { messages.append(text) }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError,
+           let text = underlying.userInfo[NSLocalizedDescriptionKey] as? String {
+            messages.append(text)
+        }
+        return messages.joined(separator: " ")
     }
 
     private static func describe(_ error: DecodingError) -> String {

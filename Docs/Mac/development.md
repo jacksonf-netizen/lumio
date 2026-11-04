@@ -61,8 +61,9 @@ Shared/LumioCore/               Swift package shared by every Lumio app
   Sources/LumioUpdate/          Update signatures and installing (Foundation + CryptoKit)
   Tests/                        Swift Testing suites and fixtures
 Mac/                            Everything only the Mac app uses
-  project.yml                   XcodeGen spec: the app, its installer service, versions, update settings
+  project.yml                   XcodeGen spec: the app, its installer service, update settings
   Config/Signing.xcconfig       Code signing for Xcode builds (ad-hoc; releases are re-signed by sign_app.sh)
+  Config/Version.xcconfig       Reads the version from version.properties (top of the repository)
   App/IPTVMac/                  The macOS app target: entry point, windows, menus
   App/LumioInstaller/           XPC service that installs signed updates (the app is sandboxed)
   LumioMac/                     Swift package with the Mac screens and players
@@ -81,7 +82,9 @@ Tools/check_secrets.py          Secrets check, run before every push
 Mac/Tools/install.sh            Build and install your own copy in /Applications
 Tools/check_secrets.py      Fails if anything git would publish contains a credential
 Mac/Tools/AppIcon/              Icon artwork and the script that builds the icon set
-.github/workflows/ci.yml    Secrets check, tests and a Release build on every push
+.github/workflows/mac.yml       Shared and Mac tests and a Release build (when Shared/ or Mac/ change)
+.github/workflows/android.yml   Shared tests on an Android emulator and the APK (Shared/ or AndroidTV/)
+.github/workflows/secrets.yml   Secrets check on every push
 ```
 
 Dependencies: **GRDB** (SQLite) and **MPVKit 1.0.0** (libmpv + FFmpeg, the LGPL product only).
@@ -206,8 +209,8 @@ Accounts → Manage Certificates → + → Apple Development; see "Signing" abov
 signing key in your Keychain (below).
 
 1. Test the changes (`swift test`, a smoke run, `Mac/Tools/install.sh` to use it yourself).
-2. In `Mac/project.yml`, bump `MARKETING_VERSION` (`0.1.0` → `0.2.0`, or `0.1.1` for small fixes) and
-   `CURRENT_PROJECT_VERSION` (+1).
+2. In `version.properties` (top of the repository, shared with the Android TV app), bump
+   `MARKETING_VERSION` (`0.1.0` → `0.2.0`, or `0.1.1` for small fixes) and `CURRENT_PROJECT_VERSION` (+1).
 3. In `CHANGELOG.md`, move the notes under `## Unreleased` into a new `## 0.2.0 — <date>` section.
    Start the section with a one- or two-sentence summary paragraph, then the list. The summary
    is all Lumio shows when it offers the update; the list is on the release page.

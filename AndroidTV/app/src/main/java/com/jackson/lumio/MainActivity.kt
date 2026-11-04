@@ -87,6 +87,11 @@ class MainActivity : Activity() {
             // Full-text search (SQLite FTS5) and HTTPS through Swift's networking.
             Log.i(TAG, "search 'harness': ${LumioCore.call("search", "text" to "harness")}")
             Log.i(TAG, "update check over HTTPS: ${LumioCore.call("checkUpdates")}")
+            // Bad certificates must be refused, with the same messages as on the Mac.
+            for (url in listOf("https://expired.badssl.com/", "https://self-signed.badssl.com/",
+                    "https://wrong.host.badssl.com/", "http://127.0.0.1:9/", "http://nothing.invalid/")) {
+                Log.i(TAG, "network check $url: ${LumioCore.call("fetch", "url" to url)}")
+            }
             val checks = LumioCore.call("icuChecks").optJSONArray("checks")
             for (i in 0 until (checks?.length() ?: 0)) Log.i(TAG, "ICU check: ${checks!!.getString(i)}")
             runOnUiThread {

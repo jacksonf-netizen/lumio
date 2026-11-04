@@ -1,8 +1,8 @@
 #!/bin/bash
-# Publishes the version in Mac/project.yml as a GitHub release, which every copy of Lumio then offers
+# Publishes the version in version.properties as a GitHub release, which every copy of Lumio then offers
 # to install the next time it opens.
 #
-#   1. Bump MARKETING_VERSION (and CURRENT_PROJECT_VERSION) in Mac/project.yml.
+#   1. Bump MARKETING_VERSION (and CURRENT_PROJECT_VERSION) in version.properties.
 #   2. Move the notes under "## Unreleased" in CHANGELOG.md to a new "## X.Y.Z — date" section,
 #      starting with a one- or two-sentence summary paragraph. They become the release notes; Lumio's
 #      "update available" message shows only the summary (everything above the first "---").
@@ -18,9 +18,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 
 setting() { grep -E "^[[:space:]]+$1:" Mac/project.yml | head -1 | sed -E 's/.*: *"?([^"]*)"?.*/\1/'; }
+version() { grep -E "^$1=" version.properties | head -1 | cut -d= -f2 | tr -d '[:space:]'; }
 fail() { echo "publish: $1" >&2; exit 1; }
 
-VERSION=$(setting MARKETING_VERSION)
+VERSION=$(version MARKETING_VERSION)
 REPOSITORY=$(setting UPDATE_REPOSITORY)
 TAG="v$VERSION"
 OUT="Mac/build/release"
@@ -77,7 +78,7 @@ command -v gh > /dev/null || fail "install the GitHub CLI first: brew install gh
 gh auth status > /dev/null 2>&1 || fail "sign in to GitHub first: gh auth login"
 [ -z "$(git status --porcelain)" ] || fail "commit or stash your changes first (git status)"
 [ "$(git branch --show-current)" = "main" ] || fail "publish from the main branch"
-git rev-parse -q --verify "refs/tags/$TAG" > /dev/null && fail "$TAG already exists; bump MARKETING_VERSION in Mac/project.yml"
+git rev-parse -q --verify "refs/tags/$TAG" > /dev/null && fail "$TAG already exists; bump MARKETING_VERSION in version.properties"
 gh release view "$TAG" --repo "$REPOSITORY" > /dev/null 2>&1 && fail "a $TAG release already exists on GitHub"
 
 echo "==> Checking for secrets"

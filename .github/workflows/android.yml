@@ -1,0 +1,105 @@
+# Android TV: builds the shared core for Android, runs its tests on an Android emulator, and builds
+# the APK, on every push and pull request that touches the Android app or the shared code (and by
+# hand: Actions → Android TV → Run workflow).
+#
+# Runs on Linux because GitHub's Mac runners can't start the Android emulator. The emulator is
+# x86_64 (Linux runners have no ARM virtualisation); the APK itself carries the two ARM builds.
+# Tool versions match AndroidTV/Tools/env.sh and Docs/AndroidTV/plan.md.
+name: Android TV
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Shared/**"
+      - "AndroidTV/**"
+      - "version.properties"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "Shared/**"
+      - "AndroidTV/**"
+      - "version.properties"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+env:
+  SWIFT_VERSION: "6.4.2"
+  SWIFT_ANDROID_SDK_CHECKSUM: 4d6ad63ea74becd58e123ff58b1b48c3be5ec0db0dff0ea5abe37ac007dd3233
+  NDK_VERSION: "30.0.16248370"
+
+jobs:
+  core-tests-and-apk:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Swift
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends libncurses-dev libedit2 libpython3-dev libz3-dev \
+            libxml2-dev libcurl4-openssl-dev
+          base="swift-$SWIFT_VERSION-RELEASE-ubuntu24.04"
+          url="https://download.swift.org/swift-$SWIFT_VERSION-release/ubuntu2404/swift-$SWIFT_VERSION-RELEASE/$base.tar.gz"
+          curl -fsSL -o swift.tar.gz "$url"
+          curl -fsSL -o swift.tar.gz.sig "$url.sig"
+          curl -fsSL https://www.swift.org/keys/all-keys.asc | gpg --import -
+          gpg --verify swift.tar.gz.sig swift.tar.gz
+          mkdir -p "$RUNNER_TEMP/swift"
+          tar -xzf swift.tar.gz -C "$RUNNER_TEMP/swift" --strip-components=1
+          rm swift.tar.gz swift.tar.gz.sig
+          echo "$RUNNER_TEMP/swift/usr/bin" >> "$GITHUB_PATH"
+
+      - name: Install the Android SDK parts and the Swift SDK for Android
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "platforms;android-36" \
+            "build-tools;36.1.0" "platform-tools" "emulator" "system-images;android-31;default;x86_64" > /dev/null
+          swift sdk install "https://download.swift.org/swift-$SWIFT_VERSION-release/android-sdk/swift-$SWIFT_VERSION-RELEASE/swift-$SWIFT_VERSION-RELEASE_android.artifactbundle.tar.gz" \
+            --checksum "$SWIFT_ANDROID_SDK_CHECKSUM"
+          ANDROID_NDK_HOME="$ANDROID_HOME/ndk/$NDK_VERSION" \
+            "$HOME/.swiftpm/swift-sdks/swift-$SWIFT_VERSION-RELEASE_android.artifactbundle/swift-android/scripts/setup-android-sdk.sh"
+
+      - name: Build SQLite for Android
+        run: AndroidTV/Tools/build_sqlite.sh
+
+      - name: Start the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd -n ci \
+            -k "system-images;android-31;default;x86_64" > /dev/null
+          nohup "$ANDROID_HOME/emulator/emulator" -avd ci -no-window -no-audio -no-boot-anim \
+            -no-snapshot -gpu swiftshader_indirect > "$RUNNER_TEMP/emulator.log" 2>&1 &
+
+      - name: Shared core tests on Android
+        run: |
+          adb="$ANDROID_HOME/platform-tools/adb"
+          timeout 600 "$adb" wait-for-device
+          timeout 600 bash -c "until [ \"\$($adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 5; done"
+          AndroidTV/Tools/run_core_tests.sh x86_64
+
+      - name: Build the core for 32- and 64-bit ARM
+        run: AndroidTV/Tools/build_core.sh release
+
+      - name: Build the APK
+        working-directory: AndroidTV
+        run: ./gradlew --no-daemon :app:assembleRelease
+
+      - name: Check the APK size
+        run: |
+          apk=AndroidTV/app/build/outputs/apk/release/app-release.apk
+          size=$(wc -c < "$apk")
+          echo "APK: $((size / 1048576)) MB (budget 35 MB, limit 50 MB)"
+          [ "$size" -le $((50 * 1048576)) ] || { echo "The APK is over the 50 MB limit" >&2; exit 1; }
+
+      - name: Emulator log (on failure)
+        if: failure()
+        run: tail -100 "$RUNNER_TEMP/emulator.log" || true

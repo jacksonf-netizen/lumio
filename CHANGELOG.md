@@ -1,10 +1,18 @@
 # Changelog
 
 Notable changes to Lumio (formerly IPTV Streamer). Versions follow [semantic versioning](https://semver.org):
-the version in `Mac/project.yml` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`) always match.
+the version in `version.properties` (`MARKETING_VERSION`) and the release tag (`vX.Y.Z`) always match.
 
 Each version starts with a one- or two-sentence summary paragraph: that's all Lumio shows when it
 offers the update. The list below it appears on the release page.
+
+## Unreleased
+
+- For developers: the version number lives in `version.properties` at the top of the repository,
+  which the Mac and Android TV builds both read.
+- For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
+  when its part of the repository changes. The Android TV workflow runs the shared core's tests on
+  an Android emulator and builds the APK.
 
 ## 0.1.7 — 2026-11-04
 

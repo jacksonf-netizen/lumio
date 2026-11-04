@@ -138,7 +138,8 @@ final class Bridge: @unchecked Sendable {
                 let (_, response) = try await transport.data(for: URLRequest(url: url))
                 return ["status": response.statusCode]
             } catch {
-                return ["failed": String(describing: error)]
+                // What the user would see: curl's failures mapped like the Mac's (XtreamError).
+                return ["failed": XtreamError.from(error).description]
             }
 
         case "icuChecks":
