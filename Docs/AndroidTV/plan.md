@@ -525,8 +525,15 @@ Done 2026-11-04 (branch `android/phase-2-app-shell`):
 - Compose needs compileSdk 37 (Android SDK platform 37.0 installed); the app still targets 36
   and runs from Android 9.
 
-Still to do in phase 2: network-change and sleep events from Kotlin (`SystemEvents`), channel
-logos (the small image loader), and the Android app's acknowledgements of AndroidX and Media3.
+- Network and sleep events from Kotlin (`SystemMonitor`: ConnectivityManager, and the app leaving
+  or returning to the screen) reach the core's playback through `PushedSystemEvents`.
+- Channel logos through a small loader of our own (`images/ImageLoader.kt`): web URLs only, 15 MB
+  limit, decoded at display size, memory cache sized for the device, 150 MB disk cache.
+- Back from a screen's content returns to the sidebar; Back there leaves the app.
+- `AndroidTV/THIRD-PARTY-NOTICES.md` lists everything the Android app bundles, with full licence
+  texts, and ships inside the APK. The Android build is pinned to GRDB 7.11.1, like the Mac.
+- The stream harness builds logo URLs from the request's host, so the emulator (which reaches
+  the Mac as 10.0.2.2) loads them.
 
 ### Phase 3: playback
 

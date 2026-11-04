@@ -11,6 +11,14 @@ val sharedVersion = Properties().apply {
     rootDir.resolve("../version.properties").inputStream().use { load(it) }
 }
 val marketingVersion: String = sharedVersion.getProperty("MARKETING_VERSION")
+
+// AndroidTV/THIRD-PARTY-NOTICES.md ships inside the app (Settings → About shows it).
+val noticesDir = layout.buildDirectory.dir("generated/notices")
+val copyNotices by tasks.registering(Copy::class) {
+    from(rootDir.resolve("THIRD-PARTY-NOTICES.md"))
+    into(noticesDir)
+}
+tasks.named("preBuild") { dependsOn(copyNotices) }
 val versionParts = marketingVersion.split(".").map { it.toInt() }
 
 android {
@@ -52,6 +60,7 @@ android {
         getByName("main") {
             // liblumiocore.so and libc++_shared.so from AndroidTV/Tools/build_core.sh.
             jniLibs.directories.add(rootDir.resolve("build/jniLibs").path)
+            assets.directories.add(noticesDir.get().asFile.path)
         }
         getByName("androidTest") {
             // The bridge's JSON fixtures, shared with the Swift tests so both sides agree on every field.

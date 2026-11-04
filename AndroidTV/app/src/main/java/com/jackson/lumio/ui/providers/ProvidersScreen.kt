@@ -87,9 +87,9 @@ fun ProvidersScreen(model: ProvidersViewModel) {
 private fun ProviderList(model: ProvidersViewModel, onAdd: () -> Unit, onEdit: (ProviderInfo) -> Unit) {
     val state = model.state
     val addButton = remember { FocusRequester() }
-    // With nothing to list, the remote starts on "Add provider".
-    LaunchedEffect(state.loaded, state.providers.isEmpty()) {
-        if (state.loaded && state.providers.isEmpty()) runCatching { addButton.requestFocus() }
+    // The remote starts on "Add provider" (on first run, and back from the editor).
+    LaunchedEffect(state.loaded) {
+        if (state.loaded) runCatching { addButton.requestFocus() }
     }
     Column(Modifier.fillMaxSize().padding(horizontal = 48.dp, vertical = 32.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {

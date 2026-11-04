@@ -29,6 +29,7 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.NowNext
+import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
 
 /** Groups on the left; moving onto a group shows its channels on the right, with what's on now. */
@@ -78,10 +79,13 @@ private fun ChannelRow(channel: Channel, nowNext: NowNext?) {
         // Playback arrives in phase 3.
         onClick = {},
         leadingContent = {
-            Text(
-                channel.number?.toString() ?: "",
-                color = LumioColors.secondaryText, fontSize = 16.sp, modifier = Modifier.width(52.dp),
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    channel.number?.toString() ?: "",
+                    color = LumioColors.secondaryText, fontSize = 16.sp, modifier = Modifier.width(52.dp),
+                )
+                RemoteImage(channel.logo, 48.dp)
+            }
         },
         headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 18.sp) },
         supportingContent = nowNext?.now?.let { programme ->

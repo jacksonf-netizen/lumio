@@ -10,7 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,12 +57,21 @@ fun LumioApp() {
         }
     }
     val shown = section
+    // Back from a screen's content returns to the sidebar; Back on the sidebar leaves the app.
+    val sidebarFocus = remember { FocusRequester() }
+    var sidebarFocused by remember { mutableStateOf(false) }
+    BackHandler(enabled = !sidebarFocused) { runCatching { sidebarFocus.requestFocus() } }
 
     // A Surface gives everything inside the theme's text colour.
     Surface(colors = SurfaceDefaults.colors(containerColor = LumioColors.background, contentColor = LumioColors.text)) {
     Row(Modifier.fillMaxSize()) {
         Column(
-            Modifier.width(220.dp).fillMaxHeight().background(LumioColors.surface).padding(vertical = 32.dp, horizontal = 12.dp),
+            Modifier
+                .width(220.dp)
+                .fillMaxHeight()
+                .background(LumioColors.surface)
+                .onFocusChanged { sidebarFocused = it.hasFocus }
+                .padding(vertical = 32.dp, horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(
@@ -71,7 +85,7 @@ fun LumioApp() {
                     onClick = { section = item },
                     headlineContent = { Text(item.title, fontSize = 18.sp) },
                     colors = ListItemDefaults.colors(selectedContainerColor = LumioColors.raised),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().then(if (item == shown) Modifier.focusRequester(sidebarFocus) else Modifier),
                 )
             }
             Box(Modifier.weight(1f))

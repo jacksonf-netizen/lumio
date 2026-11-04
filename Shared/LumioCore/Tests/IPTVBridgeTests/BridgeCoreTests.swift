@@ -151,3 +151,24 @@ final class EventLog: @unchecked Sendable {
         Issue.record("No matching event; got \(lock.withLock { events })")
     }
 }
+
+@Suite("Bridge: system events")
+struct BridgeSystemEventTests {
+    @Test func networkAndSleepEventsReachTheCore() async throws {
+        let bridge = BridgeCore(environment: .preview(), events: { _ in })
+        let stream = bridge.systemEvents.events()
+        for request in [#"{"method":"system.event","params":{"type":"network","available":false}}"#,
+                        #"{"method":"system.event","params":{"type":"network","available":false}}"#,
+                        #"{"method":"system.event","params":{"type":"willSleep"}}"#,
+                        #"{"method":"system.event","params":{"type":"didWake"}}"#] {
+            #expect(!(await bridge.handle(request)).contains("error"))
+        }
+        var received: [SystemEvent] = []
+        for await event in stream {
+            received.append(event)
+            if received.count == 3 { break }
+        }
+        // The repeated network state is passed on once.
+        #expect(received == [.network(available: false), .willSleep, .didWake])
+    }
+}

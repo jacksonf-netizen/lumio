@@ -14,6 +14,8 @@ import IPTVCore
 /// in `perform(_:_:)`; the Kotlin side has one function per method (LumioCore.kt).
 public actor BridgeCore {
     public nonisolated let environment: AppEnvironment
+    /// Network and sleep events from the app (`system.event`).
+    public nonisolated let systemEvents: PushedSystemEvents
     private let send: @Sendable (String) -> Void
     private let liveCatalog: LiveCatalog
     private let guide: GuideRepository
@@ -22,8 +24,10 @@ public actor BridgeCore {
     private var tasks: [Task<Void, Never>] = []
 
     /// `events` receives each event as JSON, on any thread.
-    public init(environment: AppEnvironment, events: @escaping @Sendable (String) -> Void) {
+    public init(environment: AppEnvironment, systemEvents: PushedSystemEvents = PushedSystemEvents(),
+                events: @escaping @Sendable (String) -> Void) {
         self.environment = environment
+        self.systemEvents = systemEvents
         send = events
         liveCatalog = LiveCatalog(database: environment.database)
         guide = GuideRepository(database: environment.database)
@@ -34,8 +38,10 @@ public actor BridgeCore {
     public static func open(databasePath: String, secrets: any SecretStore,
                             events: @escaping @Sendable (String) -> Void) throws -> BridgeCore {
         let database = try AppDatabase.open(at: URL(fileURLWithPath: databasePath))
-        return BridgeCore(environment: AppEnvironment(database: database, secrets: secrets, transport: URLSessionTransport()),
-                          events: events)
+        let systemEvents = PushedSystemEvents()
+        let environment = AppEnvironment(database: database, secrets: secrets, transport: URLSessionTransport(),
+                                         systemEvents: systemEvents)
+        return BridgeCore(environment: environment, systemEvents: systemEvents, events: events)
     }
 
     /// Starts following changes and the background work every app runs (link checks and refreshes
@@ -123,6 +129,18 @@ public actor BridgeCore {
                 environment.refreshProvider(ProviderID(id))
             } else {
                 environment.refreshAllProviders()
+            }
+            return Empty()
+
+        case "system.event":
+            // {"type": "network", "available": true} | {"type": "willSleep"} | {"type": "didWake"}
+            struct P: Decodable { var type: String; var available: Bool? }
+            let p = try params.decode(P.self)
+            switch p.type {
+            case "network": systemEvents.send(.network(available: p.available ?? true))
+            case "willSleep": systemEvents.send(.willSleep)
+            case "didWake": systemEvents.send(.didWake)
+            default: throw BridgeError("Unknown system event \(p.type).")
             }
             return Empty()
 

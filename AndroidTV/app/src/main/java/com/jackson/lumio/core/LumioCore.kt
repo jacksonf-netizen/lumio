@@ -2,7 +2,10 @@ package com.jackson.lumio.core
 
 import android.content.Context
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -30,6 +33,10 @@ object LumioCore {
     val events: SharedFlow<BridgeEvent> = eventFlow.asSharedFlow()
 
     @Volatile private var started = false
+
+    /** For requests nobody waits for (system events), one at a time so they arrive in order. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.IO.limitedParallelism(1))
 
     /** Opens the database and starts the core. Call once, on the main thread (Application.onCreate). */
     fun start(context: Context) {
@@ -78,6 +85,16 @@ object LumioCore {
         if (refs.isEmpty()) return emptyMap()
         val list = call("live.nowNext", "epg" to JSONArray(refs.map { it.toJson() })).asArray().map(::NowNext)
         return list.associateBy { it.epg }
+    }
+
+    /** network (with [available]), willSleep or didWake. Sent in the background, in order. */
+    fun systemEvent(type: String, available: Boolean? = null) {
+        background.launch {
+            runCatching {
+                if (available != null) call("system.event", "type" to type, "available" to available)
+                else call("system.event", "type" to type)
+            }
+        }
     }
 
     /** Checks of this build (debug.icuChecks, debug.memory, debug.fetch), for tests. */
