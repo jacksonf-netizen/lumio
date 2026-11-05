@@ -19,6 +19,7 @@ public actor BridgeCore {
     private let send: @Sendable (String) -> Void
     private let liveCatalog: LiveCatalog
     private let guide: GuideRepository
+    private let library: LibraryRepository
     private var syncing: [ProviderID: String] = [:]
     private nonisolated let players: Players
     private var observers: [AnyDatabaseCancellable] = []
@@ -36,6 +37,7 @@ public actor BridgeCore {
         players = Players(environment: environment, send: playerCommands, emit: { Self.emit($0, to: events) })
         liveCatalog = LiveCatalog(database: environment.database)
         guide = GuideRepository(database: environment.database)
+        library = LibraryRepository(database: environment.database)
     }
 
     /// Opens the database at `databasePath` and wires the core with the app's secret store and the
@@ -222,6 +224,50 @@ public actor BridgeCore {
                 return NowNextDTO(epg: ref, now: value.now.map(ProgrammeDTO.init), next: value.next.map(ProgrammeDTO.init))
             }
 
+        case "guide.programmes":
+            // The guide grid asks for the rows on screen and a window around the visible hours.
+            // Capped at two days a call so a mistaken request can't load the whole guide.
+            struct P: Decodable { var epg: [EPGRefDTO]; var start: Double; var end: Double }
+            let p = try params.decode(P.self)
+            let start = Date(timeIntervalSince1970: p.start)
+            let end = Date(timeIntervalSince1970: min(p.end, p.start + 2 * 86_400))
+            guard end > start else { return [GuideRowDTO]() }
+            let found = try await guide.programmes(for: p.epg.map(\.ref), in: DateInterval(start: start, end: end))
+            return p.epg.map { ref in
+                GuideRowDTO(epg: ref, programmes: (found[ref.ref] ?? []).map(ProgrammeDTO.init))
+            }
+
+        case "library.toggleFavorite":
+            // Favorites hold the channel from every provider that carries it, as on the Mac.
+            struct P: Decodable { var channel: String }
+            let channel = try await channel(try params.decode(P.self).channel)
+            struct Reply: Encodable { var favorite: Bool }
+            return Reply(favorite: try await library.toggleFavorite(channel))
+
+        case "library.moveFavorite":
+            // Moves a favorite to position `to` (0 = top; past the end = bottom).
+            struct P: Decodable { var channel: String; var to: Int }
+            let p = try params.decode(P.self)
+            let group = ChannelGroup(id: "favorites", name: "Favorites", kind: .favorites)
+            var list = try await liveCatalog.channels(in: group)
+            guard let from = list.firstIndex(where: { $0.id == p.channel }) else {
+                throw BridgeError("That channel isn't in Favorites.")
+            }
+            let moved = list.remove(at: from)
+            list.insert(moved, at: max(0, min(p.to, list.count)))
+            try await library.reorder(list, in: group)
+            return Empty()
+
+        case "library.removeRecent":
+            struct P: Decodable { var channel: String }
+            try await library.removeRecent(try await channel(try params.decode(P.self).channel))
+            return Empty()
+
+        case "library.clearRecents":
+            // Channels only; movies and series keep their own history.
+            try await library.clearRecents([.channel])
+            return Empty()
+
         default:
             throw BridgeError("Unknown request \(method).")
         }
@@ -232,6 +278,11 @@ public actor BridgeCore {
             throw BridgeError("That provider no longer exists.")
         }
         return provider
+    }
+
+    private func channel(_ id: String) async throws -> ChannelListItem {
+        guard let channel = try await liveCatalog.item(logicalID: id) else { throw BridgeError("That channel no longer exists.") }
+        return channel
     }
 
     private func providerList() async throws -> [ProviderDTO] {

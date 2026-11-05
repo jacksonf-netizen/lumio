@@ -38,8 +38,13 @@ import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.NowNext
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.common.MenuAction
+import com.jackson.lumio.ui.common.OptionsPanel
 
-/** Groups on the left; moving onto a group shows its channels on the right, with what's on now. */
+/**
+ * Groups on the left; moving onto a group shows its channels on the right, with what's on now.
+ * OK watches a channel; Hold OK opens its options (Favorites).
+ */
 @Composable
 fun LiveTvScreen(
     onPlay: (channel: String, group: String) -> Unit,
@@ -53,6 +58,8 @@ fun LiveTvScreen(
     LaunchedEffect(playerShowing) {
         if (!playerShowing && lastPlayed != null) runCatching { playedRow.requestFocus() }
     }
+    var options by remember { mutableStateOf<Channel?>(null) }
+    Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
             Modifier.width(300.dp).fillMaxHeight().padding(vertical = 24.dp, horizontal = 12.dp),
@@ -86,6 +93,10 @@ fun LiveTvScreen(
                                 lastPlayed = channel.id
                                 onPlay(channel.id, state.selectedGroup)
                             },
+                            onLongClick = {
+                                lastPlayed = channel.id
+                                options = channel
+                            },
                             modifier = if (channel.id == lastPlayed) Modifier.focusRequester(playedRow) else Modifier,
                         )
                     }
@@ -93,14 +104,32 @@ fun LiveTvScreen(
             }
         }
     }
+    options?.let { channel ->
+        OptionsPanel(
+            channel.name,
+            listOf(
+                MenuAction("Watch") {
+                    lastPlayed = channel.id
+                    onPlay(channel.id, state.selectedGroup)
+                },
+                MenuAction(if (channel.favorite) "Remove from Favorites" else "Add to Favorites") { model.toggleFavorite(channel) },
+            ),
+            onDismiss = {
+                options = null
+                runCatching { playedRow.requestFocus() }
+            },
+        )
+    }
+    }
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, nowNext: NowNext?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ChannelRow(channel: Channel, nowNext: NowNext?, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val now = System.currentTimeMillis() / 1000.0
     ListItem(
         selected = false,
         onClick = onClick,
+        onLongClick = onLongClick,
         leadingContent = {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -110,7 +139,12 @@ private fun ChannelRow(channel: Channel, nowNext: NowNext?, onClick: () -> Unit,
                 RemoteImage(channel.logo, 48.dp)
             }
         },
-        headlineContent = { Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 18.sp) },
+        headlineContent = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(channel.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 18.sp, modifier = Modifier.weight(1f, fill = false))
+                if (channel.favorite) Text("  ★", color = LumioColors.accent, fontSize = 14.sp)
+            }
+        },
         supportingContent = nowNext?.now?.let { programme ->
             {
                 Column {

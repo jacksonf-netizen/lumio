@@ -111,18 +111,37 @@ data class NowNext(val epg: EPGRef, val now: Programme?, val next: Programme?) {
     )
 }
 
-data class Programme(val title: String, val start: Double, val stop: Double, val subtitle: String?, val summary: String?) {
+data class Programme(
+    val title: String,
+    val start: Double,
+    val stop: Double,
+    val subtitle: String? = null,
+    val summary: String? = null,
+    val category: String? = null,
+    /** The provider's episode number as written ("S2 E5"). */
+    val episode: String? = null,
+) {
     constructor(json: JSONObject) : this(
         title = json.getString("title"),
         start = json.getDouble("start"),
         stop = json.getDouble("stop"),
         subtitle = json.text("subtitle"),
         summary = json.text("summary"),
+        category = json.text("category"),
+        episode = json.text("episode"),
     )
+
+    /** On at [now] (seconds since 1970). */
+    fun isOn(now: Double): Boolean = start <= now && stop > now
 
     /** 0–1 through the programme at [now] (seconds since 1970). */
     fun progress(now: Double): Float =
         if (stop <= start) 0f else ((now - start) / (stop - start)).coerceIn(0.0, 1.0).toFloat()
+}
+
+/** One guide row: a channel's programmes in the window asked for, in order. */
+data class GuideRow(val epg: EPGRef, val programmes: List<Programme>) {
+    constructor(json: JSONObject) : this(EPGRef(json.getJSONObject("epg")), json.getJSONArray("programmes").objects().map(::Programme))
 }
 
 /** A player's state (the core's PlayerStateDTO). */

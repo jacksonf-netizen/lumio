@@ -52,4 +52,16 @@ class BridgeModelsTest {
         assertEquals(listOf("providers", "sync", "sync", "live"), events.map { it.type })
         assertTrue(events[2].finished)
     }
+
+    @Test fun guideRows() {
+        val rows = fixture("guide.json").map(::GuideRow)
+        assertEquals(listOf("bbcone.uk", "empty.uk"), rows.map { it.epg.id })
+        val quiz = rows[0].programmes[0]
+        assertEquals("S4 E12", quiz.episode)
+        assertEquals("Entertainment", quiz.category)
+        assertEquals("Four teams, one trophy.", quiz.summary)
+        assertNull(rows[0].programmes[1].episode)
+        assertTrue(quiz.isOn(1793815200.0))
+        assertTrue(rows[1].programmes.isEmpty())
+    }
 }

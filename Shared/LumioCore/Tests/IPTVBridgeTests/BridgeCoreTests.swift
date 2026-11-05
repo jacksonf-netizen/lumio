@@ -98,6 +98,95 @@ struct BridgeCoreTests {
         #expect(channels.first?.epg?.id == "seven.uk")
     }
 
+    /// One provider with three channels in a News category and a guide for the first.
+    private func seedChannels(_ bridge: BridgeCore) async throws -> [ChannelDTO] {
+        let database = bridge.environment.database
+        let provider = Provider(name: "A", serverURL: URL(string: "http://a.example")!)
+        let start = Date(timeIntervalSince1970: 1_793_815_200)
+        try await database.writer.write { db in
+            try provider.insert(db)
+            try Category(providerID: provider.id, kind: .live, categoryID: "1", name: "News", sortIndex: 0).insert(db)
+            for (index, name) in ["One", "Two", "Three"].enumerated() {
+                try Channel(providerID: provider.id, streamID: index + 1, number: index + 1, name: "Channel \(name)",
+                            epgChannelID: "ch\(index + 1).uk", categoryID: "1", sortIndex: index).insert(db)
+            }
+            for hour in 0..<30 {
+                var programme = Programme(providerID: provider.id, epgID: "ch1.uk", start: start.addingTimeInterval(Double(hour) * 3600),
+                                          stop: start.addingTimeInterval(Double(hour + 1) * 3600), title: "Show \(hour)",
+                                          category: "News", episodeNumber: hour == 1 ? "S1 E2" : nil)
+                try programme.insert(db)
+            }
+        }
+        try bridge.environment.logicalChannels.rebuild()
+        let groups = try JSONDecoder().decode([GroupDTO].self, from: try JSONSerialization.data(withJSONObject: try await call(bridge, "live.groups")))
+        let news = try #require(groups.first { $0.name == "News" })
+        let data = try JSONSerialization.data(withJSONObject: try await call(bridge, "live.channels", ["group": news.id]))
+        return try JSONDecoder().decode([ChannelDTO].self, from: data)
+    }
+
+    private func names(_ bridge: BridgeCore, in group: String) async throws -> [String] {
+        let data = try JSONSerialization.data(withJSONObject: try await call(bridge, "live.channels", ["group": group]))
+        return try JSONDecoder().decode([ChannelDTO].self, from: data).map(\.name)
+    }
+
+    @Test func guideRowsCoverTheWindowAskedForAndNoMore() async throws {
+        let (bridge, _) = await makeBridge()
+        let channels = try await seedChannels(bridge)
+        let refs = try channels.map { try JSONSerialization.jsonObject(with: JSONEncoder().encode(try #require($0.epg))) }
+        let start = 1_793_815_200.0 + 3600 + 1800 // halfway through Show 1
+        let data = try JSONSerialization.data(withJSONObject: try await call(bridge, "guide.programmes", [
+            "epg": refs, "start": start, "end": start + 2 * 3600,
+        ]))
+        let rows = try JSONDecoder().decode([GuideRowDTO].self, from: data)
+        #expect(rows.map(\.epg.id) == ["ch1.uk", "ch2.uk", "ch3.uk"])
+        #expect(rows[0].programmes.map(\.title) == ["Show 1", "Show 2", "Show 3"])
+        #expect(rows[0].programmes[0].episode == "S1 E2")
+        #expect(rows[0].programmes[0].category == "News")
+        #expect(rows[1].programmes.isEmpty)
+
+        // A request for a week is cut to two days.
+        let long = try JSONSerialization.data(withJSONObject: try await call(bridge, "guide.programmes", [
+            "epg": [refs[0]], "start": 1_793_815_200.0, "end": 1_793_815_200.0 + 7 * 86_400,
+        ]))
+        #expect(try JSONDecoder().decode([GuideRowDTO].self, from: long)[0].programmes.count == 30)
+    }
+
+    @Test func favoritesToggleAndMove() async throws {
+        let (bridge, _) = await makeBridge()
+        let channels = try await seedChannels(bridge)
+        for channel in channels {
+            let reply = try await call(bridge, "library.toggleFavorite", ["channel": channel.id]) as? [String: Any]
+            #expect(reply?["favorite"] as? Bool == true)
+        }
+        #expect(try await names(bridge, in: "favorites") == ["Channel One", "Channel Two", "Channel Three"])
+
+        _ = try await call(bridge, "library.moveFavorite", ["channel": channels[2].id, "to": 0])
+        #expect(try await names(bridge, in: "favorites") == ["Channel Three", "Channel One", "Channel Two"])
+        _ = try await call(bridge, "library.moveFavorite", ["channel": channels[2].id, "to": 99])
+        #expect(try await names(bridge, in: "favorites") == ["Channel One", "Channel Two", "Channel Three"])
+
+        let off = try await call(bridge, "library.toggleFavorite", ["channel": channels[1].id]) as? [String: Any]
+        #expect(off?["favorite"] as? Bool == false)
+        #expect(try await names(bridge, in: "favorites") == ["Channel One", "Channel Three"])
+        await #expect(throws: Failure.self) { try await call(bridge, "library.moveFavorite", ["channel": channels[1].id, "to": 0]) }
+        await #expect(throws: Failure.self) { try await call(bridge, "library.toggleFavorite", ["channel": "nope"]) }
+    }
+
+    @Test func recentsRemoveAndClear() async throws {
+        let (bridge, _) = await makeBridge()
+        let channels = try await seedChannels(bridge)
+        let library = LibraryRepository(database: bridge.environment.database)
+        for channel in channels {
+            try await library.recordPlayed(providerID: ProviderID(channel.providerID), kind: .channel, itemID: String(channel.streamID))
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(try await names(bridge, in: "recents") == ["Channel Three", "Channel Two", "Channel One"])
+        _ = try await call(bridge, "library.removeRecent", ["channel": channels[1].id])
+        #expect(try await names(bridge, in: "recents") == ["Channel Three", "Channel One"])
+        _ = try await call(bridge, "library.clearRecents")
+        #expect(try await names(bridge, in: "recents").isEmpty)
+    }
+
     @Test func changesArriveAsEvents() async throws {
         let (bridge, log) = await makeBridge()
         _ = try await addHarness(bridge)
@@ -128,6 +217,8 @@ struct BridgeCoreTests {
         #expect(groups.map(\.kind) == ["favorites", "all", "category"])
         let nowNext = try JSONDecoder().decode([NowNextDTO].self, from: try read("nownext.json"))
         #expect(nowNext.first?.now?.title == "News at Six")
+        let guide = try JSONDecoder().decode([GuideRowDTO].self, from: try read("guide.json"))
+        #expect(guide.first?.programmes.map(\.episode) == ["S4 E12", nil])
         let events = try JSONDecoder().decode([BridgeEvent].self, from: try read("events.json"))
         #expect(events.map(\.type) == ["providers", "sync", "sync", "live"])
     }

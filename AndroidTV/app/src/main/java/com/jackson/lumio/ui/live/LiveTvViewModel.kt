@@ -75,6 +75,17 @@ class LiveTvViewModel : ViewModel() {
         }
     }
 
+    /** Adds to Favorites or takes out; the list updates from the core's change event. */
+    fun toggleFavorite(channel: Channel) {
+        viewModelScope.launch {
+            try {
+                LumioCore.toggleFavorite(channel.id)
+            } catch (error: CoreException) {
+                state = state.copy(message = error.message)
+            }
+        }
+    }
+
     private fun reloadGroups() {
         viewModelScope.launch {
             try {
