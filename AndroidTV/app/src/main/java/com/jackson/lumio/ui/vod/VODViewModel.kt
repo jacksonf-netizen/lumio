@@ -22,7 +22,7 @@ import kotlinx.coroutines.launch
 
 /** A page shown over the Movies or Series home. */
 sealed interface VODPage {
-    data class Category(val category: VODCategory) : VODPage
+    data class Category(val kind: String, val category: VODCategory) : VODPage
     data class Movie(val provider: String, val id: Int) : VODPage
     data class Series(val provider: String, val id: Int) : VODPage
 }

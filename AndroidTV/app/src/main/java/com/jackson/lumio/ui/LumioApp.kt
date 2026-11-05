@@ -35,13 +35,14 @@ import androidx.tv.material3.Text
 import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.live.LiveTvScreen
+import com.jackson.lumio.ui.search.SearchScreen
 import com.jackson.lumio.ui.vod.VODScreen
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
 import com.jackson.lumio.ui.providers.ProvidersScreen
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 
-/** The sections in the sidebar, in the Mac's order. Search arrives later in phase 5. */
+/** The sections in the sidebar, close to the Mac's order. */
 enum class Section(val title: String) {
     Live("Live TV"),
     Guide("Guide"),
@@ -49,6 +50,7 @@ enum class Section(val title: String) {
     Series("Series"),
     Favorites("Favorites"),
     Recents("Recents"),
+    Search("Search"),
     Settings("Settings"),
 }
 
@@ -120,6 +122,9 @@ fun LumioApp() {
                         }, playerShowing = player.showing)
                     }
                 }
+                Section.Search -> SearchScreen(onWatch = play, onPlay = { k, provider, id, position, title, subtitle ->
+                    player.playVOD(k, provider, id, position, title, subtitle)
+                }, playerShowing = player.showing)
                 Section.Favorites -> GuideScreen(GuideScope.Favorites, play, player.showing, playing, toSidebar)
                 Section.Recents -> GuideScreen(GuideScope.Recents, play, player.showing, playing, toSidebar)
                 Section.Settings -> ProvidersScreen(providers)

@@ -108,6 +108,9 @@ object LumioCore {
     suspend fun vodSearch(kind: String, query: String, limit: Int = 60): List<VODItem> =
         call("vod.search", "kind" to kind, "query" to query, "limit" to limit).asArray().map(::VODItem)
 
+    /** Channels, guide programmes, movies and series matching [text]. */
+    suspend fun search(text: String): SearchResults = SearchResults(call("search.query", "text" to text).asObject())
+
     /** What the catalog has; with [fetch], the provider's full details first (slower). */
     suspend fun movie(provider: String, id: Int, fetch: Boolean = false): MovieInfo =
         MovieInfo(call("vod.movie", "provider" to provider, "id" to id, "fetch" to fetch).asObject())

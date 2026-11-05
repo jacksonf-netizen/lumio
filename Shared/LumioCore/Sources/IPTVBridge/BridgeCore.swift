@@ -94,7 +94,7 @@ public actor BridgeCore {
     // MARK: Methods
 
     private func perform(_ method: String, _ params: Params) async throws -> any Encodable {
-        if method.hasPrefix("vod.") { return try await vodRequest(method, params) }
+        if method.hasPrefix("vod.") || method == "search.query" { return try await vodRequest(method, params) }
         switch method {
         case "providers.list":
             return try await providerList()

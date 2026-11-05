@@ -269,6 +269,22 @@ struct BridgeCoreTests {
         #expect(after.recentlyWatched.isEmpty)
     }
 
+    @Test func searchFindsChannelsMoviesAndSeries() async throws {
+        let (bridge, _) = await makeBridge()
+        _ = try await seedVOD(bridge)
+        let channels = try await seedChannels(bridge)
+        #expect(channels.count == 3)
+        let films = try decode(SearchDTO.self, try await call(bridge, "search.query", ["text": "fil"]))
+        #expect(Set(films.movies.map(\.name)) == ["First Film", "Second Film"])
+        #expect(films.channels.isEmpty)
+        let both = try decode(SearchDTO.self, try await call(bridge, "search.query", ["text": "chan thr"]))
+        #expect(both.channels.map(\.name) == ["Channel Three"])
+        let show = try decode(SearchDTO.self, try await call(bridge, "search.query", ["text": "show"]))
+        #expect(show.series.map(\.name) == ["A Show"])
+        let none = try decode(SearchDTO.self, try await call(bridge, "search.query", ["text": "  "]))
+        #expect(none.channels.isEmpty && none.movies.isEmpty)
+    }
+
     @Test func changesArriveAsEvents() async throws {
         let (bridge, log) = await makeBridge()
         _ = try await addHarness(bridge)

@@ -117,6 +117,20 @@ public struct SeriesDTO: Codable, Equatable, Sendable {
     public var detailsError: String?
 }
 
+/// Search results across channels, guide programmes, movies and series (the core's SearchRepository).
+public struct SearchDTO: Codable, Equatable, Sendable {
+    public var channels: [ChannelDTO]
+    public var programmes: [ProgrammeHitDTO]
+    public var movies: [VODItemDTO]
+    public var series: [VODItemDTO]
+}
+
+/// A programme that matched, with a channel showing it (when one does).
+public struct ProgrammeHitDTO: Codable, Equatable, Sendable {
+    public var programme: ProgrammeDTO
+    public var channel: ChannelDTO?
+}
+
 // MARK: Conversions
 
 extension VODItemDTO {
@@ -196,6 +210,17 @@ extension BridgeCore {
             struct P: Decodable { var kind: String; var query: String; var limit: Int? }
             let p = try params.decode(P.self)
             return try await vod.items(try itemKind(p.kind), search: p.query, limit: min(p.limit ?? 100, 300)).map(VODItemDTO.init)
+
+        case "search.query":
+            // Word prefixes, ignoring case and accents ("sky spo" finds Sky Sports), as on the Mac.
+            struct P: Decodable { var text: String; var limit: Int? }
+            let p = try params.decode(P.self)
+            let found = try await SearchRepository(database: environment.database).search(p.text, limit: min(p.limit ?? 40, 100))
+            return SearchDTO(
+                channels: found.channels.map(ChannelDTO.init),
+                programmes: found.programmes.map { ProgrammeHitDTO(programme: ProgrammeDTO($0.programme), channel: $0.channel.map(ChannelDTO.init)) },
+                movies: found.movies.map(VODItemDTO.init),
+                series: found.series.map(VODItemDTO.init))
 
         case "vod.movie":
             // What the catalog has; with `fetch`, the provider's full details first.

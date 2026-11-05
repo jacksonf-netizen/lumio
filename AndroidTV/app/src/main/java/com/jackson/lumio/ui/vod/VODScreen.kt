@@ -69,53 +69,48 @@ import com.jackson.lumio.ui.common.OptionsPanel
 /** Starts a movie or episode: kind (movie or episode), provider, id, position (null: the start), title, subtitle. */
 typealias PlayVOD = (kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?) -> Unit
 
-private val PosterWidth = 124.dp
-private val PosterHeight = 186.dp
+val PosterWidth = 124.dp
+val PosterHeight = 186.dp
 
-private data class Panel(val title: String, val actions: List<MenuAction>)
+/** A list of choices over the page (Hold OK's options), with optional [detail] text under the title. */
+data class Panel(val title: String, val actions: List<MenuAction>, val detail: String? = null)
 
 /**
- * Movies or Series ([kind] movie or series). The home shows Recently Watched, Recently Added and a
- * shelf per category; a category, movie or series opens over it. The page below stays as it was,
- * so Back returns to the same poster.
+ * What a screen hosting movie and series pages can do: open a page over itself, play, and show a
+ * panel of choices. Movies, Series and Search are each a home page in a [VODHost].
  */
-@OptIn(ExperimentalComposeUiApi::class)
-@Composable
-fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
-    val model: VODViewModel = viewModel(key = "vod-$kind") { VODViewModel(kind) }
-    val stack = remember { mutableStateListOf<VODPage>() }
-    val layerFocus = remember { mutableStateListOf(FocusRequester()) }
-    var panel by remember { mutableStateOf<Panel?>(null) }
-    var played by remember { mutableStateOf(false) }
+class VODHostScope(
+    val open: (VODPage) -> Unit,
+    val play: PlayVOD,
+    val showPanel: (Panel) -> Unit,
+    /** The Movies (movie) or Series (series) model; shared with those sections. */
+    val model: (String) -> VODViewModel,
+) {
+    fun openItem(item: VODItem) =
+        open(if (item.kind == "movie") VODPage.Movie(item.provider, item.id) else VODPage.Series(item.provider, item.id))
 
-    fun open(page: VODPage) {
-        when (page) {
-            is VODPage.Movie -> model.openMovie(page.provider, page.id)
-            is VODPage.Series -> model.openSeries(page.provider, page.id)
-            is VODPage.Category -> {}
+    /** Hold OK on a poster. */
+    fun itemOptions(item: VODItem) {
+        showPanel(Panel(item.name, listOf(
+            MenuAction(if (item.kind == "movie") "Show movie" else "Show series") { openItem(item) },
+            MenuAction(if (item.favorite) "Remove from Favorites" else "Add to Favorites") {
+                model(item.kind).setFavorite(item.kind, item.provider, item.id.toString(), !item.favorite)
+            },
+        )))
+    }
+
+    /** OK on a Recently Watched card: resumes, or opens the page when there's nothing to resume. */
+    fun openRecent(item: ContinueItem) {
+        when {
+            item.canResume -> play(item.kind, item.provider, item.id, item.position, item.title, item.subtitle)
+            item.kind == "movie" -> item.id.toIntOrNull()?.let { open(VODPage.Movie(item.provider, it)) }
+            else -> item.series?.let { open(VODPage.Series(item.provider, it)) }
         }
-        stack.add(page)
-        layerFocus.add(FocusRequester())
     }
 
-    fun focusTop() {
-        runCatching { layerFocus.last().requestFocus() }
-    }
-
-    fun close() {
-        model.close(stack.removeAt(stack.lastIndex))
-        layerFocus.removeAt(layerFocus.lastIndex)
-    }
-
-    fun play(kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?) {
-        played = true
-        onPlay(kind, provider, id, position, title, subtitle)
-    }
-
-    fun openItem(item: VODItem) = open(
-        if (item.kind == "movie") VODPage.Movie(item.provider, item.id) else VODPage.Series(item.provider, item.id))
-
-    fun recentOptions(item: ContinueItem) {
+    /** Hold OK on a Recently Watched card. */
+    fun recentOptions(item: ContinueItem, kind: String) {
+        val owner = model(kind)
         val actions = buildList {
             if (item.canResume) {
                 add(MenuAction("Resume") { play(item.kind, item.provider, item.id, item.position, item.title, item.subtitle) })
@@ -127,21 +122,72 @@ fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
                 if (item.kind == "movie") item.id.toIntOrNull()?.let { open(VODPage.Movie(item.provider, it)) }
                 else item.series?.let { open(VODPage.Series(item.provider, it)) }
             })
-            add(MenuAction("Remove from Recently Watched") { model.removeRecent(item) })
+            add(MenuAction("Remove from Recently Watched") { owner.removeRecent(item) })
             add(MenuAction("Clear Recently Watched…") {
-                panel = Panel("Clear Recently Watched?", listOf(MenuAction("Clear") { model.clearRecents() }, MenuAction("Cancel") {}))
+                showPanel(Panel("Clear Recently Watched?", listOf(MenuAction("Clear") { owner.clearRecents() }, MenuAction("Cancel") {})))
             })
         }
-        panel = Panel(item.title, actions)
+        showPanel(Panel(item.title, actions))
+    }
+}
+
+/**
+ * Movies or Series ([kind] movie or series). The home shows Recently Watched, Recently Added and a
+ * shelf per category; a category, movie or series opens over it.
+ */
+@Composable
+fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
+    VODHost(onPlay, playerShowing) {
+        Home(model(kind), kind, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
+            onRecent = ::openRecent, onRecentOptions = { recentOptions(it, kind) }, onItemOptions = ::itemOptions)
+    }
+}
+
+/**
+ * A home page ([home]) with movie, series and category pages opening over it. The page below stays
+ * composed as it was, so Back returns to the same poster, row or result.
+ */
+@Composable
+fun VODHost(onPlay: PlayVOD, playerShowing: Boolean, home: @Composable VODHostScope.() -> Unit) {
+    val movies: VODViewModel = viewModel(key = "vod-movie") { VODViewModel("movie") }
+    val series: VODViewModel = viewModel(key = "vod-series") { VODViewModel("series") }
+    val model = { kind: String -> if (kind == "movie") movies else series }
+    val stack = remember { mutableStateListOf<VODPage>() }
+    val layerFocus = remember { mutableStateListOf(FocusRequester()) }
+    var panel by remember { mutableStateOf<Panel?>(null) }
+    var played by remember { mutableStateOf(false) }
+
+    fun focusTop() {
+        runCatching { layerFocus.last().requestFocus() }
     }
 
-    fun itemOptions(item: VODItem) {
-        panel = Panel(item.name, listOf(
-            MenuAction(if (item.kind == "movie") "Show movie" else "Show series") { openItem(item) },
-            MenuAction(if (item.favorite) "Remove from Favorites" else "Add to Favorites") {
-                model.setFavorite(item.kind, item.provider, item.id.toString(), !item.favorite)
+    fun close() {
+        when (val page = stack.removeAt(stack.lastIndex)) {
+            is VODPage.Movie -> movies.close(page)
+            is VODPage.Series -> series.close(page)
+            is VODPage.Category -> {}
+        }
+        layerFocus.removeAt(layerFocus.lastIndex)
+    }
+
+    val scope = remember {
+        VODHostScope(
+            open = { page ->
+                when (page) {
+                    is VODPage.Movie -> movies.openMovie(page.provider, page.id)
+                    is VODPage.Series -> series.openSeries(page.provider, page.id)
+                    is VODPage.Category -> {}
+                }
+                stack.add(page)
+                layerFocus.add(FocusRequester())
             },
-        ))
+            play = { kind, provider, id, position, title, subtitle ->
+                played = true
+                onPlay(kind, provider, id, position, title, subtitle)
+            },
+            showPanel = { panel = it },
+            model = model,
+        )
     }
 
     BackHandler(enabled = stack.isNotEmpty() && panel == null && !playerShowing) {
@@ -153,7 +199,15 @@ fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
         if (stack.size != pages) focusTop()
         pages = stack.size
     }
-    LaunchedEffect(playerShowing) { if (!playerShowing && played) focusTop() }
+    // Closing the player (a movie, an episode, or a channel from Search) brings the remote back here.
+    var sawPlayer by remember { mutableStateOf(false) }
+    LaunchedEffect(playerShowing) {
+        if (playerShowing) sawPlayer = true else if (sawPlayer || played) {
+            sawPlayer = false
+            played = false
+            focusTop()
+        }
+    }
     var hadPanel by remember { mutableStateOf(false) }
     LaunchedEffect(panel == null) {
         if (panel != null) hadPanel = true else if (hadPanel) {
@@ -163,30 +217,24 @@ fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        Layer(covered = stack.isNotEmpty(), focus = layerFocus[0]) {
-            Home(model, kind, onOpen = ::openItem, onCategory = { open(VODPage.Category(it)) },
-                onRecent = { item ->
-                    when {
-                        item.canResume -> play(item.kind, item.provider, item.id, item.position, item.title, item.subtitle)
-                        item.kind == "movie" -> item.id.toIntOrNull()?.let { open(VODPage.Movie(item.provider, it)) }
-                        else -> item.series?.let { open(VODPage.Series(item.provider, it)) }
-                    }
-                },
-                onRecentOptions = ::recentOptions, onItemOptions = ::itemOptions)
-        }
+        Layer(covered = stack.isNotEmpty(), focus = layerFocus[0]) { scope.home() }
         stack.forEachIndexed { index, page ->
             key(page) {
                 Layer(covered = index < stack.lastIndex, focus = layerFocus[index + 1]) {
                     when (page) {
-                        is VODPage.Category -> CategoryGrid(model, page.category, onOpen = ::openItem, onOptions = ::itemOptions)
-                        is VODPage.Movie -> MoviePage(model, page, onPlay = ::play)
-                        is VODPage.Series -> SeriesPage(model, page, onPlay = ::play, onOptions = { panel = it })
+                        is VODPage.Category -> CategoryGrid(model(page.kind), page.category, onOpen = scope::openItem,
+                            onOptions = scope::itemOptions)
+                        is VODPage.Movie -> MoviePage(movies, page, onPlay = scope.play)
+                        is VODPage.Series -> SeriesPage(series, page, onPlay = scope.play, onOptions = { panel = it })
                     }
                 }
             }
         }
         panel?.let { shown ->
-            key(shown) { OptionsPanel(shown.title, shown.actions, onDismiss = { if (panel === shown) panel = null }) }
+            key(shown) {
+                OptionsPanel(shown.title, shown.actions, onDismiss = { if (panel === shown) panel = null },
+                    detail = shown.detail?.let { text -> { Text(text, color = LumioColors.secondaryText, fontSize = 15.sp, maxLines = 12) } })
+            }
         }
     }
 }
@@ -279,7 +327,7 @@ private fun Home(
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun Shelf(title: String, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
+fun Shelf(title: String, content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) {
     Column {
         Text(title, fontSize = 19.sp, fontWeight = FontWeight.Medium, modifier = Modifier.padding(start = 32.dp, bottom = 10.dp))
         LazyRow(
@@ -299,7 +347,7 @@ private fun Message(text: String, color: Color) {
 // MARK: Cards
 
 @Composable
-private fun PosterCard(item: VODItem, onClick: () -> Unit, onLongClick: () -> Unit) {
+fun PosterCard(item: VODItem, onClick: () -> Unit, onLongClick: () -> Unit) {
     Column(Modifier.width(PosterWidth)) {
         Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(PosterWidth, PosterHeight)) {
             Box(Modifier.fillMaxSize().background(LumioColors.raised)) {

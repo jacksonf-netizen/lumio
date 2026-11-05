@@ -60,6 +60,7 @@ import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.ProviderInfo
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.common.RemoteTextField
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.launch
@@ -286,11 +287,7 @@ private fun ProviderEditorPage(model: ProvidersViewModel, provider: ProviderInfo
     }
 }
 
-/**
- * A labelled text field for the remote: up and down move past it, OK opens the on-screen keyboard,
- * and the keyboard's done key (or Back) closes it again. The keyboard doesn't open just because
- * the field has focus, so moving through a form never traps the remote in the keyboard.
- */
+/** A labelled field in the provider editor (see [RemoteTextField]). */
 @Composable
 private fun Field(
     label: String,
@@ -299,74 +296,4 @@ private fun Field(
     keyboard: KeyboardType = KeyboardType.Text,
     modifier: Modifier = Modifier,
     onChange: (String) -> Unit,
-) {
-    var editing by remember { mutableStateOf(false) }
-    var highlighted by remember { mutableStateOf(false) }
-    val box = remember { FocusRequester() }
-    val text = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-    val focusManager = LocalFocusManager.current
-
-    LaunchedEffect(editing) {
-        if (editing) {
-            text.requestFocus()
-            keyboardController?.show()
-        }
-    }
-
-    Column(modifier) {
-        Text(label, color = LumioColors.secondaryText, fontSize = 15.sp)
-        Spacer(Modifier.height(4.dp))
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .focusRequester(box)
-                .onFocusChanged { highlighted = it.hasFocus }
-                .clickable { editing = true }
-                .background(LumioColors.surface, RoundedCornerShape(8.dp))
-                .border(2.dp, if (highlighted) LumioColors.accent else LumioColors.raised, RoundedCornerShape(8.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) {
-            BasicTextField(
-                value = value,
-                onValueChange = onChange,
-                singleLine = true,
-                readOnly = !editing,
-                textStyle = TextStyle(color = LumioColors.text, fontSize = 18.sp),
-                cursorBrush = SolidColor(if (editing) LumioColors.accent else Color.Transparent),
-                visualTransformation = if (secret) PasswordVisualTransformation() else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = if (secret) KeyboardType.Password else keyboard,
-                    imeAction = ImeAction.Done,
-                    autoCorrectEnabled = false,
-                ),
-                keyboardActions = KeyboardActions(onDone = {
-                    editing = false
-                    box.requestFocus()
-                }),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .focusRequester(text)
-                    .focusProperties { canFocus = editing }
-                    .onFocusChanged { if (!it.isFocused && editing) editing = false }
-                    // With the keyboard closed (Back), up and down leave the field and OK reopens it.
-                    .onPreviewKeyEvent { event ->
-                        if (!editing || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (event.key) {
-                            Key.DirectionDown, Key.DirectionUp -> {
-                                editing = false
-                                box.requestFocus()
-                                focusManager.moveFocus(if (event.key == Key.DirectionDown) FocusDirection.Down else FocusDirection.Up)
-                                true
-                            }
-                            Key.DirectionCenter, Key.Enter -> {
-                                keyboardController?.show()
-                                true
-                            }
-                            else -> false
-                        }
-                    },
-            )
-        }
-    }
-}
+) = RemoteTextField(label, value, secret = secret, keyboard = keyboard, modifier = modifier, onChange = onChange)

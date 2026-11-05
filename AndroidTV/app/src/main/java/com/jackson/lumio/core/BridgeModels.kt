@@ -328,6 +328,28 @@ data class SeriesInfo(
     )
 }
 
+/** Search results (the core's SearchRepository): word prefixes, ignoring case and accents. */
+data class SearchResults(
+    val channels: List<Channel>,
+    val programmes: List<ProgrammeHit>,
+    val movies: List<VODItem>,
+    val series: List<VODItem>,
+) {
+    constructor(json: JSONObject) : this(
+        channels = json.getJSONArray("channels").objects().map(::Channel),
+        programmes = json.getJSONArray("programmes").objects().map(::ProgrammeHit),
+        movies = json.getJSONArray("movies").objects().map(::VODItem),
+        series = json.getJSONArray("series").objects().map(::VODItem),
+    )
+
+    val isEmpty get() = channels.isEmpty() && programmes.isEmpty() && movies.isEmpty() && series.isEmpty()
+}
+
+/** A programme that matched, with a channel showing it (when one does). */
+data class ProgrammeHit(val programme: Programme, val channel: Channel?) {
+    constructor(json: JSONObject) : this(Programme(json.getJSONObject("programme")), json.optJSONObject("channel")?.let(::Channel))
+}
+
 /** The movie or episode a player is playing. */
 data class VODNow(val kind: String, val title: String, val subtitle: String?) {
     constructor(json: JSONObject) : this(json.getString("kind"), json.getString("title"), json.text("subtitle"))
