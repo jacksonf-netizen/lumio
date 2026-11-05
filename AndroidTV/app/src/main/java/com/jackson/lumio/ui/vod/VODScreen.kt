@@ -99,6 +99,14 @@ class VODHostScope(
         )))
     }
 
+    /** Hold OK on a category ("See all" or a category card): hide it (Settings → Content shows it again). */
+    fun categoryOptions(kind: String, category: VODCategory) {
+        showPanel(Panel(category.name, listOf(
+            MenuAction("Open") { open(VODPage.Category(kind, category)) },
+            MenuAction("Hide category") { model(kind).hideCategory(category) },
+        ), detail = "Hidden categories leave Movies and Series. Settings → Content lists them, to show them again."))
+    }
+
     /** OK on a Recently Watched card: resumes, or opens the page when there's nothing to resume. */
     fun openRecent(item: ContinueItem) {
         when {
@@ -139,6 +147,7 @@ class VODHostScope(
 fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
     VODHost(onPlay, playerShowing) {
         Home(model(kind), kind, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
+            onCategoryOptions = { categoryOptions(kind, it) },
             onRecent = ::openRecent, onRecentOptions = { recentOptions(it, kind) }, onItemOptions = ::itemOptions)
     }
 }
@@ -269,6 +278,7 @@ private fun Home(
     kind: String,
     onOpen: (VODItem) -> Unit,
     onCategory: (VODCategory) -> Unit,
+    onCategoryOptions: (VODCategory) -> Unit,
     onRecent: (ContinueItem) -> Unit,
     onRecentOptions: (ContinueItem) -> Unit,
     onItemOptions: (VODItem) -> Unit,
@@ -309,14 +319,14 @@ private fun Home(
                     items(shelf.items, key = { "${it.provider}|${it.id}" }) { item ->
                         PosterCard(item, onClick = { onOpen(item) }, onLongClick = { onItemOptions(item) })
                     }
-                    item(key = "all") { MoreCard("See all") { onCategory(shelf.category) } }
+                    item(key = "all") { MoreCard("See all", onLongClick = { onCategoryOptions(shelf.category) }) { onCategory(shelf.category) } }
                 }
             }
             if (home.categories.size > home.shelves.size) {
                 item(key = "categories") {
                     Shelf("All categories") {
                         items(home.categories, key = { "${it.provider}|${it.id}" }) { category ->
-                            CategoryCard(category.name) { onCategory(category) }
+                            CategoryCard(category.name, onLongClick = { onCategoryOptions(category) }) { onCategory(category) }
                         }
                     }
                 }
@@ -390,8 +400,8 @@ private fun ContinueCard(item: ContinueItem, onClick: () -> Unit, onLongClick: (
 }
 
 @Composable
-private fun MoreCard(text: String, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.size(PosterWidth, PosterHeight)) {
+private fun MoreCard(text: String, onLongClick: () -> Unit, onClick: () -> Unit) {
+    Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(PosterWidth, PosterHeight)) {
         Box(Modifier.fillMaxSize().background(LumioColors.surface), contentAlignment = Alignment.Center) {
             Text(text, fontSize = 16.sp, color = LumioColors.text)
         }
@@ -399,8 +409,8 @@ private fun MoreCard(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CategoryCard(name: String, onClick: () -> Unit) {
-    Card(onClick = onClick, modifier = Modifier.size(200.dp, 64.dp)) {
+private fun CategoryCard(name: String, onLongClick: () -> Unit, onClick: () -> Unit) {
+    Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(200.dp, 64.dp)) {
         Box(Modifier.fillMaxSize().background(LumioColors.surface).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
             Text(name, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }

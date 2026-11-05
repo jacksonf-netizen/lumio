@@ -95,6 +95,7 @@ public actor BridgeCore {
 
     private func perform(_ method: String, _ params: Params) async throws -> any Encodable {
         if method.hasPrefix("vod.") || method == "search.query" { return try await vodRequest(method, params) }
+        if method.hasPrefix("settings.") || method.hasPrefix("content.") { return try await settingsRequest(method, params) }
         switch method {
         case "providers.list":
             return try await providerList()
@@ -389,7 +390,7 @@ public actor BridgeCore {
 /// The app's players, created on first use. "main" is the full-screen player.
 @MainActor
 final class Players {
-    private let environment: AppEnvironment
+    let environment: AppEnvironment
     private let send: (@MainActor @Sendable (String) -> String?)?
     private let emit: @Sendable (BridgeEvent) -> Void
     private var players: [String: BridgePlayer] = [:]
@@ -400,6 +401,8 @@ final class Players {
         self.send = send
         self.emit = emit
     }
+
+    var all: [BridgePlayer] { Array(players.values) }
 
     func player(_ id: String?) throws -> BridgePlayer {
         let id = id ?? "main"

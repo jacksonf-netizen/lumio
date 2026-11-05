@@ -350,6 +350,87 @@ data class ProgrammeHit(val programme: Programme, val channel: Channel?) {
     constructor(json: JSONObject) : this(Programme(json.getJSONObject("programme")), json.optJSONObject("channel")?.let(::Channel))
 }
 
+// MARK: Settings (Shared/LumioCore/Sources/IPTVBridge/BridgeSettings.swift)
+
+data class AppSettings(
+    val epgRefreshHours: Double,
+    val catalogRefreshHours: Double,
+    val epgFutureDays: Double,
+    /** ts or m3u8. */
+    val preferredFormat: String,
+    /** lowLatency, normal or large. */
+    val bufferPreset: String,
+    val stallTimeoutSeconds: Double,
+    /** Empty: the default. */
+    val userAgent: String,
+    val defaultUserAgent: String,
+    val hiddenSidebarItems: List<String>,
+) {
+    constructor(json: JSONObject) : this(
+        epgRefreshHours = json.getDouble("epgRefreshHours"),
+        catalogRefreshHours = json.getDouble("catalogRefreshHours"),
+        epgFutureDays = json.getDouble("epgFutureDays"),
+        preferredFormat = json.getString("preferredFormat"),
+        bufferPreset = json.getString("bufferPreset"),
+        stallTimeoutSeconds = json.getDouble("stallTimeoutSeconds"),
+        userAgent = json.getString("userAgent"),
+        defaultUserAgent = json.getString("defaultUserAgent"),
+        hiddenSidebarItems = json.getJSONArray("hiddenSidebarItems").strings(),
+    )
+}
+
+data class Region(
+    val code: String,
+    val name: String,
+    val groups: Int,
+    val examples: List<String>,
+    val shown: Boolean,
+    val categoryCount: Int,
+    val shownCategories: Int,
+    /** Groups without a recognisable region. */
+    val other: Boolean,
+) {
+    constructor(json: JSONObject) : this(
+        code = json.getString("code"),
+        name = json.getString("name"),
+        groups = json.getInt("groups"),
+        examples = json.getJSONArray("examples").strings(),
+        shown = json.getBoolean("shown"),
+        categoryCount = json.getInt("categoryCount"),
+        shownCategories = json.getInt("shownCategories"),
+        other = json.getBoolean("other"),
+    )
+}
+
+/** A category in Settings → Content (a region's live group, or a hidden category of any kind). */
+data class ContentCategory(
+    val provider: String,
+    val providerName: String,
+    /** live, movie or series. */
+    val kind: String,
+    val id: String,
+    val name: String,
+    val shown: Boolean,
+) {
+    constructor(json: JSONObject) : this(
+        provider = json.getString("provider"),
+        providerName = json.getString("providerName"),
+        kind = json.getString("kind"),
+        id = json.getString("id"),
+        name = json.getString("name"),
+        shown = json.getBoolean("shown"),
+    )
+}
+
+data class Regions(val regions: List<Region>, val categories: Map<String, List<ContentCategory>>) {
+    constructor(json: JSONObject) : this(
+        regions = json.getJSONArray("regions").objects().map(::Region),
+        categories = json.getJSONObject("categories").let { map ->
+            map.keys().asSequence().associateWith { key -> map.getJSONArray(key).objects().map(::ContentCategory) }
+        },
+    )
+}
+
 /** The movie or episode a player is playing. */
 data class VODNow(val kind: String, val title: String, val subtitle: String?) {
     constructor(json: JSONObject) : this(json.getString("kind"), json.getString("title"), json.text("subtitle"))

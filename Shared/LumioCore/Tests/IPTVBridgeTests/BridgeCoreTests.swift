@@ -285,6 +285,72 @@ struct BridgeCoreTests {
         #expect(none.channels.isEmpty && none.movies.isEmpty)
     }
 
+    @Test func settingsAreCheckedAndStored() async throws {
+        let (bridge, _) = await makeBridge()
+        let defaults = try decode(SettingsDTO.self, try await call(bridge, "settings.get"))
+        #expect(defaults.epgRefreshHours == 12)
+        #expect(defaults.preferredFormat == "ts")
+        #expect(defaults.userAgent.isEmpty)
+        #expect(!defaults.defaultUserAgent.isEmpty)
+
+        _ = try await call(bridge, "settings.set", ["key": "epgRefreshHours", "number": 24])
+        _ = try await call(bridge, "settings.set", ["key": "preferredFormat", "text": "m3u8"])
+        _ = try await call(bridge, "settings.set", ["key": "bufferPreset", "text": "large"])
+        _ = try await call(bridge, "settings.set", ["key": "userAgent", "text": "  VLC/3.0  "])
+        _ = try await call(bridge, "settings.set", ["key": "hiddenSidebarItems", "list": ["series", "search"]])
+        let saved = try decode(SettingsDTO.self, try await call(bridge, "settings.get"))
+        #expect(saved.epgRefreshHours == 24)
+        #expect(saved.preferredFormat == "m3u8")
+        #expect(saved.bufferPreset == "large")
+        #expect(saved.userAgent == "VLC/3.0")
+        #expect(saved.hiddenSidebarItems == ["series", "search"])
+        // The player setup reads the same values.
+        let playback = bridge.environment.playbackSettings(engines: [.exoPlayer])
+        #expect(playback.defaultFormat == .m3u8)
+        #expect(playback.buffer == .large)
+
+        await #expect(throws: Failure.self) { try await call(bridge, "settings.set", ["key": "epgRefreshHours", "number": 500]) }
+        await #expect(throws: Failure.self) { try await call(bridge, "settings.set", ["key": "preferredFormat", "text": "avi"]) }
+        await #expect(throws: Failure.self) { try await call(bridge, "settings.set", ["key": "somethingElse", "number": 1]) }
+        _ = try await call(bridge, "settings.set", ["key": "userAgent", "text": ""])
+        #expect(try decode(SettingsDTO.self, try await call(bridge, "settings.get")).userAgent.isEmpty)
+    }
+
+    @Test func regionsAndHiddenCategories() async throws {
+        let (bridge, _) = await makeBridge()
+        let database = bridge.environment.database
+        let provider = Provider(name: "A", serverURL: URL(string: "http://a.example")!)
+        try await database.writer.write { db in
+            try provider.insert(db)
+            for (index, name) in ["UK | News", "UK | Sport", "US | News", "Cartoons"].enumerated() {
+                try Category(providerID: provider.id, kind: .live, categoryID: "\(index)", name: name, sortIndex: index).insert(db)
+                try Channel(providerID: provider.id, streamID: index + 1, name: "Channel \(index)", categoryID: "\(index)", sortIndex: index).insert(db)
+            }
+        }
+        try bridge.environment.logicalChannels.rebuild()
+        var regions = try decode(RegionsDTO.self, try await call(bridge, "content.regions"))
+        #expect(regions.regions.map(\.code).contains("UK"))
+        #expect(regions.regions.last?.other == true)
+        #expect(regions.categories["UK"]?.count == 2)
+
+        _ = try await call(bridge, "content.setRegion", ["code": "UK", "shown": false])
+        regions = try decode(RegionsDTO.self, try await call(bridge, "content.regions"))
+        #expect(regions.regions.first { $0.code == "UK" }?.shown == false)
+        // A single group switched back on inside a hidden region.
+        _ = try await call(bridge, "content.setRegionCategory", ["provider": provider.id.rawValue, "id": "1", "shown": true])
+        regions = try decode(RegionsDTO.self, try await call(bridge, "content.regions"))
+        #expect(regions.regions.first { $0.code == "UK" }?.shownCategories == 1)
+        _ = try await call(bridge, "content.setAllRegions", ["shown": true])
+        regions = try decode(RegionsDTO.self, try await call(bridge, "content.regions"))
+        #expect(regions.regions.allSatisfy { $0.shown })
+
+        _ = try await call(bridge, "content.setCategoryHidden", ["provider": provider.id.rawValue, "kind": "live", "id": "3", "hidden": true])
+        let hidden = try decode([ContentCategoryDTO].self, try await call(bridge, "content.hiddenCategories"))
+        #expect(hidden.map(\.name) == ["Cartoons"])
+        _ = try await call(bridge, "content.setCategoryHidden", ["provider": provider.id.rawValue, "kind": "live", "id": "3", "hidden": false])
+        #expect(try decode([ContentCategoryDTO].self, try await call(bridge, "content.hiddenCategories")).isEmpty)
+    }
+
     @Test func changesArriveAsEvents() async throws {
         let (bridge, log) = await makeBridge()
         _ = try await addHarness(bridge)

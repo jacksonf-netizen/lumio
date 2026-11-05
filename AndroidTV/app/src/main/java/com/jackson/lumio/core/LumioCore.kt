@@ -152,6 +152,37 @@ object LumioCore {
 
     suspend fun seek(position: Double): PlayerState = PlayerState(call("player.seek", "position" to position) as JSONObject)
 
+    // MARK: Settings and content switches
+
+    suspend fun settings(): AppSettings = AppSettings(call("settings.get").asObject())
+
+    /** A number setting (epgRefreshHours, catalogRefreshHours, epgFutureDays, stallTimeoutSeconds). */
+    suspend fun setSetting(key: String, number: Double) { call("settings.set", "key" to key, "number" to number) }
+
+    /** A text setting (preferredFormat, bufferPreset, userAgent; empty user agent: the default). */
+    suspend fun setSetting(key: String, text: String) { call("settings.set", "key" to key, "text" to text) }
+
+    /** A list setting (hiddenSidebarItems). */
+    suspend fun setSetting(key: String, list: List<String>) { call("settings.set", "key" to key, "list" to JSONArray(list)) }
+
+    suspend fun regions(): Regions = Regions(call("content.regions").asObject())
+
+    /** Switching a region on or off resets its single groups. */
+    suspend fun setRegion(code: String, shown: Boolean) { call("content.setRegion", "code" to code, "shown" to shown) }
+
+    suspend fun setAllRegions(shown: Boolean) { call("content.setAllRegions", "shown" to shown) }
+
+    suspend fun setRegionCategory(provider: String, id: String, shown: Boolean) {
+        call("content.setRegionCategory", "provider" to provider, "id" to id, "shown" to shown)
+    }
+
+    suspend fun hiddenCategories(): List<ContentCategory> = call("content.hiddenCategories").asArray().map(::ContentCategory)
+
+    /** [kind] live, movie or series. */
+    suspend fun setCategoryHidden(provider: String, kind: String, id: String, hidden: Boolean) {
+        call("content.setCategoryHidden", "provider" to provider, "kind" to kind, "id" to id, "hidden" to hidden)
+    }
+
     // MARK: Favorites and Recents (the core's LibraryRepository, as on the Mac)
 
     /** Adds the channel to Favorites or takes it out. Returns whether it's a favorite now. */

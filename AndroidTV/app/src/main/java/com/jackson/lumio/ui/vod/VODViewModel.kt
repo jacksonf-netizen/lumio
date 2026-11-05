@@ -177,6 +177,9 @@ class VODViewModel(val kind: String) : ViewModel() {
 
     fun clearRecents() = act { LumioCore.clearVODRecents(kind) }
 
+    /** The home re-reads from the core's change event. */
+    fun hideCategory(category: VODCategory) = act { LumioCore.setCategoryHidden(category.provider, kind, category.id, true) }
+
     private fun act(work: suspend () -> Unit) {
         viewModelScope.launch {
             try {
