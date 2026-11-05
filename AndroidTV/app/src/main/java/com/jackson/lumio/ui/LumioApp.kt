@@ -38,6 +38,12 @@ import com.jackson.lumio.ui.live.LiveTvScreen
 import com.jackson.lumio.ui.search.SearchScreen
 import com.jackson.lumio.ui.vod.VODScreen
 import com.jackson.lumio.ui.multiview.MultiviewScreen
+import com.jackson.lumio.update.UpdatePanel
+import com.jackson.lumio.update.UpdateViewModel
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.jackson.lumio.ui.multiview.MultiviewViewModel
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
@@ -64,6 +70,15 @@ fun LumioApp() {
     val providers: ProvidersViewModel = viewModel()
     val player: PlayerViewModel = viewModel()
     val multiview: MultiviewViewModel = viewModel()
+    val updates: UpdateViewModel = viewModel()
+    LaunchedEffect(Unit) { updates.checkAtLaunch() }
+    // Back from allowing Lumio to install apps: carry on with the update.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) updates.resumeAfterPermission() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
+    }
     val settings: SettingsViewModel = viewModel()
     // Sections switched off in Settings → General leave the sidebar.
     val hidden = settings.settings?.hiddenSidebarItems.orEmpty()
@@ -138,7 +153,7 @@ fun LumioApp() {
                 }, playerShowing = overlay)
                 Section.Favorites -> GuideScreen(GuideScope.Favorites, play, overlay, playing, toSidebar)
                 Section.Recents -> GuideScreen(GuideScope.Recents, play, overlay, playing, toSidebar)
-                Section.Settings -> SettingsScreen(providers, settings)
+                Section.Settings -> SettingsScreen(providers, updates, settings)
             }
         }
     }
@@ -150,6 +165,8 @@ fun LumioApp() {
             multiview.start(channel, group)
         }) else null)
     }
+    // An update waits until nothing is playing.
+    if (updates.prompt && !overlay) UpdatePanel(updates)
     if (multiview.showing) {
         MultiviewScreen(
             multiview,

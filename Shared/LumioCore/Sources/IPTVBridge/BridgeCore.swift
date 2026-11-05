@@ -22,6 +22,8 @@ public actor BridgeCore {
     private let library: LibraryRepository
     private var syncing: [ProviderID: String] = [:]
     nonisolated let players: Players
+    /// For update checks (GitHub). Replaceable in tests.
+    let updateTransport: any HTTPTransport
     private var observers: [AnyDatabaseCancellable] = []
     private var tasks: [Task<Void, Never>] = []
 
@@ -30,8 +32,10 @@ public actor BridgeCore {
     /// it there's no playback (tests of everything else).
     public init(environment: AppEnvironment, systemEvents: PushedSystemEvents = PushedSystemEvents(),
                 playerCommands: (@MainActor @Sendable (String) -> String?)? = nil,
+                updateTransport: any HTTPTransport = URLSessionTransport(),
                 events: @escaping @Sendable (String) -> Void) {
         self.environment = environment
+        self.updateTransport = updateTransport
         self.systemEvents = systemEvents
         send = events
         players = Players(environment: environment, send: playerCommands, emit: { Self.emit($0, to: events) })
@@ -97,6 +101,7 @@ public actor BridgeCore {
         if method.hasPrefix("vod.") || method == "search.query" { return try await vodRequest(method, params) }
         if method.hasPrefix("settings.") || method.hasPrefix("content.") { return try await settingsRequest(method, params) }
         if method.hasPrefix("multiview.") { return try await multiviewRequest(method, params) }
+        if method.hasPrefix("update.") { return try await updateRequest(method, params) }
         switch method {
         case "providers.list":
             return try await providerList()

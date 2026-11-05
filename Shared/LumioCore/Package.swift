@@ -49,7 +49,8 @@ let package = Package(
         ),
         .testTarget(
             name: "IPTVBridgeTests",
-            dependencies: ["IPTVBridge", .product(name: "GRDB", package: "GRDB.swift")],
+            dependencies: ["IPTVBridge", .product(name: "GRDB", package: "GRDB.swift"),
+                           .product(name: "Crypto", package: "swift-crypto", condition: .when(platforms: [.android, .linux]))],
             // Also read by the Android app's tests (AndroidTV/app/build.gradle.kts, androidTest assets).
             resources: [.copy("Fixtures")]
         ),

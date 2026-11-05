@@ -27,6 +27,13 @@ offers the update. The list below it appears on the release page.
   "no free connection" warning) moved into the shared core as `MultiviewSession`, used by the Mac
   and the Android TV app. A new "no free video decoder" failure stops a tile at once, without
   trying other formats and providers.
+- For developers: update checks know which app is asking. Each release carries a hidden marker of
+  the version in which each app last changed, so an app is only offered an update when there's
+  something new for it. `Tools/Release/publish.sh` now builds, signs and checks both apps and
+  removes the previous release.
+- Android TV: Lumio checks GitHub for updates and installs them itself: it downloads the new
+  version, checks its signature, and Android asks you to confirm (and, the first time, to let Lumio
+  install apps).
 - For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
   when its part of the repository changes. The Android TV workflow runs the shared core's tests on
   an Android emulator and builds the APK.
