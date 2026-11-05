@@ -13,6 +13,8 @@ offers the update. The list below it appears on the release page.
 - For developers: the services' wiring and the Providers screen's rules (adding, editing,
   removing, reordering, refreshing) moved into the shared core, so the coming Android TV app
   follows the same rules as the Mac.
+- For developers: the player's setup, the fallback ladder's choice of engines and the zapping
+  rules (channel up/down, numbers, previous channel) are shared with the Android TV app.
 - For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
   when its part of the repository changes. The Android TV workflow runs the shared core's tests on
   an Android emulator and builds the APK.

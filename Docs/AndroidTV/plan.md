@@ -542,6 +542,35 @@ Done 2026-11-04 (branch `android/phase-2-app-shell`):
 - Full-screen player, remote zapping, number entry, info banner, previous channel.
 - Measure channel-change time and memory on the onn HD stick.
 
+Done 2026-11-04 (branch `android/phase-3-playback`), on the emulator:
+
+- `EngineKind.exoPlayer`, and the fallback ladder uses only the platform's engines
+  (`PlaybackSettings.engines`): on Android it goes through formats, then providers. Saved engines
+  the platform lacks are ignored. The Mac's ladder is unchanged (its tests pass as before).
+- Shared player setup (`AppEnvironment.playbackDependencies`, `playbackSettings(engines:)`) and
+  zapping rules (`ZapList`: up/down wrap, numbers, previous channel), used by the Mac too.
+- `BridgedEngine` (shared): the core's PlaybackController drives an engine in the app. Commands go
+  to Kotlin synchronously on the UI thread (the core's main actor runs there); ExoPlayer's events
+  come back through `nativePlayerEvent` with the load id. `BridgePlayer` adds the zap list and
+  Recents; `player.*` requests and `player` events carry its state. Tested on the Mac and on
+  Android with a fake engine (load URL, 404 → next format, zapping, Recents).
+- `player/ExoEngine.kt`: ExoPlayer per player, user agent and timeouts per load, buffer from the
+  preset (at most 24 MB on low-RAM devices), byte counter for the stall watchdog, errors mapped to
+  the core's kinds (HTTP status kept, so 404 skips a rung), tracks and metrics.
+- Player screen: full-screen video, info banner (number, logo, name, provider, now with progress,
+  next) on channel change and OK, status for opening, reconnecting, waiting for the network and
+  failure (with Try again). Up/down and CH+/CH- zap (up = up the list, as on the Mac), number
+  keys, last-channel key, Back closes and returns to the channel that was playing.
+- On the emulator: channel change about 1 s; the HEVC test channel's TS failed to decode on the
+  emulator and the core moved to HLS by itself; a stalled stream reconnected in 1.8 s; closing
+  released the provider connection; memory while playing 69.5 MB (PSS).
+
+- Audio and subtitle panel: Right (or Menu) in the player.
+- Debug builds take a test provider from launch extras (`-e server -e username -e password`), so
+  the emulator or a TV can be set up without typing on the remote; release builds ignore them.
+
+Still to do: the measurements on the onn HD stick.
+
 ### Phase 4: guide, favorites, recents
 
 - Guide grid (Compose, or the custom view if the spike says so), now line, jump to now,

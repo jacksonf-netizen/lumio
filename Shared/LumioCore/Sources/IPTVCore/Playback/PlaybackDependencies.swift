@@ -9,6 +9,9 @@ import GRDB
 /// Tunables for the reliability layer. Defaults suit typical IPTV providers.
 public struct PlaybackSettings: Sendable, Equatable {
     public var defaultEngine: EngineKind = .mpv
+    /// The engines this platform has, in fallback order. The Mac has mpv and AVPlayer; Android TV
+    /// has ExoPlayer only, so its ladder moves through formats and providers, not engines.
+    public var engines: [EngineKind] = [.mpv, .avPlayer]
     public var defaultFormat: StreamFormat = .ts
     public var buffer: BufferPreset = .normal
     /// No new frames or buffer growth for this long while playing = stalled.

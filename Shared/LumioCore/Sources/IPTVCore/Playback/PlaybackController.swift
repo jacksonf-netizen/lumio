@@ -604,7 +604,8 @@ public final class PlaybackController {
         }
         var ordered = item
         ordered.sources = ranked
-        return FallbackLadder.plans(for: ordered, defaultEngine: settings.defaultEngine, defaultFormat: settings.defaultFormat)
+        return FallbackLadder.plans(for: ordered, defaultEngine: settings.defaultEngine, defaultFormat: settings.defaultFormat,
+                                    engines: settings.engines)
     }
 
     // MARK: State

@@ -125,6 +125,34 @@ data class Programme(val title: String, val start: Double, val stop: Double, val
         if (stop <= start) 0f else ((now - start) / (stop - start)).coerceIn(0.0, 1.0).toFloat()
 }
 
+/** A player's state (the core's PlayerStateDTO). */
+data class PlayerState(
+    val player: String,
+    /** idle, connecting, buffering, playing, paused, reconnecting, waitingForNetwork, suspended, preempted, ended, failed. */
+    val phase: String,
+    val attempt: Int?,
+    val message: String?,
+    val notice: String?,
+    val channel: Channel?,
+    val provider: String?,
+    val hasPrevious: Boolean,
+) {
+    constructor(json: JSONObject) : this(
+        player = json.getString("player"),
+        phase = json.getString("phase"),
+        attempt = if (json.has("attempt")) json.getInt("attempt") else null,
+        message = json.text("message"),
+        notice = json.text("notice"),
+        channel = json.optJSONObject("channel")?.let(::Channel),
+        provider = json.text("provider"),
+        hasPrevious = json.getBoolean("hasPrevious"),
+    )
+}
+
+data class Track(val id: Int, val kind: String, val name: String, val selected: Boolean) {
+    constructor(json: JSONObject) : this(json.getInt("id"), json.getString("kind"), json.getString("name"), json.getBoolean("selected"))
+}
+
 /**
  * A change in the core. type: providers, live, guide, or sync (with provider, label, finished, error).
  */
@@ -134,6 +162,8 @@ data class BridgeEvent(
     val label: String?,
     val finished: Boolean,
     val error: String?,
+    /** For player events. */
+    val state: PlayerState?,
 ) {
     constructor(json: JSONObject) : this(
         type = json.getString("type"),
@@ -141,6 +171,7 @@ data class BridgeEvent(
         label = json.text("label"),
         finished = json.optBoolean("finished", false),
         error = json.text("error"),
+        state = json.optJSONObject("state")?.let(::PlayerState),
     )
 }
 

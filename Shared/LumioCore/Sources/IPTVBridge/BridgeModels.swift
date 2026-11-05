@@ -79,6 +79,22 @@ public struct ProgrammeDTO: Codable, Equatable, Sendable {
     public var summary: String?
 }
 
+public struct TrackDTO: Codable, Equatable, Sendable {
+    public var id: Int
+    /// audio or subtitle.
+    public var kind: String
+    /// What to show: title, language and codec where known.
+    public var name: String
+    public var selected: Bool
+
+    init(_ track: MediaTrack) {
+        id = track.id
+        kind = track.kind.rawValue
+        name = track.displayName
+        selected = track.isSelected
+    }
+}
+
 public struct ProviderEditorDTO: Codable, Equatable, Sendable {
     /// One link per line.
     public var servers: String
@@ -91,18 +107,22 @@ public struct BridgeEvent: Codable, Equatable, Sendable {
     /// providers: the provider list or a provider's status changed.
     /// live: the Live TV groups or channels changed. guide: now/next may have changed.
     /// sync: a refresh started, moved on a step or finished (`provider`, `label`, `error`).
+    /// player: a player's state changed (`state`).
     public var type: String
     public var provider: String?
     public var label: String?
     public var finished: Bool?
     public var error: String?
+    public var state: PlayerStateDTO?
 
-    public init(type: String, provider: String? = nil, label: String? = nil, finished: Bool? = nil, error: String? = nil) {
+    public init(type: String, provider: String? = nil, label: String? = nil, finished: Bool? = nil, error: String? = nil,
+                state: PlayerStateDTO? = nil) {
         self.type = type
         self.provider = provider
         self.label = label
         self.finished = finished
         self.error = error
+        self.state = state
     }
 }
 

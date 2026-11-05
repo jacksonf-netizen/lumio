@@ -87,43 +87,54 @@ public enum FallbackLadder {
     /// For each source (already in preference order):
     /// 1. what worked last time, else preferred format on the default engine
     /// 2. the other format on the same engine (if the provider allows it)
-    /// 3. the other engine (AVPlayer only gets HLS for live, or containers it supports for VOD)
+    /// 3. the platform's other engines (AVPlayer only gets HLS for live, or containers it supports
+    ///    for VOD). Only engines in `engines` are used; a saved engine the platform doesn't have
+    ///    (an mpv override restored on Android, say) is ignored.
     public static func plans(for item: PlaybackItem, defaultEngine: EngineKind = .mpv,
-                             defaultFormat: StreamFormat = .ts) -> [PlaybackPlan] {
+                             defaultFormat: StreamFormat = .ts,
+                             engines: [EngineKind] = [.mpv, .avPlayer]) -> [PlaybackPlan] {
+        let available = engines.isEmpty ? [defaultEngine] : engines
+        func usable(_ engine: EngineKind?) -> EngineKind? { engine.flatMap { available.contains($0) ? $0 : nil } }
+        func supports(_ engine: EngineKind, _ format: StreamFormat) -> Bool { engine != .avPlayer || format == .m3u8 }
+        func supports(_ engine: EngineKind, container: String) -> Bool {
+            engine != .avPlayer || avPlayerContainers.contains(container)
+        }
+
         var result: [PlaybackPlan] = []
         for source in item.sources {
             var plans: [PlaybackPlan] = []
-            let primaryEngine = source.engineOverride ?? source.lastWorkingEngine ?? defaultEngine
+            let primaryEngine = usable(source.engineOverride) ?? usable(source.lastWorkingEngine) ?? usable(defaultEngine) ?? available[0]
+            // Locked to one engine by a per-channel override: don't switch engines.
+            let locked = usable(source.engineOverride) != nil
 
             if item.isLive {
                 let allowed = source.allowedFormats.isEmpty ? [StreamFormat.ts, .m3u8] : source.allowedFormats
                 let wanted = source.lastWorkingFormat ?? source.preferredFormat ?? defaultFormat
                 let primaryFormat = allowed.contains(wanted) ? wanted : allowed[0]
-                func supports(_ engine: EngineKind, _ format: StreamFormat) -> Bool {
-                    engine == .mpv || format == .m3u8
-                }
-                let primary = supports(primaryEngine, primaryFormat)
-                    ? PlaybackPlan(source: source, format: primaryFormat, engine: primaryEngine)
-                    : PlaybackPlan(source: source, format: primaryFormat, engine: .mpv)
+                let primary = PlaybackPlan(
+                    source: source, format: primaryFormat,
+                    engine: supports(primaryEngine, primaryFormat)
+                        ? primaryEngine : (available.first { supports($0, primaryFormat) } ?? primaryEngine))
                 plans.append(primary)
                 for format in allowed where format != primary.format && supports(primary.engine, format) {
                     plans.append(PlaybackPlan(source: source, format: format, engine: primary.engine))
                 }
-                let otherEngine: EngineKind = primary.engine == .mpv ? .avPlayer : .mpv
-                // Locked to one engine by a per-channel override: don't switch engines.
-                if source.engineOverride == nil {
-                    let formats = otherEngine == .avPlayer ? allowed.filter { $0 == .m3u8 } : allowed
-                    let ordered = formats.filter { $0 == primary.format } + formats.filter { $0 != primary.format }
-                    for format in ordered {
-                        plans.append(PlaybackPlan(source: source, format: format, engine: otherEngine))
+                if !locked {
+                    for engine in available where engine != primary.engine {
+                        let formats = allowed.filter { supports(engine, $0) }
+                        let ordered = formats.filter { $0 == primary.format } + formats.filter { $0 != primary.format }
+                        for format in ordered {
+                            plans.append(PlaybackPlan(source: source, format: format, engine: engine))
+                        }
                     }
                 }
             } else {
                 plans.append(PlaybackPlan(source: source, format: nil, engine: primaryEngine))
-                let otherEngine: EngineKind = primaryEngine == .mpv ? .avPlayer : .mpv
-                let ext = (source.containerExtension ?? "mp4").lowercased()
-                if source.engineOverride == nil, otherEngine == .mpv || avPlayerContainers.contains(ext) {
-                    plans.append(PlaybackPlan(source: source, format: nil, engine: otherEngine))
+                let container = (source.containerExtension ?? "mp4").lowercased()
+                if !locked {
+                    for engine in available where engine != primaryEngine && supports(engine, container: container) {
+                        plans.append(PlaybackPlan(source: source, format: nil, engine: engine))
+                    }
                 }
             }
             for plan in plans where !result.contains(plan) { result.append(plan) }

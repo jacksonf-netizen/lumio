@@ -2,6 +2,7 @@ package com.jackson.lumio.core
 
 import android.content.Context
 import android.util.Log
+import com.jackson.lumio.player.PlayerEngines
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -97,6 +98,34 @@ object LumioCore {
         }
     }
 
+    // MARK: Playback (the core's PlaybackController; the engine is player/ExoEngine.kt)
+
+    /** Plays [channel] from [group]; channel up/down then moves through that group. */
+    suspend fun watch(channel: String, group: String): PlayerState =
+        PlayerState(call("player.watch", "channel" to channel, "group" to group) as JSONObject)
+
+    suspend fun zap(by: Int): PlayerState = PlayerState(call("player.zap", "by" to by) as JSONObject)
+
+    suspend fun channelNumber(number: Int): PlayerState = PlayerState(call("player.number", "number" to number) as JSONObject)
+
+    suspend fun previousChannel(): PlayerState = PlayerState(call("player.previous") as JSONObject)
+
+    suspend fun stopPlayer(): PlayerState = PlayerState(call("player.stop") as JSONObject)
+
+    suspend fun retry(): PlayerState = PlayerState(call("player.retry") as JSONObject)
+
+    suspend fun tracks(): List<Track> = call("player.tracks").asArray().map(::Track)
+
+    /** [id] null switches that kind off (no subtitles). */
+    suspend fun selectTrack(kind: String, id: Int?) {
+        if (id != null) call("player.selectTrack", "kind" to kind, "id" to id) else call("player.selectTrack", "kind" to kind)
+    }
+
+    /** An event from the engine, passed straight to the core (doesn't wait). */
+    fun playerEvent(event: JSONObject) {
+        nativePlayerEvent(event.toString().toByteArray())
+    }
+
     /** Checks of this build (debug.icuChecks, debug.memory, debug.fetch), for tests. */
     suspend fun debug(method: String, vararg params: Pair<String, Any>): Any = call("debug.$method", *params)
 
@@ -122,6 +151,7 @@ object LumioCore {
 
     @JvmStatic private external fun nativeStart(databasePath: ByteArray, cacheDir: ByteArray, listener: CoreListener): ByteArray?
     @JvmStatic private external fun nativeCall(request: ByteArray): ByteArray
+    @JvmStatic private external fun nativePlayerEvent(event: ByteArray)
 }
 
 /** A failed request, with a message fit to show. */
@@ -142,4 +172,7 @@ class CoreListener(private val vault: LoginVault, private val emit: (BridgeEvent
     fun loadSecret(providerID: ByteArray): ByteArray? = vault.load(String(providerID))
 
     fun deleteSecret(providerID: ByteArray): Boolean = vault.delete(String(providerID))
+
+    /** A command for a player engine, from the core's main actor (the UI thread). */
+    fun onPlayerCommand(command: ByteArray): ByteArray = PlayerEngines.handle(String(command)).toByteArray()
 }

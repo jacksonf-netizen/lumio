@@ -66,8 +66,12 @@ public struct RecentItem: Hashable, Sendable, Codable {
 
 /// Which playback engine to use.
 public enum EngineKind: String, Sendable, Codable, CaseIterable {
+    /// Mac: libmpv (MPEG-TS, HLS, every codec FFmpeg knows).
     case mpv
+    /// Mac: Apple's AVPlayer (HLS and Apple's containers).
     case avPlayer
+    /// Android TV: Media3 ExoPlayer (MPEG-TS and HLS, hardware decoding).
+    case exoPlayer
 }
 
 /// Stream container requested from an Xtream server.

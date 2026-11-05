@@ -143,7 +143,7 @@ final class EventLog: @unchecked Sendable {
     func append(_ event: String) { lock.withLock { events.append(event) } }
 
     /// Waits up to 5 seconds for an event matching `predicate`.
-    func waitFor(_ predicate: (String) -> Bool) async throws {
+    func waitFor(_ predicate: @Sendable (String) -> Bool) async throws {
         for _ in 0..<100 {
             if lock.withLock({ events.contains(where: predicate) }) { return }
             try await Task.sleep(for: .milliseconds(50))
