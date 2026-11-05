@@ -134,6 +134,30 @@ extension BridgePlayerTests {
             #expect(await bridge.environment.connections.totalInUse == 0)
         }
 
+        @Test func aNewTileWaitsRatherThanStoppingOneThatPlays() async throws {
+            let (bridge, engines, log) = try await makeBridge()
+            let seven = try await channel(bridge, "Seven")
+            let eight = try await channel(bridge, "Eight")
+            // Tile 2 plays Eight (only on A), tile 3 plays Seven: one connection each, both used.
+            _ = try await call(bridge, "multiview.start", ["layout": 3])
+            _ = try await call(bridge, "multiview.setChannel", ["tile": 1, "channel": eight.id])
+            _ = try await call(bridge, "multiview.setChannel", ["tile": 2, "channel": seven.id])
+            await waitFor { !engines.loads("tile1").isEmpty && !engines.loads("tile2").isEmpty }
+            for tile in ["tile1", "tile2"] { deliver(engines, tile, "playing") }
+            try await log.waitFor { $0.contains(#""type":"multiview""#) && $0.components(separatedBy: #""phase":"playing""#).count > 2 }
+            let loads = engines.loads("tile1").count + engines.loads("tile2").count
+
+            // Filling tile 1 can't fit. The two playing tiles carry on; the warning is about the new one.
+            _ = try await call(bridge, "multiview.setChannel", ["tile": 0, "channel": seven.id])
+            try await log.waitFor { $0.contains("free connection") }
+            let state = try await call(bridge, "multiview.state")
+            #expect((state["warning"] as? String)?.contains("Seven") == true)
+            #expect(tiles(state)[0]["providerID"] == nil)
+            #expect(engines.loads("tile1").count + engines.loads("tile2").count == loads)
+            #expect(!engines.commands.contains { ["tile1", "tile2"].contains($0["player"] as? String) && $0["command"] as? String == "stop" })
+            _ = try await call(bridge, "multiview.stop")
+        }
+
         @Test func noFreeDecoderStopsTheTileWithoutTryingOtherSources() async throws {
             let (bridge, engines, log) = try await makeBridge()
             let seven = try await channel(bridge, "Seven")

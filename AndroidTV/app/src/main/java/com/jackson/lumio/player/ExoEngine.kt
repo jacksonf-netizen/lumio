@@ -350,6 +350,14 @@ object PlayerEngines {
 
     fun engine(player: String): ExoEngine = engines.getOrPut(player) { ExoEngine(context, player) }
 
+    /**
+     * Frees the multiview tiles' players once multiview has closed (each holds buffers and a
+     * surface; the next load makes a new one). On the UI thread, after the core has stopped them.
+     */
+    fun releaseTiles() {
+        for ((id, engine) in engines) if (id.startsWith("tile")) engine.handle(JSONObject().put("command", "release"))
+    }
+
     /** Whether any engine other than [player] has a video decoder open. */
     fun othersHoldDecoders(player: String): Boolean = engines.any { (id, engine) -> id != player && engine.holdsVideoDecoder }
 

@@ -392,6 +392,10 @@ struct BridgeCoreTests {
         #expect(guide.first?.programmes.map(\.episode) == ["S4 E12", nil])
         let events = try JSONDecoder().decode([BridgeEvent].self, from: try read("events.json"))
         #expect(events.map(\.type) == ["providers", "sync", "sync", "live"])
+        let multiview = try #require(try JSONDecoder().decode([BridgeEvent].self, from: try read("multiview.json")).first?.multiview)
+        #expect(multiview.tiles.map(\.phase) == ["playing", "reconnecting", "idle"])
+        #expect(multiview.tiles[0].providers.map(\.name) == ["Provider One", "Provider Two"])
+        #expect(multiview.tiles[1].pinned == "p2")
     }
 }
 

@@ -10,6 +10,7 @@ import com.jackson.lumio.core.CoreException
 import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.MultiviewState
 import com.jackson.lumio.player.DecoderLimits
+import com.jackson.lumio.player.PlayerEngines
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 
@@ -70,6 +71,7 @@ class MultiviewViewModel(application: Application) : AndroidViewModel(applicatio
         showing = false
         viewModelScope.launch {
             runCatching { state = LumioCore.stopMultiview() }
+            PlayerEngines.releaseTiles()
             then?.invoke()
         }
     }

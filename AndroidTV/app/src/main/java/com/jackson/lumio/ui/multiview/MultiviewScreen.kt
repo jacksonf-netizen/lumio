@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Border
@@ -82,8 +83,10 @@ fun MultiviewScreen(
     var picking by remember { mutableStateOf<Int?>(null) }
     var hint by remember { mutableStateOf(true) }
     val tileFocus = remember { List(4) { FocusRequester() } }
-    // The tile to come back to after the picker or a panel.
+    // The highlighted tile, and the one the picker or a panel was opened from. Focus goes back to
+    // the latter: while the picker closes, Compose can briefly hand the highlight to another tile.
     var focused by remember { mutableStateOf(state?.audioTile ?: 0) }
+    var returnTo by remember { mutableStateOf(state?.audioTile ?: 0) }
 
     fun leave() {
         val tile = state?.tiles?.getOrNull(focused)?.takeIf { it.channel != null }
@@ -96,11 +99,12 @@ fun MultiviewScreen(
         delay(6000)
         hint = false
     }
-    // Focus starts on (and comes back to) a tile.
-    LaunchedEffect(panel == null && picking == null, state != null) {
+    // Focus starts on (and comes back to) a tile, also after the layout changes (the tiles are
+    // laid out again, so the highlighted one may have gone).
+    LaunchedEffect(panel == null && picking == null, state != null, state?.layout) {
         if (panel == null && picking == null && state != null) {
             delay(50)
-            runCatching { tileFocus[focused.coerceIn(0, state.layout - 1)].requestFocus() }
+            runCatching { tileFocus[returnTo.coerceIn(0, state.layout - 1)].requestFocus() }
         }
     }
 
@@ -127,8 +131,14 @@ fun MultiviewScreen(
                         focused = index
                         model.focusAudio(index)
                     },
-                    onClick = { if (tile?.channel == null) picking = index else panel = index },
-                    onLongClick = { panel = index },
+                    onClick = {
+                        returnTo = index
+                        if (tile?.channel == null) picking = index else panel = index
+                    },
+                    onLongClick = {
+                        returnTo = index
+                        panel = index
+                    },
                 )
             }
             state.warning?.let { Warning(it) }
@@ -262,6 +272,10 @@ private fun TileView(
             // Always there, so the player keeps its surface while channels change.
             TileVideo(index)
             val channel = tile?.channel
+            // A stopped player keeps showing its last picture; cover it.
+            if (channel == null || tile.phase in setOf("idle", "failed", "preempted", "ended")) {
+                Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0E)))
+            }
             if (channel == null) {
                 Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("+", color = Color.White, fontSize = 40.sp)
@@ -316,6 +330,7 @@ private fun TileStatus(tile: Tile, modifier: Modifier) {
 @Composable
 private fun TileVideo(index: Int) {
     val engine = remember(index) { PlayerEngines.engine("tile$index") }
+    val link = remember { arrayOfNulls<(ExoPlayer?) -> Unit>(1) }
     AndroidView(
         factory = { context ->
             PlayerView(context).apply {
@@ -326,9 +341,17 @@ private fun TileVideo(index: Int) {
             }
         },
         modifier = Modifier.fillMaxSize(),
-        update = { view -> engine.onPlayerChanged = { view.player = it } },
+        update = { view ->
+            if (link[0] == null) {
+                val show: (ExoPlayer?) -> Unit = { view.player = it }
+                link[0] = show
+                engine.onPlayerChanged = show
+            }
+        },
     )
-    DisposableEffect(engine) { onDispose { engine.onPlayerChanged = null } }
+    // Only unhook this view's own link: when the layout changes, the new view for this tile has
+    // already hooked itself up by the time the old one goes.
+    DisposableEffect(engine) { onDispose { if (engine.onPlayerChanged === link[0]) engine.onPlayerChanged = null } }
 }
 
 @Composable

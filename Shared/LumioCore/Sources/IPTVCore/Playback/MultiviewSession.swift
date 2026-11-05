@@ -153,10 +153,17 @@ public final class MultiviewSession {
             }
         }
         var pins: [Int: ProviderID] = [:]
+        // Tiles playing the same channel as before stay where they are if they can: when there
+        // aren't enough connections, a newly filled tile waits rather than stopping one that plays.
+        var playing: [Int: ProviderID] = [:]
         for (position, index) in order.enumerated() {
             if let pin = tiles[index].pinnedProvider { pins[position] = pin }
+            if let provider = tiles[index].assignedProvider, tiles[index].controller.phase.isActive,
+               tiles[index].controller.item?.id == items[index]?.id {
+                playing[position] = provider
+            }
         }
-        let assignment = SourceSelector.assignTiles(candidates, capacity: capacity, pinned: pins)
+        let assignment = SourceSelector.assignTiles(candidates, capacity: capacity, pinned: pins, playing: playing)
 
         // Stop tiles whose provider changes before starting anything.
         var toStart: [(Int, PlaybackItem)] = []

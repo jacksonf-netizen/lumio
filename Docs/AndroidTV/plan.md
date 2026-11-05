@@ -652,6 +652,40 @@ that has thousands of titles.
 - Measure on both onn devices: tiles that play smoothly, memory, and what happens when one more
   tile is asked for than the decoder allows (a clear message, never a frozen tile).
 
+Done 2026-11-05 (branch `android/phase-5b-multiview`), on the emulator:
+
+- Shared, and used by the Mac too: `MultiviewSession` (was the Mac's `MultiviewModel`): tiles,
+  layout, sound, per-tile provider choice, the provider assignment and the "no free connection"
+  warning. The assignment now keeps tiles that are playing on their provider, so a newly filled tile
+  that doesn't fit waits instead of stopping one that plays (`SourceSelector.assignTiles(playing:)`).
+- `EngineFailure.Kind.noFreeDecoder`: the device has no video decoder free. It stops the fallback
+  ladder at once ("This device can't play another video at the same time…"); nothing is recorded
+  against the stream.
+- Bridge: `multiview.*` (start with a layout and an optional channel, layout, setChannel,
+  clearTile, focusAudio, pinProvider, retry, stop, state) and `multiview` events. Tiles are players
+  "tile0" to "tile3" in the app. Fixture `multiview.json`.
+- Decoder limits (`player/DecoderLimits.kt`): the H.264 hardware decoder's instance limit (less
+  one), how many 1080p30 streams its performance points cover (or its fastest 1080p frame rate),
+  and at most 2 tiles on low-RAM devices. Fewer than 2: multiview isn't offered. Debug builds take
+  `-e multiviewTiles N` for the emulator, whose decoder reports 32 instances and 4 streams.
+- ExoEngine: tiles buffer at most 16 MB (8 MB on low-RAM devices) and pick at most 720p when a
+  stream offers a choice. A decoder that won't open while other players hold theirs, or a codec
+  reporting no resources, is `noFreeDecoder`. A player that reports playing but shows no picture
+  for 10 seconds fails instead of freezing. Closing multiview releases the tiles' players.
+- Screen: Hold OK in the live player → Multiview. 2 tiles side by side, 3 as one large tile with two
+  beside it, 4 in a grid. The highlighted tile is heard; OK opens its options (watch full screen,
+  change channel, provider, remove, layout, close), an empty tile opens Live TV as a channel picker.
+  Back watches the highlighted tile full screen once every tile's stream has closed. Tiles come
+  back as they were when multiview is opened again.
+- On the emulator, one provider with 3 connections: 3 tiles playing and the fourth waiting with the
+  warning, the full-screen player closed before the tiles start and the tiles closed before it
+  starts again (never more streams than the limit), memory 135.5 MB PSS with 3 tiles playing,
+  116 MB after closing (debug build).
+
+Still to do: the measurements on both onn devices, including asking for one tile more than the
+decoder can open. On the emulator, test channel 1 rebuffers every few seconds in any player while
+the test server sends it faster than real time; to check on a TV.
+
 ### Phase 6: updates and releasing
 
 - In-app updater (signature check, PackageInstaller), APK signing key, `publish.sh` for both

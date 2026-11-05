@@ -92,4 +92,22 @@ class BridgeModelsTest {
         assertTrue(quiz.isOn(1793815200.0))
         assertTrue(rows[1].programmes.isEmpty())
     }
+
+    @Test fun multiview() {
+        val event = BridgeEvent(fixture("multiview.json")[0])
+        val state = event.multiview!!
+        assertEquals(3, state.layout)
+        assertEquals(1, state.audioTile)
+        assertTrue(state.warning!!.contains("Sports One"))
+        assertEquals(listOf("playing", "reconnecting", "idle"), state.tiles.map { it.phase })
+        val first = state.tiles[0]
+        assertEquals("BBC One", first.channel?.name)
+        assertEquals("cat:news", first.group)
+        assertEquals("p1", first.providerID)
+        assertEquals(listOf("Provider One", "Provider Two"), first.providers.map { it.name })
+        assertNull(first.pinned)
+        assertEquals(2, state.tiles[1].attempt)
+        assertEquals("p2", state.tiles[1].pinned)
+        assertNull(state.tiles[2].channel)
+    }
 }
