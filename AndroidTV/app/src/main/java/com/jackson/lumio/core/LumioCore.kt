@@ -96,6 +96,59 @@ object LumioCore {
         return rows.associate { it.epg to it.programmes }
     }
 
+    // MARK: Movies and Series (kind: movie or series)
+
+    suspend fun vodHome(kind: String): VODHome = VODHome(call("vod.home", "kind" to kind).asObject())
+
+    /** A page of a category, in the provider's order. */
+    suspend fun vodCategory(kind: String, provider: String, category: String, offset: Int, limit: Int = 120): List<VODItem> =
+        call("vod.category", "kind" to kind, "provider" to provider, "category" to category, "offset" to offset, "limit" to limit)
+            .asArray().map(::VODItem)
+
+    suspend fun vodSearch(kind: String, query: String, limit: Int = 60): List<VODItem> =
+        call("vod.search", "kind" to kind, "query" to query, "limit" to limit).asArray().map(::VODItem)
+
+    /** What the catalog has; with [fetch], the provider's full details first (slower). */
+    suspend fun movie(provider: String, id: Int, fetch: Boolean = false): MovieInfo =
+        MovieInfo(call("vod.movie", "provider" to provider, "id" to id, "fetch" to fetch).asObject())
+
+    /** With [fetch], the seasons and episodes are fetched again from the provider first. */
+    suspend fun series(provider: String, id: Int, fetch: Boolean = false): SeriesInfo =
+        SeriesInfo(call("vod.series", "provider" to provider, "id" to id, "fetch" to fetch).asObject())
+
+    /**
+     * Plays a movie ([kind] movie, [id] its stream id) or an episode ([kind] episode, [id] its episode
+     * id) from [position] seconds (null: the start). The core saves the position as it plays.
+     */
+    suspend fun playVOD(kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?): PlayerState {
+        val params = mutableListOf<Pair<String, Any>>("kind" to kind, "provider" to provider, "id" to id, "title" to title)
+        if (position != null && position > 0) params += "position" to position
+        if (subtitle != null) params += "subtitle" to subtitle
+        return PlayerState(call("vod.play", *params.toTypedArray()) as JSONObject)
+    }
+
+    suspend fun setVODFavorite(kind: String, provider: String, id: String, favorite: Boolean) {
+        call("vod.setFavorite", "kind" to kind, "provider" to provider, "id" to id, "favorite" to favorite)
+    }
+
+    /** [kind] movie or episode. */
+    suspend fun setWatched(kind: String, provider: String, id: String, watched: Boolean) {
+        call("vod.setWatched", "kind" to kind, "provider" to provider, "id" to id, "watched" to watched)
+    }
+
+    /** A movie ([kind] movie, its stream id) or a whole series ([kind] series, its series id). */
+    suspend fun removeVODRecent(kind: String, provider: String, id: String) {
+        call("vod.removeRecent", "kind" to kind, "provider" to provider, "id" to id)
+    }
+
+    suspend fun clearVODRecents(kind: String) { call("vod.clearRecents", "kind" to kind) }
+
+    suspend fun pause(): PlayerState = PlayerState(call("player.pause") as JSONObject)
+
+    suspend fun resume(): PlayerState = PlayerState(call("player.resume") as JSONObject)
+
+    suspend fun seek(position: Double): PlayerState = PlayerState(call("player.seek", "position" to position) as JSONObject)
+
     // MARK: Favorites and Recents (the core's LibraryRepository, as on the Mac)
 
     /** Adds the channel to Favorites or takes it out. Returns whether it's a favorite now. */

@@ -53,6 +53,34 @@ class BridgeModelsTest {
         assertTrue(events[2].finished)
     }
 
+    private fun fixtureObject(name: String): JSONObject =
+        JSONObject(InstrumentationRegistry.getInstrumentation().context.assets.open(name).bufferedReader().readText())
+
+    @Test fun moviesAndSeries() {
+        val home = VODHome(fixtureObject("vod_home.json"))
+        assertTrue(home.recentlyWatched[0].canResume)
+        assertEquals(9, home.recentlyWatched[1].series)
+        assertEquals("S1 E2 · Second", home.recentlyWatched[1].subtitle)
+        assertEquals("Dune", home.recentlyAdded[0].name)
+        assertEquals(2021, home.recentlyAdded[0].year)
+        assertEquals("Science Fiction", home.shelves[0].category.name)
+        assertEquals(0.26, home.shelves[0].items[0].progress!!, 0.0001)
+
+        val movie = MovieInfo(fixtureObject("movie.json"))
+        assertEquals(6960, movie.duration)
+        assertEquals("Denis Villeneuve", movie.director)
+        assertTrue(movie.progress!!.canResume)
+        assertNull(movie.detailsError)
+
+        val series = SeriesInfo(fixtureObject("series.json"))
+        assertEquals(listOf("Season One", "Season 2"), series.seasons.map { it.name })
+        assertEquals(listOf("e11", "e12", "e21"), series.episodes.map { it.id })
+        assertTrue(series.episodes[0].progress!!.watched)
+        assertNull(series.episodes[1].progress)
+        assertEquals("e12", series.next)
+        assertEquals("The provider didn't answer in time.", series.detailsError)
+    }
+
     @Test fun guideRows() {
         val rows = fixture("guide.json").map(::GuideRow)
         assertEquals(listOf("bbcone.uk", "empty.uk"), rows.map { it.epg.id })

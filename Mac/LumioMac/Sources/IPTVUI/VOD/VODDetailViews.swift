@@ -17,7 +17,7 @@ struct MovieDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 Text(item.displayName).font(.largeTitle.weight(.semibold))
                 metaLine
-                if let progress, !progress.isWatched, progress.positionSeconds >= 30 {
+                if let progress, progress.canResume {
                     ProgressView(value: progress.positionSeconds, total: max(progress.durationSeconds ?? 1, progress.positionSeconds))
                         .frame(maxWidth: 360)
                 }
@@ -63,10 +63,7 @@ struct MovieDetailView: View {
         .onChange(of: state.vodProgressVersion) { Task { await loadProgress() } }
     }
 
-    private var canResume: Bool {
-        guard let progress else { return false }
-        return !progress.isWatched && progress.positionSeconds >= 30
-    }
+    private var canResume: Bool { progress?.canResume ?? false }
 
     private var resumeLabel: String { canResume ? "Resume" : "Play" }
 
@@ -92,11 +89,7 @@ struct MovieDetailView: View {
         await loadProgress()
         // Details come from the provider; show what we have meanwhile and cache the result.
         do {
-            guard let provider = try state.environment.providers.repository.provider(id: item.providerID) else { return }
-            let source = try state.environment.sources.source(for: provider)
-            let fetched = try await source.fetchMovieDetails(streamID: item.itemID)
-            details = fetched
-            try? state.environment.catalog.updateMovieDetails(fetched, providerID: item.providerID, streamID: item.itemID)
+            details = try await state.environment.fetchMovieDetails(providerID: item.providerID, streamID: item.itemID)
         } catch {
             loadError = "Couldn't load full details: \(CredentialRedactor.redact((error as? LocalizedError)?.errorDescription ?? String(describing: error)))"
         }
@@ -211,7 +204,7 @@ struct SeriesDetailView: View {
 
     private func nextLabel(_ next: (Episode, WatchProgress?)) -> String {
         let code = "S\(next.0.seasonNumber) E\(next.0.episodeNumber)"
-        if let progress = next.1, !progress.isWatched, progress.positionSeconds >= 30 { return "Resume \(code)" }
+        if next.1?.canResume == true { return "Resume \(code)" }
         return "Play \(code)"
     }
 
@@ -220,10 +213,7 @@ struct SeriesDetailView: View {
         isFavorite = (try? await state.library.isFavorite(kind: .series, providerID: item.providerID, itemID: String(item.itemID))) ?? false
         await loadCached()
         do {
-            guard let provider = try state.environment.providers.repository.provider(id: item.providerID) else { return }
-            let source = try state.environment.sources.source(for: provider)
-            let details = try await source.fetchSeriesDetails(seriesID: item.itemID)
-            try state.environment.catalog.replaceSeriesDetails(details, providerID: item.providerID, seriesID: item.itemID)
+            try await state.environment.refreshSeriesDetails(providerID: item.providerID, seriesID: item.itemID)
             await loadCached()
         } catch {
             loadError = "Couldn't refresh episodes: \(CredentialRedactor.redact((error as? LocalizedError)?.errorDescription ?? String(describing: error)))"
@@ -247,7 +237,7 @@ struct SeriesDetailView: View {
     }
 
     private func play(_ episode: Episode, resumeFrom progress: WatchProgress?) {
-        if let progress, !progress.isWatched, progress.positionSeconds >= 30 {
+        if progress?.canResume == true {
             resumeTarget = episode
         } else {
             start(episode, at: nil)

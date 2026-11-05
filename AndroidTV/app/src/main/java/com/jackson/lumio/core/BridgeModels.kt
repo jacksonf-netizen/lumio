@@ -144,6 +144,195 @@ data class GuideRow(val epg: EPGRef, val programmes: List<Programme>) {
     constructor(json: JSONObject) : this(EPGRef(json.getJSONObject("epg")), json.getJSONArray("programmes").objects().map(::Programme))
 }
 
+// MARK: Movies and Series (Shared/LumioCore/Sources/IPTVBridge/BridgeVOD.swift)
+
+data class VODItem(
+    /** movie or series. */
+    val kind: String,
+    val provider: String,
+    val id: Int,
+    val name: String,
+    val poster: String?,
+    val rating: Double?,
+    val year: Int?,
+    /** 0–1 watched (movies). */
+    val progress: Double?,
+    val favorite: Boolean,
+) {
+    constructor(json: JSONObject) : this(
+        kind = json.getString("kind"),
+        provider = json.getString("provider"),
+        id = json.getInt("id"),
+        name = json.getString("name"),
+        poster = json.text("poster"),
+        rating = json.number("rating"),
+        year = if (json.has("year")) json.getInt("year") else null,
+        progress = json.number("progress"),
+        favorite = json.getBoolean("favorite"),
+    )
+}
+
+/** A movie or episode in Recently Watched. */
+data class ContinueItem(
+    /** movie or episode. */
+    val kind: String,
+    val provider: String,
+    /** The stream id (movie) or episode id. */
+    val id: String,
+    val title: String,
+    val subtitle: String?,
+    val image: String?,
+    val position: Double,
+    val duration: Double?,
+    val series: Int?,
+    val watched: Boolean,
+    val canResume: Boolean,
+) {
+    constructor(json: JSONObject) : this(
+        kind = json.getString("kind"),
+        provider = json.getString("provider"),
+        id = json.getString("id"),
+        title = json.getString("title"),
+        subtitle = json.text("subtitle"),
+        image = json.text("image"),
+        position = json.getDouble("position"),
+        duration = json.number("duration"),
+        series = if (json.has("series")) json.getInt("series") else null,
+        watched = json.getBoolean("watched"),
+        canResume = json.getBoolean("canResume"),
+    )
+}
+
+data class VODCategory(val provider: String, val id: String, val name: String) {
+    constructor(json: JSONObject) : this(json.getString("provider"), json.getString("id"), json.getString("name"))
+}
+
+data class VODShelf(val category: VODCategory, val items: List<VODItem>) {
+    constructor(json: JSONObject) : this(VODCategory(json.getJSONObject("category")), json.getJSONArray("items").objects().map(::VODItem))
+}
+
+data class VODHome(
+    val recentlyWatched: List<ContinueItem>,
+    val recentlyAdded: List<VODItem>,
+    val shelves: List<VODShelf>,
+    val categories: List<VODCategory>,
+) {
+    constructor(json: JSONObject) : this(
+        recentlyWatched = json.getJSONArray("recentlyWatched").objects().map(::ContinueItem),
+        recentlyAdded = json.getJSONArray("recentlyAdded").objects().map(::VODItem),
+        shelves = json.getJSONArray("shelves").objects().map(::VODShelf),
+        categories = json.getJSONArray("categories").objects().map(::VODCategory),
+    )
+}
+
+data class WatchProgress(val position: Double, val duration: Double?, val watched: Boolean, val canResume: Boolean) {
+    constructor(json: JSONObject) : this(json.getDouble("position"), json.number("duration"), json.getBoolean("watched"),
+        json.getBoolean("canResume"))
+}
+
+data class MovieInfo(
+    val provider: String,
+    val providerName: String,
+    val id: Int,
+    val name: String,
+    val poster: String?,
+    val backdrop: String?,
+    val year: Int?,
+    /** Seconds. */
+    val duration: Int?,
+    val genre: String?,
+    val rating: Double?,
+    val plot: String?,
+    val director: String?,
+    val cast: String?,
+    val favorite: Boolean,
+    val progress: WatchProgress?,
+    val detailsError: String?,
+) {
+    constructor(json: JSONObject) : this(
+        provider = json.getString("provider"),
+        providerName = json.getString("providerName"),
+        id = json.getInt("id"),
+        name = json.getString("name"),
+        poster = json.text("poster"),
+        backdrop = json.text("backdrop"),
+        year = if (json.has("year")) json.getInt("year") else null,
+        duration = if (json.has("duration")) json.getInt("duration") else null,
+        genre = json.text("genre"),
+        rating = json.number("rating"),
+        plot = json.text("plot"),
+        director = json.text("director"),
+        cast = json.text("cast"),
+        favorite = json.getBoolean("favorite"),
+        progress = json.optJSONObject("progress")?.let(::WatchProgress),
+        detailsError = json.text("detailsError"),
+    )
+}
+
+data class Season(val number: Int, val name: String) {
+    constructor(json: JSONObject) : this(json.getInt("number"), json.getString("name"))
+}
+
+data class Episode(
+    val id: String,
+    val season: Int,
+    val number: Int,
+    val title: String,
+    val duration: Int?,
+    val plot: String?,
+    val image: String?,
+    val progress: WatchProgress?,
+) {
+    constructor(json: JSONObject) : this(
+        id = json.getString("id"),
+        season = json.getInt("season"),
+        number = json.getInt("number"),
+        title = json.getString("title"),
+        duration = if (json.has("duration")) json.getInt("duration") else null,
+        plot = json.text("plot"),
+        image = json.text("image"),
+        progress = json.optJSONObject("progress")?.let(::WatchProgress),
+    )
+}
+
+data class SeriesInfo(
+    val provider: String,
+    val providerName: String,
+    val id: Int,
+    val name: String,
+    val cover: String?,
+    val year: Int?,
+    val rating: Double?,
+    val plot: String?,
+    val favorite: Boolean,
+    val seasons: List<Season>,
+    val episodes: List<Episode>,
+    /** The episode Play offers. */
+    val next: String?,
+    val detailsError: String?,
+) {
+    constructor(json: JSONObject) : this(
+        provider = json.getString("provider"),
+        providerName = json.getString("providerName"),
+        id = json.getInt("id"),
+        name = json.getString("name"),
+        cover = json.text("cover"),
+        year = if (json.has("year")) json.getInt("year") else null,
+        rating = json.number("rating"),
+        plot = json.text("plot"),
+        favorite = json.getBoolean("favorite"),
+        seasons = json.getJSONArray("seasons").objects().map(::Season),
+        episodes = json.getJSONArray("episodes").objects().map(::Episode),
+        next = json.text("next"),
+        detailsError = json.text("detailsError"),
+    )
+}
+
+/** The movie or episode a player is playing. */
+data class VODNow(val kind: String, val title: String, val subtitle: String?) {
+    constructor(json: JSONObject) : this(json.getString("kind"), json.getString("title"), json.text("subtitle"))
+}
+
 /** A player's state (the core's PlayerStateDTO). */
 data class PlayerState(
     val player: String,
@@ -155,6 +344,8 @@ data class PlayerState(
     val channel: Channel?,
     val provider: String?,
     val hasPrevious: Boolean,
+    /** The movie or episode playing; null for live TV. */
+    val vod: VODNow? = null,
 ) {
     constructor(json: JSONObject) : this(
         player = json.getString("player"),
@@ -165,6 +356,7 @@ data class PlayerState(
         channel = json.optJSONObject("channel")?.let(::Channel),
         provider = json.text("provider"),
         hasPrevious = json.getBoolean("hasPrevious"),
+        vod = json.optJSONObject("vod")?.let(::VODNow),
     )
 }
 
@@ -173,7 +365,8 @@ data class Track(val id: Int, val kind: String, val name: String, val selected: 
 }
 
 /**
- * A change in the core. type: providers, live, guide, or sync (with provider, label, finished, error).
+ * A change in the core. type: providers, live, guide, vod (watch progress or Recently Watched), player
+ * (with state), or sync (with provider, label, finished, error).
  */
 data class BridgeEvent(
     val type: String,

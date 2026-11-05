@@ -187,6 +187,88 @@ struct BridgeCoreTests {
         #expect(try await names(bridge, in: "recents").isEmpty)
     }
 
+    /// One provider with a movie category (two films) and a series with two seasons.
+    private func seedVOD(_ bridge: BridgeCore) async throws -> String {
+        let database = bridge.environment.database
+        let provider = Provider(name: "A", serverURL: URL(string: "http://a.example")!)
+        try await database.writer.write { db in
+            try provider.insert(db)
+            try Category(providerID: provider.id, kind: .movie, categoryID: "m1", name: "Films", sortIndex: 0).insert(db)
+            try Movie(providerID: provider.id, streamID: 1, name: "First Film", categoryID: "m1", year: 2001, plot: "One.",
+                      durationSeconds: 5400, addedAt: Date(timeIntervalSince1970: 100), sortIndex: 0).insert(db)
+            try Movie(providerID: provider.id, streamID: 2, name: "Second Film", categoryID: "m1",
+                      addedAt: Date(timeIntervalSince1970: 200), sortIndex: 1).insert(db)
+            try Category(providerID: provider.id, kind: .series, categoryID: "s1", name: "Drama", sortIndex: 0).insert(db)
+            try Series(providerID: provider.id, seriesID: 9, name: "A Show", categoryID: "s1", releaseDate: "2019-03-01").insert(db)
+            try Season(providerID: provider.id, seriesID: 9, seasonNumber: 1, name: "Season One").insert(db)
+            for (season, number) in [(1, 1), (1, 2), (2, 1)] {
+                try Episode(providerID: provider.id, episodeID: "e\(season)\(number)", seriesID: 9, seasonNumber: season,
+                            episodeNumber: number, title: "Episode \(number)").insert(db)
+            }
+        }
+        return provider.id.rawValue
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, _ value: Any) throws -> T {
+        try JSONDecoder().decode(type, from: try JSONSerialization.data(withJSONObject: value))
+    }
+
+    @Test func moviesHomeCategoryAndDetails() async throws {
+        let (bridge, _) = await makeBridge()
+        let provider = try await seedVOD(bridge)
+        let home = try decode(VODHomeDTO.self, try await call(bridge, "vod.home", ["kind": "movie"]))
+        #expect(home.recentlyAdded.map(\.name) == ["Second Film", "First Film"])
+        #expect(home.shelves.first?.category.name == "Films")
+        #expect(home.shelves.first?.items.count == 2)
+
+        let page = try decode([VODItemDTO].self, try await call(bridge, "vod.category", [
+            "kind": "movie", "provider": provider, "category": "m1", "offset": 1, "limit": 5,
+        ]))
+        #expect(page.map(\.name) == ["Second Film"])
+
+        let movie = try decode(MovieDTO.self, try await call(bridge, "vod.movie", ["provider": provider, "id": 1]))
+        #expect(movie.name == "First Film")
+        #expect(movie.duration == 5400)
+        #expect(movie.plot == "One.")
+        #expect(movie.providerName == "A")
+        #expect(movie.progress == nil)
+        #expect(!movie.favorite)
+
+        _ = try await call(bridge, "vod.setFavorite", ["kind": "movie", "provider": provider, "id": "1", "favorite": true])
+        _ = try await call(bridge, "vod.setWatched", ["kind": "movie", "provider": provider, "id": "1", "watched": true])
+        let marked = try decode(MovieDTO.self, try await call(bridge, "vod.movie", ["provider": provider, "id": 1]))
+        #expect(marked.favorite)
+        #expect(marked.progress?.watched == true)
+        #expect(marked.progress?.canResume == false)
+
+        // Fetching details from a provider that can't be reached still shows the catalog's.
+        let fetched = try decode(MovieDTO.self, try await call(bridge, "vod.movie", ["provider": provider, "id": 1, "fetch": true]))
+        #expect(fetched.name == "First Film")
+        #expect(fetched.detailsError != nil)
+    }
+
+    @Test func seriesSeasonsEpisodesAndNext() async throws {
+        let (bridge, _) = await makeBridge()
+        let provider = try await seedVOD(bridge)
+        let library = LibraryRepository(database: bridge.environment.database)
+        try await library.saveProgress(kind: .episode, providerID: ProviderID(provider), itemID: "e12", position: 300, duration: 2400)
+        let series = try decode(SeriesDTO.self, try await call(bridge, "vod.series", ["provider": provider, "id": 9]))
+        #expect(series.name == "A Show")
+        #expect(series.year == 2019)
+        #expect(series.seasons == [SeasonDTO(number: 1, name: "Season One"), SeasonDTO(number: 2, name: "Season 2")])
+        #expect(series.episodes.map(\.id) == ["e11", "e12", "e21"])
+        #expect(series.episodes[1].progress?.canResume == true)
+        #expect(series.next == "e12")
+
+        try await library.recordPlayed(providerID: ProviderID(provider), kind: .episode, itemID: "e12")
+        let home = try decode(VODHomeDTO.self, try await call(bridge, "vod.home", ["kind": "series"]))
+        #expect(home.recentlyWatched.first?.series == 9)
+        #expect(home.recentlyWatched.first?.canResume == true)
+        _ = try await call(bridge, "vod.removeRecent", ["kind": "series", "provider": provider, "id": "9"])
+        let after = try decode(VODHomeDTO.self, try await call(bridge, "vod.home", ["kind": "series"]))
+        #expect(after.recentlyWatched.isEmpty)
+    }
+
     @Test func changesArriveAsEvents() async throws {
         let (bridge, log) = await makeBridge()
         _ = try await addHarness(bridge)
@@ -217,6 +299,13 @@ struct BridgeCoreTests {
         #expect(groups.map(\.kind) == ["favorites", "all", "category"])
         let nowNext = try JSONDecoder().decode([NowNextDTO].self, from: try read("nownext.json"))
         #expect(nowNext.first?.now?.title == "News at Six")
+        let home = try JSONDecoder().decode(VODHomeDTO.self, from: try read("vod_home.json"))
+        #expect(home.recentlyWatched.first?.canResume == true)
+        #expect(home.shelves.first?.items.first?.name == "Arrival")
+        let movie = try JSONDecoder().decode(MovieDTO.self, from: try read("movie.json"))
+        #expect(movie.progress?.position == 1820)
+        let series = try JSONDecoder().decode(SeriesDTO.self, from: try read("series.json"))
+        #expect(series.next == "e12")
         let guide = try JSONDecoder().decode([GuideRowDTO].self, from: try read("guide.json"))
         #expect(guide.first?.programmes.map(\.episode) == ["S4 E12", nil])
         let events = try JSONDecoder().decode([BridgeEvent].self, from: try read("events.json"))

@@ -1,0 +1,4 @@
+{"provider": "p1", "providerName": "Provider One", "id": 42, "name": "Arrival", "poster": "http://a.example/arrival.jpg",
+ "backdrop": "http://a.example/arrival-wide.jpg", "year": 2016, "duration": 6960, "genre": "Drama, Sci-Fi", "rating": 7.9,
+ "plot": "A linguist works with the military to talk to visitors.", "director": "Denis Villeneuve", "cast": "Amy Adams",
+ "favorite": true, "progress": {"position": 1820, "duration": 6960, "watched": false, "canResume": true}}

@@ -52,6 +52,17 @@ class ExoEngine(private val context: Context, private val id: String) {
             value?.invoke(player)
         }
 
+    /**
+     * Where a movie or episode is, for the player's progress bar: position and duration in seconds
+     * (duration null until known). Read on the main thread. Null with nothing loaded.
+     */
+    val timeline: Pair<Double, Double?>?
+        get() {
+            val player = player ?: return null
+            val duration = player.duration.takeIf { it != androidx.media3.common.C.TIME_UNSET && it > 0 }
+            return player.currentPosition / 1000.0 to duration?.let { it / 1000.0 }
+        }
+
     fun handle(command: JSONObject): Any? = when (command.getString("command")) {
         "load" -> load(command).let { null }
         "play" -> player?.play().let { null }

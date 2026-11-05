@@ -35,15 +35,18 @@ import androidx.tv.material3.Text
 import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.live.LiveTvScreen
+import com.jackson.lumio.ui.vod.VODScreen
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
 import com.jackson.lumio.ui.providers.ProvidersScreen
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 
-/** The sections in the sidebar. More arrive with later phases (Movies, Series, Search). */
+/** The sections in the sidebar, in the Mac's order. Search arrives later in phase 5. */
 enum class Section(val title: String) {
     Live("Live TV"),
     Guide("Guide"),
+    Movies("Movies"),
+    Series("Series"),
     Favorites("Favorites"),
     Recents("Recents"),
     Settings("Settings"),
@@ -108,6 +111,15 @@ fun LumioApp() {
             when (shown) {
                 Section.Live -> LiveTvScreen(onPlay = play, playerShowing = player.showing)
                 Section.Guide -> GuideScreen(GuideScope.All, play, player.showing, playing)
+                Section.Movies, Section.Series -> {
+                    val kind = if (shown == Section.Movies) "movie" else "series"
+                    // One screen per kind, each keeping its own pages.
+                    androidx.compose.runtime.key(kind) {
+                        VODScreen(kind, onPlay = { k, provider, id, position, title, subtitle ->
+                            player.playVOD(k, provider, id, position, title, subtitle)
+                        }, playerShowing = player.showing)
+                    }
+                }
                 Section.Favorites -> GuideScreen(GuideScope.Favorites, play, player.showing, playing, toSidebar)
                 Section.Recents -> GuideScreen(GuideScope.Recents, play, player.showing, playing, toSidebar)
                 Section.Settings -> ProvidersScreen(providers)

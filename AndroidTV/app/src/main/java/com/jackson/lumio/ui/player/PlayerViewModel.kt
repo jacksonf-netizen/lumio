@@ -10,6 +10,7 @@ import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.NowNext
 import com.jackson.lumio.core.PlayerState
 import com.jackson.lumio.core.Track
+import com.jackson.lumio.player.PlayerEngines
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -52,6 +53,40 @@ class PlayerViewModel : ViewModel() {
 
     fun watch(channel: String, group: String) = run { LumioCore.watch(channel, group).also { showing = true } }
 
+    /** A movie or episode; see [LumioCore.playVOD]. */
+    fun playVOD(kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?) =
+        run { LumioCore.playVOD(kind, provider, id, position, title, subtitle).also { showing = true } }
+
+    /** Where a skip is heading while the remote is still being pressed (seconds), or null. */
+    var seekTarget by mutableStateOf<Double?>(null)
+        private set
+    private var seekJob: Job? = null
+
+    /** Pauses or resumes a movie or episode, showing the controls. */
+    fun togglePause() {
+        showBanner()
+        run { if (state?.phase == "paused") LumioCore.resume() else LumioCore.pause() }
+    }
+
+    /**
+     * Skips by [seconds]. Presses close together add up and the skip happens 0.6 s after the last,
+     * so holding the remote doesn't send a seek per press.
+     */
+    fun skip(seconds: Double) {
+        val (position, duration) = PlayerEngines.engine("main").timeline ?: return
+        val from = seekTarget ?: position
+        seekTarget = (from + seconds).coerceIn(0.0, duration?.let { maxOf(0.0, it - 5) } ?: Double.MAX_VALUE)
+        showBanner()
+        seekJob?.cancel()
+        seekJob = viewModelScope.launch {
+            delay(600)
+            val target = seekTarget ?: return@launch
+            runCatching { state = LumioCore.seek(target) }
+            delay(400) // the player reports the new position
+            seekTarget = null
+        }
+    }
+
     fun zap(by: Int) = run { LumioCore.zap(by) }
 
     fun previous() = run { LumioCore.previousChannel() }
@@ -76,6 +111,8 @@ class PlayerViewModel : ViewModel() {
 
     fun close() {
         tracks = null
+        seekJob?.cancel()
+        seekTarget = null
         showing = false
         viewModelScope.launch { runCatching { LumioCore.stopPlayer() } }
     }
