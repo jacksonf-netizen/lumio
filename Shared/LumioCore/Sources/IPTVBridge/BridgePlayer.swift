@@ -100,20 +100,7 @@ final class BridgePlayer {
     // MARK: State
 
     var state: PlayerStateDTO {
-        let phase: String, attempt: Int?, message: String?
-        switch controller.phase {
-        case .idle: (phase, attempt, message) = ("idle", nil, nil)
-        case .connecting: (phase, attempt, message) = ("connecting", nil, nil)
-        case .buffering: (phase, attempt, message) = ("buffering", nil, nil)
-        case .playing: (phase, attempt, message) = ("playing", nil, nil)
-        case .paused: (phase, attempt, message) = ("paused", nil, nil)
-        case .reconnecting(let n): (phase, attempt, message) = ("reconnecting", n, nil)
-        case .waitingForNetwork: (phase, attempt, message) = ("waitingForNetwork", nil, nil)
-        case .suspended: (phase, attempt, message) = ("suspended", nil, nil)
-        case .preempted: (phase, attempt, message) = ("preempted", nil, nil)
-        case .ended: (phase, attempt, message) = ("ended", nil, nil)
-        case .failed(let failure): (phase, attempt, message) = ("failed", nil, CredentialRedactor.redact(failure.message))
-        }
+        let (phase, attempt, message) = PhaseText.of(controller.phase)
         return PlayerStateDTO(player: id, phase: phase, attempt: attempt, message: message, notice: controller.notice,
                               channel: vod == nil ? zap.current.map(ChannelDTO.init) : nil,
                               provider: controller.plan?.source.providerName,

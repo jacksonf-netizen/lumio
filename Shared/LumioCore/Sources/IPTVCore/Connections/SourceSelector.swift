@@ -42,14 +42,15 @@ public enum SourceSelector {
         }
     }
 
-    /// Assigns each multiview tile a source so that as many tiles as possible play, then prefers
-    /// higher-priority and more reliable sources. Tiles whose index is in `pinned` may only use that
-    /// provider (a manual override).
+    /// Assigns each multiview tile a source so that as many tiles as possible play, then keeps
+    /// tiles that are playing on the provider they're on (`playing`, by tile index: moving or
+    /// stopping one interrupts it), then prefers higher-priority and more reliable sources. Tiles
+    /// whose index is in `pinned` may only use that provider (a manual override).
     ///
     /// Exhaustive search: with at most 4 tiles and a handful of providers this is tiny and gives
     /// the optimal answer (e.g. 4 tiles over 2 accounts × 2 connections always fits).
     public static func assignTiles(_ tiles: [[SourceCandidate]], capacity: [ProviderID: Int],
-                                   pinned: [Int: ProviderID] = [:]) -> [TileAssignment] {
+                                   pinned: [Int: ProviderID] = [:], playing: [Int: ProviderID] = [:]) -> [TileAssignment] {
         let options: [[SourceCandidate?]] = tiles.enumerated().map { index, candidates in
             let allowed = pinned[index].map { pin in candidates.filter { $0.providerID == pin } } ?? candidates
             return rank(allowed, capacity: capacity).map { Optional($0) } + [nil]
@@ -62,7 +63,7 @@ public enum SourceSelector {
 
         func search(_ index: Int) {
             if index == options.count {
-                let score = Score(current)
+                let score = Score(current, playing: playing)
                 if score > bestScore {
                     bestScore = score
                     best = current
@@ -90,22 +91,26 @@ public enum SourceSelector {
 
     private struct Score: Comparable {
         var assigned: Int
+        /// Tiles left playing on the provider they were already on.
+        var kept: Int
         var priorityCost: Int
         var reliability: Double
         /// Earlier tiles get their first choice when everything else ties.
         var orderBonus: Int
 
-        static let worst = Score(assigned: -1, priorityCost: 0, reliability: 0, orderBonus: 0)
+        static let worst = Score(assigned: -1, kept: 0, priorityCost: 0, reliability: 0, orderBonus: 0)
 
-        init(assigned: Int, priorityCost: Int, reliability: Double, orderBonus: Int) {
+        init(assigned: Int, kept: Int, priorityCost: Int, reliability: Double, orderBonus: Int) {
             self.assigned = assigned
+            self.kept = kept
             self.priorityCost = priorityCost
             self.reliability = reliability
             self.orderBonus = orderBonus
         }
 
-        init(_ picks: [SourceCandidate?]) {
+        init(_ picks: [SourceCandidate?], playing: [Int: ProviderID]) {
             assigned = picks.compactMap { $0 }.count
+            kept = picks.enumerated().filter { $0.element != nil && playing[$0.offset] == $0.element?.providerID }.count
             priorityCost = picks.compactMap { $0?.providerPriority }.reduce(0, +)
             reliability = picks.compactMap { $0?.reliability }.reduce(0, +)
             orderBonus = picks.enumerated().reduce(0) { sum, item in
@@ -115,6 +120,7 @@ public enum SourceSelector {
 
         static func < (a: Score, b: Score) -> Bool {
             if a.assigned != b.assigned { return a.assigned < b.assigned }
+            if a.kept != b.kept { return a.kept < b.kept }
             if a.priorityCost != b.priorityCost { return a.priorityCost > b.priorityCost }
             if abs(a.reliability - b.reliability) > 1e-9 { return a.reliability < b.reliability }
             return a.orderBonus < b.orderBonus

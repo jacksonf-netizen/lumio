@@ -7,7 +7,7 @@ import IPTVCore
 ///
 /// Keys: Esc back to the player (on the tile you're hearing) · 1–4 hear that tile · F full screen.
 struct MultiviewScreen: View {
-    @Bindable var model: MultiviewModel
+    @Bindable var model: MultiviewSession
     let state: AppState
     @State private var pickingTile: Int?
     @State private var controlsVisible = true
@@ -70,7 +70,7 @@ struct MultiviewScreen: View {
             isFullScreen = NSApp.keyWindow?.styleMask.contains(.fullScreen) ?? false
             focused = true
             showControls()
-            if !model.isActive { model.start(with: nil) }
+            if !model.isActive { state.beginMultiview(with: nil) }
         }
         .onDisappear {
             controlsTask?.cancel()
@@ -171,8 +171,8 @@ struct MultiviewScreen: View {
 }
 
 private struct TileView: View {
-    let tile: MultiviewModel.Tile
-    let model: MultiviewModel
+    let tile: MultiviewSession.Tile
+    let model: MultiviewSession
     let state: AppState
     let isAudio: Bool
     let pick: () -> Void

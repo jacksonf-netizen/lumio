@@ -116,6 +116,7 @@ public final class BridgedEngine: PlaybackEngine {
             case "http": .httpStatus(object["status"] as? Int ?? 0)
             case "unsupported": .unsupported
             case "decoder": .decoder
+            case "noFreeDecoder": .noFreeDecoder
             case "stalled": .stalled
             case "endOfStream": .endOfStream
             default: .unknown

@@ -230,6 +230,40 @@ object LumioCore {
         if (id != null) call("player.selectTrack", "kind" to kind, "id" to id) else call("player.selectTrack", "kind" to kind)
     }
 
+    // MARK: Multiview (the shared MultiviewSession; tiles are players "tile0" to "tile3")
+
+    /**
+     * Opens multiview with [layout] tiles and [channel] (from [group]) in the first empty one. The
+     * full-screen player stops first. Tiles chosen last time come back.
+     */
+    suspend fun startMultiview(layout: Int, channel: String?, group: String?): MultiviewState {
+        val params = buildList<Pair<String, Any>> {
+            add("layout" to layout)
+            channel?.let { add("channel" to it) }
+            group?.let { add("group" to it) }
+        }
+        return MultiviewState(call("multiview.start", *params.toTypedArray()) as JSONObject)
+    }
+
+    suspend fun multiviewLayout(layout: Int): MultiviewState = MultiviewState(call("multiview.layout", "layout" to layout) as JSONObject)
+
+    suspend fun setTileChannel(tile: Int, channel: String, group: String): MultiviewState =
+        MultiviewState(call("multiview.setChannel", "tile" to tile, "channel" to channel, "group" to group) as JSONObject)
+
+    suspend fun clearTile(tile: Int): MultiviewState = MultiviewState(call("multiview.clearTile", "tile" to tile) as JSONObject)
+
+    suspend fun focusTileAudio(tile: Int): MultiviewState = MultiviewState(call("multiview.focusAudio", "tile" to tile) as JSONObject)
+
+    suspend fun retryTile(tile: Int): MultiviewState = MultiviewState(call("multiview.retry", "tile" to tile) as JSONObject)
+
+    /** [provider] null: automatic. */
+    suspend fun pinTileProvider(tile: Int, provider: String?): MultiviewState = MultiviewState(
+        (if (provider != null) call("multiview.pinProvider", "tile" to tile, "provider" to provider)
+        else call("multiview.pinProvider", "tile" to tile)) as JSONObject)
+
+    /** Returns once every tile's stream is closed. */
+    suspend fun stopMultiview(): MultiviewState = MultiviewState(call("multiview.stop") as JSONObject)
+
     /** An event from the engine, passed straight to the core (doesn't wait). */
     fun playerEvent(event: JSONObject) {
         nativePlayerEvent(event.toString().toByteArray())

@@ -74,6 +74,9 @@ public struct EngineFailure: Error, Sendable, Equatable, CustomStringConvertible
         /// The engine can't handle this format/codec.
         case unsupported
         case decoder
+        /// Every hardware video decoder is in use (multiview on a device that can't play one more
+        /// video at once). Another format or provider won't help, so playback stops at once.
+        case noFreeDecoder
         /// Watchdog: no progress for too long.
         case stalled
         /// A live stream ended (the server closed it).
@@ -93,7 +96,7 @@ public struct EngineFailure: Error, Sendable, Equatable, CustomStringConvertible
     /// Not a login or connection-limit refusal: the server answered those.
     public var mayMeanServerDown: Bool {
         switch kind {
-        case .unsupported, .decoder: false
+        case .unsupported, .decoder, .noFreeDecoder: false
         case .httpStatus(let code): ![401, 456, 458, 509].contains(code)
         default: true
         }
@@ -102,11 +105,14 @@ public struct EngineFailure: Error, Sendable, Equatable, CustomStringConvertible
     /// Retrying the same URL won't help; move on to the next format / engine / provider.
     public var skipsToNextRung: Bool {
         switch kind {
-        case .unsupported, .decoder: true
+        case .unsupported, .decoder, .noFreeDecoder: true
         case .httpStatus(let code): code == 404 || code == 401 || code == 403 || code == 458 || code == 456 || code == 509
         default: false
         }
     }
+
+    /// No fallback can fix this: stop trying and show the message.
+    public var stopsFallback: Bool { kind == .noFreeDecoder }
 
     /// The provider refused this stream outright (missing, forbidden, or at its connection limit).
     /// Other formats from the same provider almost always fail the same way, so if another provider
@@ -129,6 +135,7 @@ public struct EngineFailure: Error, Sendable, Equatable, CustomStringConvertible
         case .httpStatus(let code): base = "Unexpected response from the provider (HTTP \(code))"
         case .unsupported: base = "This stream's format isn't supported by the current player engine"
         case .decoder: base = "The video couldn't be decoded"
+        case .noFreeDecoder: base = "This device can't play another video at the same time. Close a tile or choose fewer tiles"
         case .stalled: base = "The stream stopped sending data"
         case .endOfStream: base = "The provider closed the stream"
         case .unknown: base = "Playback failed"

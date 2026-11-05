@@ -51,7 +51,20 @@ class PlayerViewModel : ViewModel() {
         }
     }
 
-    fun watch(channel: String, group: String) = run { LumioCore.watch(channel, group).also { showing = true } }
+    /** The Live TV group the channel was watched from (for multiview's "watch full screen"). */
+    var group: String? = null
+        private set
+
+    fun watch(channel: String, group: String) {
+        this.group = group
+        run { LumioCore.watch(channel, group).also { showing = true } }
+    }
+
+    /** Hides the player without stopping it: multiview stops it before its tiles start. */
+    fun dismiss() {
+        tracks = null
+        showing = false
+    }
 
     /** A movie or episode; see [LumioCore.playVOD]. */
     fun playVOD(kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?) =

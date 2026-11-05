@@ -37,6 +37,8 @@ import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.live.LiveTvScreen
 import com.jackson.lumio.ui.search.SearchScreen
 import com.jackson.lumio.ui.vod.VODScreen
+import com.jackson.lumio.ui.multiview.MultiviewScreen
+import com.jackson.lumio.ui.multiview.MultiviewViewModel
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
 import com.jackson.lumio.ui.settings.SettingsScreen
@@ -61,6 +63,7 @@ enum class Section(val title: String, val key: String?) {
 fun LumioApp() {
     val providers: ProvidersViewModel = viewModel()
     val player: PlayerViewModel = viewModel()
+    val multiview: MultiviewViewModel = viewModel()
     val settings: SettingsViewModel = viewModel()
     // Sections switched off in Settings → General leave the sidebar.
     val hidden = settings.settings?.hiddenSidebarItems.orEmpty()
@@ -79,7 +82,9 @@ fun LumioApp() {
     // Back from a screen's content returns to the sidebar; Back on the sidebar leaves the app.
     val sidebarFocus = remember { FocusRequester() }
     var sidebarFocused by remember { mutableStateOf(false) }
-    BackHandler(enabled = !sidebarFocused && !player.showing) { runCatching { sidebarFocus.requestFocus() } }
+    // Screens return the highlight to where it was when the player or multiview closes.
+    val overlay = player.showing || multiview.showing
+    BackHandler(enabled = !sidebarFocused && !overlay) { runCatching { sidebarFocus.requestFocus() } }
 
     // A Surface gives everything inside the theme's text colour.
     Surface(colors = SurfaceDefaults.colors(containerColor = LumioColors.background, contentColor = LumioColors.text)) {
@@ -117,26 +122,41 @@ fun LumioApp() {
             val playing = player.state?.channel?.id
             val toSidebar = { runCatching { sidebarFocus.requestFocus() }; Unit }
             when (shown) {
-                Section.Live -> LiveTvScreen(onPlay = play, playerShowing = player.showing)
-                Section.Guide -> GuideScreen(GuideScope.All, play, player.showing, playing)
+                Section.Live -> LiveTvScreen(onPlay = play, playerShowing = overlay)
+                Section.Guide -> GuideScreen(GuideScope.All, play, overlay, playing)
                 Section.Movies, Section.Series -> {
                     val kind = if (shown == Section.Movies) "movie" else "series"
                     // One screen per kind, each keeping its own pages.
                     androidx.compose.runtime.key(kind) {
                         VODScreen(kind, onPlay = { k, provider, id, position, title, subtitle ->
                             player.playVOD(k, provider, id, position, title, subtitle)
-                        }, playerShowing = player.showing)
+                        }, playerShowing = overlay)
                     }
                 }
                 Section.Search -> SearchScreen(onWatch = play, onPlay = { k, provider, id, position, title, subtitle ->
                     player.playVOD(k, provider, id, position, title, subtitle)
-                }, playerShowing = player.showing)
-                Section.Favorites -> GuideScreen(GuideScope.Favorites, play, player.showing, playing, toSidebar)
-                Section.Recents -> GuideScreen(GuideScope.Recents, play, player.showing, playing, toSidebar)
+                }, playerShowing = overlay)
+                Section.Favorites -> GuideScreen(GuideScope.Favorites, play, overlay, playing, toSidebar)
+                Section.Recents -> GuideScreen(GuideScope.Recents, play, overlay, playing, toSidebar)
                 Section.Settings -> SettingsScreen(providers, settings)
             }
         }
     }
-    if (player.showing) PlayerScreen(player)
+    if (player.showing) {
+        PlayerScreen(player, onMultiview = if (multiview.available) ({
+            val channel = player.state?.channel?.id
+            val group = player.group
+            player.dismiss()
+            multiview.start(channel, group)
+        }) else null)
+    }
+    if (multiview.showing) {
+        MultiviewScreen(
+            multiview,
+            // Every tile's stream closes before the full-screen player opens its own.
+            onFullScreen = { channel, group -> multiview.stop { player.watch(channel, group) } },
+            onClose = { multiview.stop() },
+        )
+    }
     }
 }

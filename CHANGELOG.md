@@ -8,6 +8,9 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Multiview: when the providers don't have a connection free for every tile, a tile you've just
+  filled now waits with the "no free connection" message, instead of a tile that's already playing
+  being stopped to make room.
 - For developers: the version number lives in `version.properties` at the top of the repository,
   which the Mac and Android TV builds both read.
 - For developers: the services' wiring and the Providers screen's rules (adding, editing,
@@ -20,6 +23,10 @@ offers the update. The list below it appears on the release page.
 - For developers: fetching movie and series details, the resume rule, saving watch progress and
   the Movies and Series home page moved into the shared core, so the Mac and Android TV apps
   follow the same rules. Nothing changes in how the Mac app behaves.
+- For developers: multiview's tile rules (spreading tiles across providers, sound, layouts, the
+  "no free connection" warning) moved into the shared core as `MultiviewSession`, used by the Mac
+  and the Android TV app. A new "no free video decoder" failure stops a tile at once, without
+  trying other formats and providers.
 - For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
   when its part of the repository changes. The Android TV workflow runs the shared core's tests on
   an Android emulator and builds the APK.

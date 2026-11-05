@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,8 +51,19 @@ fun LiveTvScreen(
     onPlay: (channel: String, group: String) -> Unit,
     playerShowing: Boolean,
     model: LiveTvViewModel = viewModel(),
+    /** Opens with the highlight on the first channel (multiview's channel picker). */
+    startOnChannels: Boolean = false,
 ) {
     val state = model.state
+    val firstRow = remember { FocusRequester() }
+    var started by remember { mutableStateOf(!startOnChannels) }
+    LaunchedEffect(state.channels.isNotEmpty()) {
+        if (!started && state.channels.isNotEmpty()) {
+            started = true
+            kotlinx.coroutines.delay(50)
+            runCatching { firstRow.requestFocus() }
+        }
+    }
     // Closing the player returns the remote to the channel that was playing.
     var lastPlayed by rememberSaveable { mutableStateOf<String?>(null) }
     val playedRow = remember { FocusRequester() }
@@ -84,7 +96,7 @@ fun LiveTvScreen(
                     color = LumioColors.secondaryText, fontSize = 18.sp,
                 )
                 else -> LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    items(state.channels, key = { it.id }) { channel ->
+                    itemsIndexed(state.channels, key = { _, channel -> channel.id }) { index, channel ->
                         val nowNext = channel.epg?.let { state.nowNext[it] }
                         LaunchedEffect(channel.epg) { channel.epg?.let(model::wantNowNext) }
                         ChannelRow(
@@ -97,7 +109,9 @@ fun LiveTvScreen(
                                 lastPlayed = channel.id
                                 options = channel
                             },
-                            modifier = if (channel.id == lastPlayed) Modifier.focusRequester(playedRow) else Modifier,
+                            modifier = Modifier
+                                .then(if (channel.id == lastPlayed) Modifier.focusRequester(playedRow) else Modifier)
+                                .then(if (index == 0) Modifier.focusRequester(firstRow) else Modifier),
                         )
                     }
                 }

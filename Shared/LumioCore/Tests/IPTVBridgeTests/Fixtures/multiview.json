@@ -1,0 +1,34 @@
+[
+  {
+    "type": "multiview",
+    "multiview": {
+      "active": true,
+      "layout": 3,
+      "audioTile": 1,
+      "warning": "No provider has a free connection for Sports One. Close a tile, stop other playback, or add another provider.",
+      "tiles": [
+        {
+          "index": 0,
+          "channel": {"id": "bbcone.uk", "name": "BBC One", "number": 101, "logo": "http://img.example/bbc1.png",
+                      "providerID": "p1", "streamID": 7, "favorite": true, "hidden": false, "catchup": false,
+                      "epg": {"id": "bbcone.uk", "providers": ["p1", "p2"]}},
+          "group": "cat:news",
+          "phase": "playing",
+          "provider": "Provider One",
+          "providerID": "p1",
+          "providers": [{"id": "p1", "name": "Provider One"}, {"id": "p2", "name": "Provider Two"}]
+        },
+        {
+          "index": 1,
+          "channel": {"id": "name:sportsone", "name": "Sports One", "providerID": "p2", "streamID": 70,
+                      "favorite": false, "hidden": false, "catchup": false},
+          "phase": "reconnecting",
+          "attempt": 2,
+          "pinned": "p2",
+          "providers": [{"id": "p2", "name": "Provider Two"}]
+        },
+        {"index": 2, "phase": "idle", "providers": []}
+      ]
+    }
+  }
+]

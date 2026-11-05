@@ -355,6 +355,8 @@ public final class PlaybackController {
                         }
                         if Task.isCancelled { return }
                     }
+                    // The device, not the stream: nothing to record, nothing else to try.
+                    if failure.stopsFallback { break rungs }
                     if failure.skipsToNextRung {
                         await deps.history.recordFailure(plan, error: failure)
                         if failure.providerRefused,

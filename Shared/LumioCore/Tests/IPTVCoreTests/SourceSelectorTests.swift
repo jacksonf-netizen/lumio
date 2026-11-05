@@ -67,6 +67,14 @@ struct SourceSelectorTests {
         #expect(blocked[0].source == nil)
     }
 
+    @Test func playingTilesKeepTheirProviderOverAMoreReliableNewTile() {
+        // One connection on a. Tile 0 is new (and its source is more reliable); tile 1 is playing.
+        let assignment = SourceSelector.assignTiles(
+            [[candidate(a, 1, priority: 0, reliability: 0.9)], [candidate(a, 2, priority: 0, reliability: 0.4)]],
+            capacity: [a: 1], playing: [1: a])
+        #expect(assignment.map { $0.source?.streamID } == [nil, 2])
+    }
+
     @Test func reliabilityMovesTowardsOutcomes() {
         var r = 0.5
         for _ in 0..<10 { r = SourceSelector.updatedReliability(r, success: false) }

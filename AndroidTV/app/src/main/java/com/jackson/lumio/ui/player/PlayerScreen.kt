@@ -21,6 +21,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -48,6 +50,9 @@ import androidx.tv.material3.Text
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.player.PlayerEngines
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.common.MenuAction
+import com.jackson.lumio.ui.common.OptionsPanel
+import com.jackson.lumio.ui.guide.PressTracker
 import com.jackson.lumio.ui.vod.clock
 import kotlinx.coroutines.delay
 
@@ -60,10 +65,13 @@ import kotlinx.coroutines.delay
  */
 @OptIn(UnstableApi::class)
 @Composable
-fun PlayerScreen(model: PlayerViewModel) {
+fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
     val state = model.state
     val focus = remember { FocusRequester() }
-    BackHandler { if (model.tracks != null) model.closeTracks() else model.close() }
+    val press = remember { PressTracker() }
+    // Hold OK on live TV: multiview, audio and subtitles.
+    var options by remember { mutableStateOf(false) }
+    BackHandler(enabled = !options) { if (model.tracks != null) model.closeTracks() else model.close() }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     Box(
@@ -73,7 +81,18 @@ fun PlayerScreen(model: PlayerViewModel) {
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown || state?.phase == "failed" || model.tracks != null) return@onPreviewKeyEvent false
+                if (state?.phase == "failed" || model.tracks != null || options) return@onPreviewKeyEvent false
+                val code = event.key.nativeKeyCode
+                if (state?.vod == null && (code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER)) {
+                    // Live TV: OK shows the banner, Hold OK the options (on release, so it can't pick one).
+                    when (press.ok(event.type == KeyEventType.KeyDown, event.nativeKeyEvent.repeatCount)) {
+                        PressTracker.Result.Click -> model.showBanner()
+                        PressTracker.Result.LongClick -> options = true
+                        PressTracker.Result.None -> {}
+                    }
+                    return@onPreviewKeyEvent true
+                }
+                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 if (state?.vod != null) {
                     // A movie or episode: pause, skip, audio and subtitles. No zapping.
                     when (event.key.nativeKeyCode) {
@@ -89,10 +108,10 @@ fun PlayerScreen(model: PlayerViewModel) {
                     }
                     return@onPreviewKeyEvent true
                 }
-                when (val code = event.key.nativeKeyCode) {
+                when (code) {
                     AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> model.zap(-1)
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_CHANNEL_UP -> model.zap(1)
-                    AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_INFO -> model.showBanner()
+                    AndroidKeyEvent.KEYCODE_INFO -> model.showBanner()
                     AndroidKeyEvent.KEYCODE_LAST_CHANNEL, AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS -> model.previous()
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT, AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_CAPTIONS -> model.openTracks()
                     in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 -> model.digit(code - AndroidKeyEvent.KEYCODE_0)
@@ -108,9 +127,23 @@ fun PlayerScreen(model: PlayerViewModel) {
         } else if (model.bannerVisible || state?.phase == "failed") Banner(model)
         TopRight(model)
         model.tracks?.let { TracksPanel(it, onSelect = model::selectTrack) }
+        if (options) {
+            OptionsPanel(
+                title = state?.channel?.name ?: "Options",
+                actions = buildList {
+                    if (onMultiview != null) add(MenuAction("Multiview", run = onMultiview))
+                    add(MenuAction("Audio and subtitles") { model.openTracks() })
+                },
+                onDismiss = { options = false },
+                detail = if (onMultiview == null) ({
+                    Text("This TV can only play one video at a time, so multiview isn't available.",
+                        color = LumioColors.secondaryText, fontSize = 15.sp)
+                }) else null,
+            )
+        }
     }
-    // Focus comes back to the player when the tracks panel closes.
-    LaunchedEffect(model.tracks == null) { if (model.tracks == null) runCatching { focus.requestFocus() } }
+    // Focus comes back to the player when the tracks panel or the options close.
+    LaunchedEffect(model.tracks == null && !options) { if (model.tracks == null && !options) runCatching { focus.requestFocus() } }
 }
 
 @OptIn(UnstableApi::class)

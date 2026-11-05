@@ -471,6 +471,60 @@ data class Track(val id: Int, val kind: String, val name: String, val selected: 
  * A change in the core. type: providers, live, guide, vod (watch progress or Recently Watched), player
  * (with state), or sync (with provider, label, finished, error).
  */
+/** Multiview: the tiles and which one is heard. See `BridgeMultiview.swift`. */
+data class MultiviewState(
+    val active: Boolean,
+    /** 2, 3 or 4. */
+    val layout: Int,
+    val audioTile: Int,
+    /** Some tile has no free connection on any provider. */
+    val warning: String?,
+    val tiles: List<Tile>,
+) {
+    constructor(json: JSONObject) : this(
+        active = json.getBoolean("active"),
+        layout = json.getInt("layout"),
+        audioTile = json.getInt("audioTile"),
+        warning = json.text("warning"),
+        tiles = json.getJSONArray("tiles").objects().map(::Tile),
+    )
+}
+
+data class Tile(
+    val index: Int,
+    val channel: Channel?,
+    /** The Live TV group the channel came from. */
+    val group: String?,
+    /** As [PlayerState.phase]. */
+    val phase: String,
+    val attempt: Int?,
+    val message: String?,
+    val notice: String?,
+    /** The provider the tile plays from. */
+    val provider: String?,
+    val providerID: String?,
+    /** The provider chosen for the tile; null for automatic. */
+    val pinned: String?,
+    /** Every provider carrying the channel. */
+    val providers: List<ProviderChoice>,
+) {
+    constructor(json: JSONObject) : this(
+        index = json.getInt("index"),
+        channel = json.optJSONObject("channel")?.let(::Channel),
+        group = json.text("group"),
+        phase = json.getString("phase"),
+        attempt = if (json.has("attempt")) json.getInt("attempt") else null,
+        message = json.text("message"),
+        notice = json.text("notice"),
+        provider = json.text("provider"),
+        providerID = json.text("providerID"),
+        pinned = json.text("pinned"),
+        providers = json.getJSONArray("providers").objects().map { ProviderChoice(it.getString("id"), it.getString("name")) },
+    )
+}
+
+data class ProviderChoice(val id: String, val name: String)
+
 data class BridgeEvent(
     val type: String,
     val provider: String?,
@@ -479,6 +533,8 @@ data class BridgeEvent(
     val error: String?,
     /** For player events. */
     val state: PlayerState?,
+    /** For multiview events. */
+    val multiview: MultiviewState? = null,
 ) {
     constructor(json: JSONObject) : this(
         type = json.getString("type"),
@@ -487,6 +543,7 @@ data class BridgeEvent(
         finished = json.optBoolean("finished", false),
         error = json.text("error"),
         state = json.optJSONObject("state")?.let(::PlayerState),
+        multiview = json.optJSONObject("multiview")?.let(::MultiviewState),
     )
 }
 
