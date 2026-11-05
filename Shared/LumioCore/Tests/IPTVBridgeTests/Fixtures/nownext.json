@@ -1,0 +1,5 @@
+[
+  {"epg": {"id": "bbcone.uk", "providers": ["p1"]},
+   "now": {"title": "News at Six", "start": 1793815200, "stop": 1793817000, "subtitle": "Headlines"},
+   "next": {"title": "Weather", "start": 1793817000, "stop": 1793817300}}
+]

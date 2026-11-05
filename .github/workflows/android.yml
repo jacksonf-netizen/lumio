@@ -72,7 +72,7 @@ jobs:
       - name: Install the Android SDK parts and the Swift SDK for Android
         run: |
           yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "platforms;android-36" \
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;$NDK_VERSION" "platforms;android-37.0" \
             "build-tools;36.1.0" "platform-tools" "emulator" "system-images;android-31;default;x86_64" | grep -v "^\[" || true
           swift sdk install "https://download.swift.org/swift-$SWIFT_VERSION-release/android-sdk/swift-$SWIFT_VERSION-RELEASE/swift-$SWIFT_VERSION-RELEASE_android.artifactbundle.tar.gz" \
             --checksum "$SWIFT_ANDROID_SDK_CHECKSUM"
@@ -101,6 +101,11 @@ jobs:
           timeout 600 "$adb" wait-for-device
           timeout 600 bash -c "until [ \"\$($adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')\" = 1 ]; do sleep 5; done"
           AndroidTV/Tools/run_core_tests.sh x86_64
+
+      - name: App tests on the emulator (the bridge, the login vault, the shared fixtures)
+        run: |
+          AndroidTV/Tools/build_core.sh release x86_64
+          cd AndroidTV && ./gradlew --no-daemon :app:connectedDebugAndroidTest -PlumioAbis=x86_64
 
       - name: Build the core for 32- and 64-bit ARM
         run: AndroidTV/Tools/build_core.sh release

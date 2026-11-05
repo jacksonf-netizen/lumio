@@ -257,8 +257,6 @@ def make_handler(args, faults, hls, relay, movie_path):
     def cat(category_id):
         return f"c{category_id}" if args.renumber else category_id
 
-    base_url = f"http://127.0.0.1:{args.port}"
-
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -361,6 +359,9 @@ def make_handler(args, faults, hls, relay, movie_path):
                 return self.send_json([{"category_id": cat("1"), "category_name": news, "parent_id": 0},
                                        {"category_id": cat("2"), "category_name": entertainment, "parent_id": 0}])
             if action == "get_live_streams":
+                # Logo URLs on the host the request came to, like a real panel: the Android
+                # emulator reaches this Mac as 10.0.2.2, where 127.0.0.1 would be the emulator.
+                base_url = f"http://{self.headers.get('Host') or f'127.0.0.1:{args.port}'}"
                 return self.send_json([
                     {"num": cid, "name": label(c["name"]), "stream_type": "live", "stream_id": cid + R, "stream_icon": f"{base_url}/logo/{cid}.png",
                      "epg_channel_id": c["epg"], "added": str(now), "category_id": cat(c["category"]),

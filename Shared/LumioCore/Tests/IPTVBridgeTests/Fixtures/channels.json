@@ -1,0 +1,7 @@
+[
+  {"id": "logical:1", "name": "BBC One", "number": 101, "logo": "http://one.example:8080/logos/bbc1.png",
+   "providerID": "p1", "streamID": 7, "favorite": true, "hidden": false, "catchup": true,
+   "epg": {"id": "bbcone.uk", "providers": ["p1"]}},
+  {"id": "p1:8", "name": "No Guide Channel", "providerID": "p1", "streamID": 8, "favorite": false,
+   "hidden": false, "catchup": false}
+]

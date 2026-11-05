@@ -73,6 +73,31 @@ public struct LiveCatalog: Sendable {
         self.database = database
     }
 
+    // MARK: Changes
+
+    /// Tables whose changes can change the Live TV lists: sync, edits, matching, favorites, recents,
+    /// custom groups and hidden regions (a setting).
+    public static let listTables = [
+        "channel", "category", "channelOverride", "categoryOverride", "favorite", "recentItem",
+        "customGroup", "customGroupMember", "logicalChannelMember", "provider", "logicalEPGOverride",
+        "epgMappingOverride", "setting",
+    ]
+
+    /// Calls `onChange` (on a database thread) after every change that can change the Live TV lists.
+    /// Keep the returned value for as long as the calls are wanted.
+    public func observeListChanges(_ onChange: @escaping @Sendable () -> Void) -> AnyDatabaseCancellable {
+        DatabaseRegionObservation(tracking: Self.listTables.map { Table($0) })
+            .start(in: database.writer, onError: { error in
+                Log.app.error("Live TV observation failed: \(String(describing: error), privacy: .public)")
+            }, onChange: { _ in onChange() })
+    }
+
+    /// Calls `onChange` after every guide import (now/next may have changed).
+    public func observeGuideChanges(_ onChange: @escaping @Sendable () -> Void) -> AnyDatabaseCancellable {
+        DatabaseRegionObservation(tracking: Table("programme"))
+            .start(in: database.writer, onError: { _ in }, onChange: { _ in onChange() })
+    }
+
     // MARK: Groups
 
     public func groups(filter: ProviderFilter = .all, includeHidden: Bool = false) async throws -> [ChannelGroup] {

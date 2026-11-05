@@ -97,23 +97,12 @@ final class ProvidersViewModel {
         case .started(let id):
             syncing[id] = "Starting…"
         case .step(let id, let step):
-            syncing[id] = Self.label(for: step)
+            syncing[id] = step.label
         case .guideProgress(let id, let count):
             syncing[id] = "Guide: \(count.formatted()) programmes"
         case .finished(let id, _):
             syncing[id] = nil
             reloadStatus()
-        }
-    }
-
-    private static func label(for step: SyncStep) -> String {
-        switch step {
-        case .account: "Checking account…"
-        case .live: "Updating channels…"
-        case .movies: "Updating movies…"
-        case .series: "Updating series…"
-        case .guide: "Downloading guide…"
-        case .matching: "Matching channels…"
         }
     }
 
@@ -140,75 +129,51 @@ final class ProvidersViewModel {
         }
     }
 
-    // MARK: Actions
+    // MARK: Actions (the rules are in the shared core: AppEnvironment+ProviderActions)
 
     /// Returns nil on success, or a message to show in the editor. `servers` is one link per line.
     func add(name: String, servers: String, username: String, password: String) async -> String? {
         do {
-            let provider = try await service.addProvider(
-                name: name, servers: servers,
-                credentials: ProviderCredentials(username: username, password: password))
-            refresh(provider)
+            try await environment.addProvider(name: name, servers: servers, username: username, password: password)
             return nil
         } catch {
-            return Self.message(for: error)
+            return AppEnvironment.userMessage(for: error)
         }
     }
 
     /// Updates name, links and optionally credentials (empty password keeps the saved one).
     func save(_ provider: Provider, name: String, servers: String, username: String, password: String) async -> String? {
         do {
-            var updated = provider
-            updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? provider.name : name
-            var credentials: ProviderCredentials?
-            if let existing = try service.credentials(for: provider.id) {
-                let newUser = username.isEmpty ? existing.username : username
-                let newPass = password.isEmpty ? existing.password : password
-                if newUser != existing.username || newPass != existing.password {
-                    credentials = ProviderCredentials(username: newUser, password: newPass)
-                }
-            } else {
-                credentials = ProviderCredentials(username: username, password: password)
-            }
-            try await service.updateProvider(updated, servers: servers, credentials: credentials)
-            refresh(updated, restart: true)
+            try await environment.saveProvider(provider, name: name, servers: servers, username: username, password: password)
             return nil
         } catch {
-            return Self.message(for: error)
+            return AppEnvironment.userMessage(for: error)
         }
     }
 
     /// The provider's links as the editor shows them, one per line. Read from the database, so
     /// saving can't drop links that haven't reached `links` yet.
     func serversText(for provider: Provider) -> String {
-        let urls = (try? service.repository.links(for: provider.id))?.map(\.url) ?? links[provider.id]?.map(\.url) ?? [provider.serverURL]
-        return urls.map(\.absoluteString).joined(separator: "\n")
+        environment.serverLinksText(for: provider)
     }
 
     func savedUsername(for provider: Provider) -> String {
-        (try? service.credentials(for: provider.id))?.username ?? ""
+        environment.savedUsername(for: provider.id)
     }
 
     func remove(_ provider: Provider) async {
-        await environment.sync.cancel(provider.id)
         do {
-            try await service.removeProvider(id: provider.id)
-            await environment.connections.removeProvider(provider.id)
-            try environment.logicalChannels.rebuild()
+            try await environment.removeProvider(provider.id)
         } catch {
-            errorMessage = "Couldn't remove \(provider.name): \(Self.message(for: error))"
+            errorMessage = "Couldn't remove \(provider.name): \(AppEnvironment.userMessage(for: error))"
         }
     }
 
     func setEnabled(_ enabled: Bool, for provider: Provider) async {
-        var updated = provider
-        updated.isEnabled = enabled
         do {
-            try await service.updateProvider(updated)
-            try environment.logicalChannels.rebuild()
-            if enabled { refresh(updated) }
+            try await environment.setProviderEnabled(enabled, for: provider)
         } catch {
-            errorMessage = Self.message(for: error)
+            errorMessage = AppEnvironment.userMessage(for: error)
         }
     }
 
@@ -216,33 +181,17 @@ final class ProvidersViewModel {
         var ids = providers.map(\.id)
         ids.move(fromOffsets: source, toOffset: destination)
         do {
-            try service.repository.reorder(ids)
-            // Priority decides which provider's name/logo a merged channel shows.
-            try environment.logicalChannels.rebuild()
+            try environment.reorderProviders(ids)
         } catch {
-            errorMessage = Self.message(for: error)
+            errorMessage = AppEnvironment.userMessage(for: error)
         }
     }
 
-    /// Checks the server links first (dead ones too: the user asked), so the refresh runs on the
-    /// best one that works.
     func refresh(_ provider: Provider, parts: RefreshParts = .all, restart: Bool = false) {
-        let sync = environment.sync, servers = environment.servers
-        Task.detached(priority: .utility) {
-            await servers.recheck(provider.id, includingDead: true)
-            await sync.refresh(provider.id, parts: parts, restart: restart)
-        }
+        environment.refreshProvider(provider.id, parts: parts, restart: restart)
     }
 
     func refreshAll() {
-        let sync = environment.sync, servers = environment.servers
-        Task.detached(priority: .utility) {
-            await servers.recheckAll(includingDead: true)
-            await sync.refreshStale(force: true)
-        }
-    }
-
-    private static func message(for error: Error) -> String {
-        CredentialRedactor.redact((error as? LocalizedError)?.errorDescription ?? String(describing: error))
+        environment.refreshAllProviders()
     }
 }

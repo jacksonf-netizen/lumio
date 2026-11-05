@@ -10,6 +10,9 @@ offers the update. The list below it appears on the release page.
 
 - For developers: the version number lives in `version.properties` at the top of the repository,
   which the Mac and Android TV builds both read.
+- For developers: the services' wiring and the Providers screen's rules (adding, editing,
+  removing, reordering, refreshing) moved into the shared core, so the coming Android TV app
+  follows the same rules as the Mac.
 - For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
   when its part of the repository changes. The Android TV workflow runs the shared core's tests on
   an Android emulator and builds the APK.

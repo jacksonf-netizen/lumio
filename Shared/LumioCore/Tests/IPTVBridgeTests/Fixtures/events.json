@@ -1,0 +1,6 @@
+[
+  {"type": "providers"},
+  {"type": "sync", "provider": "p1", "label": "Updating channels…"},
+  {"type": "sync", "provider": "p1", "finished": true, "error": "The provider didn't respond in time."},
+  {"type": "live"}
+]
