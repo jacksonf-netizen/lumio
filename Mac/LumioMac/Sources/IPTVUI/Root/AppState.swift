@@ -16,7 +16,7 @@ public final class AppState {
     let library: LibraryRepository
     let liveCatalog: LiveCatalog
     let guide: GuideRepository
-    let multiview: MultiviewModel
+    let multiview: MultiviewSession
     let vod: VODCatalog
     /// Release checks (inactive unless the build has a release feed).
     public let updates = UpdateController()
@@ -55,7 +55,7 @@ public final class AppState {
         live = LiveTVModel(environment: environment, catalog: liveCatalog, guide: guide, library: library, hub: hub)
         favoritesList = LiveTVModel(environment: environment, catalog: liveCatalog, guide: guide, library: library, hub: hub)
         favoritesList.selectedGroupID = "favorites"
-        multiview = MultiviewModel(hub: hub, environment: environment)
+        multiview = MultiviewSession(environment: environment, makeController: hub.makeTileController)
         vod = VODCatalog(database: environment.database)
         live.state = self
         favoritesList.state = self
@@ -145,9 +145,18 @@ public final class AppState {
     /// Opens multiview from the player, with the channel that was playing in the first tile.
     public func startMultiview(with channel: ChannelListItem?) {
         showGuideOverlay = false
-        multiview.start(with: channel)
+        beginMultiview(with: channel)
         isPlayerPresented = false
         isMultiviewPresented = true
+    }
+
+    /// Starts the tiles, after the main player and the preview have let go of their connections.
+    func beginMultiview(with channel: ChannelListItem?) {
+        let hub = self.hub
+        multiview.start(with: channel) {
+            await hub.main.stop()
+            await hub.preview.stop()
+        }
     }
 
     /// Back to the full-window player, on the tile whose sound was playing.

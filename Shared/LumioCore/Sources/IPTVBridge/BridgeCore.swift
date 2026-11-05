@@ -96,6 +96,7 @@ public actor BridgeCore {
     private func perform(_ method: String, _ params: Params) async throws -> any Encodable {
         if method.hasPrefix("vod.") || method == "search.query" { return try await vodRequest(method, params) }
         if method.hasPrefix("settings.") || method.hasPrefix("content.") { return try await settingsRequest(method, params) }
+        if method.hasPrefix("multiview.") { return try await multiviewRequest(method, params) }
         switch method {
         case "providers.list":
             return try await providerList()
@@ -296,7 +297,7 @@ public actor BridgeCore {
         return provider
     }
 
-    private func channel(_ id: String) async throws -> ChannelListItem {
+    func channel(_ id: String) async throws -> ChannelListItem {
         guard let channel = try await liveCatalog.item(logicalID: id) else { throw BridgeError("That channel no longer exists.") }
         return channel
     }
@@ -394,6 +395,8 @@ final class Players {
     private let send: (@MainActor @Sendable (String) -> String?)?
     private let emit: @Sendable (BridgeEvent) -> Void
     private var players: [String: BridgePlayer] = [:]
+    /// Made the first time multiview opens.
+    private(set) var multiviewIfMade: BridgeMultiview?
 
     nonisolated init(environment: AppEnvironment, send: (@MainActor @Sendable (String) -> String?)?,
                      emit: @escaping @Sendable (BridgeEvent) -> Void) {
@@ -411,6 +414,14 @@ final class Players {
         let player = BridgePlayer(id: id, environment: environment, send: send, emit: emit)
         players[id] = player
         return player
+    }
+
+    func multiview() throws -> BridgeMultiview {
+        if let multiviewIfMade { return multiviewIfMade }
+        guard let send else { throw BridgeError("This app has no player.") }
+        let multiview = BridgeMultiview(environment: environment, send: send, emit: emit)
+        multiviewIfMade = multiview
+        return multiview
     }
 }
 

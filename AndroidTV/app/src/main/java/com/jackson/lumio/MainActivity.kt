@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import com.jackson.lumio.core.LumioCore
+import com.jackson.lumio.player.DecoderLimits
 import kotlinx.coroutines.launch
 import com.jackson.lumio.ui.LumioApp
 import com.jackson.lumio.ui.LumioTheme
@@ -13,9 +14,12 @@ class MainActivity : ComponentActivity() {
     /**
      * Debug builds only, for testing on the emulator or a TV without typing on the remote:
      * `adb shell am start -n com.jackson.lumio/.MainActivity -e server URL -e username U -e password P`
-     * adds that provider if none exists yet. Release builds ignore the extras.
+     * adds that provider if none exists yet. `-e multiviewTiles N` sets how many multiview tiles are
+     * offered, in place of what the decoder reports (the emulator's decoders say little). Release
+     * builds ignore the extras.
      */
     private fun addTestProvider() {
+        intent.getStringExtra("multiviewTiles")?.toIntOrNull()?.let { DecoderLimits.override = it }
         val server = intent.getStringExtra("server") ?: return
         val username = intent.getStringExtra("username") ?: return
         val password = intent.getStringExtra("password") ?: return

@@ -2,6 +2,9 @@ package com.jackson.lumio.player
 
 import android.app.ActivityManager
 import android.content.Context
+import android.media.MediaCodec
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -44,6 +47,14 @@ class ExoEngine(private val context: Context, private val id: String) {
     private var volume = 1f
     private var muted = false
     private val lowRam = context.getSystemService(ActivityManager::class.java).isLowRamDevice
+    /** A multiview tile ("tile0"…): smaller buffers, and a picture no bigger than 720p when there's a choice. */
+    private val isTile = id.startsWith("tile")
+    /** Holding a video decoder now, for telling "no decoder left" from a broken stream. */
+    var holdsVideoDecoder = false
+        private set
+    private var firstFrameShown = false
+    private val handler = Handler(Looper.getMainLooper())
+    private val noPicture = Runnable { checkPicture() }
 
     /** Listeners of the screen showing this player (PlayerView needs the ExoPlayer itself). */
     var onPlayerChanged: ((ExoPlayer?) -> Unit)? = null
@@ -87,8 +98,14 @@ class ExoEngine(private val context: Context, private val id: String) {
     private fun load(command: JSONObject) {
         loadID = command.getInt("loadID")
         val readAhead = command.getDouble("readAheadSeconds")
-        // Low-RAM devices (the onn HD stick) buffer at most 24 MB, whatever the preset.
-        val maxBytes = command.getInt("maxBytes").let { if (lowRam) minOf(it, 24 shl 20) else it }
+        // Low-RAM devices (the onn HD stick) buffer at most 24 MB, whatever the preset; a tile 8 or 16 MB.
+        val maxBytes = command.getInt("maxBytes").let {
+            when {
+                isTile -> minOf(it, if (lowRam) 8 shl 20 else 16 shl 20)
+                lowRam -> minOf(it, 24 shl 20)
+                else -> it
+            }
+        }
         val timeoutMs = (command.getDouble("timeoutSeconds") * 1000).toInt()
         val player = player(readAhead, maxBytes)
         val http = DefaultHttpDataSource.Factory()
@@ -100,6 +117,8 @@ class ExoEngine(private val context: Context, private val id: String) {
         val source = DefaultMediaSourceFactory(DefaultDataSource.Factory(context, http))
             .createMediaSource(MediaItem.fromUri(command.getString("url")))
         droppedFrames = 0
+        firstFrameShown = false
+        handler.removeCallbacks(noPicture)
         player.setMediaSource(source)
         if (command.has("startPosition")) player.seekTo((command.getDouble("startPosition") * 1000).toLong())
         player.prepare()
@@ -107,11 +126,15 @@ class ExoEngine(private val context: Context, private val id: String) {
     }
 
     private fun stop() {
+        handler.removeCallbacks(noPicture)
         player?.stop()
         player?.clearMediaItems()
+        holdsVideoDecoder = false
     }
 
     private fun release() {
+        handler.removeCallbacks(noPicture)
+        holdsVideoDecoder = false
         player?.release()
         player = null
         onPlayerChanged?.invoke(null)
@@ -185,6 +208,9 @@ class ExoEngine(private val context: Context, private val id: String) {
             .setPrioritizeTimeOverSizeThresholds(false)
             .build()
         val created = ExoPlayer.Builder(context).setLoadControl(loadControl).build()
+        if (isTile) {
+            created.trackSelectionParameters = created.trackSelectionParameters.buildUpon().setMaxVideoSize(1280, 720).build()
+        }
         created.volume = if (muted) 0f else volume
         created.addListener(listener)
         created.addAnalyticsListener(analytics)
@@ -207,7 +233,10 @@ class ExoEngine(private val context: Context, private val id: String) {
         override fun onPlaybackStateChanged(state: Int) {
             when (state) {
                 Player.STATE_BUFFERING -> send("buffering", "value" to true)
-                Player.STATE_READY -> if (player?.playWhenReady == true) send("playing") else send("paused")
+                Player.STATE_READY -> if (player?.playWhenReady == true) {
+                    send("playing")
+                    watchForPicture()
+                } else send("paused")
                 Player.STATE_ENDED -> send("ended")
             }
         }
@@ -219,8 +248,17 @@ class ExoEngine(private val context: Context, private val id: String) {
         override fun onTracksChanged(tracks: Tracks) = send("tracks")
 
         override fun onPlayerError(error: PlaybackException) {
-            val (kind, status) = classify(error)
+            handler.removeCallbacks(noPicture)
+            var (kind, status) = classify(error)
+            // A decoder that won't open while other players hold theirs: the device is out of decoders.
+            if (kind == "decoder" && (resourceShortage(error) || PlayerEngines.othersHoldDecoders(id))) kind = "noFreeDecoder"
+            holdsVideoDecoder = false
             send("failed", "kind" to kind, "status" to status, "detail" to error.errorCodeName)
+        }
+
+        override fun onRenderedFirstFrame() {
+            firstFrameShown = true
+            handler.removeCallbacks(noPicture)
         }
     }
 
@@ -233,7 +271,29 @@ class ExoEngine(private val context: Context, private val id: String) {
             eventTime: AnalyticsListener.EventTime, decoderName: String, initializedTimestampMs: Long, initializationDurationMs: Long,
         ) {
             this@ExoEngine.decoderName = decoderName
+            holdsVideoDecoder = true
         }
+
+        override fun onVideoDecoderReleased(eventTime: AnalyticsListener.EventTime, decoderName: String) {
+            holdsVideoDecoder = false
+        }
+    }
+
+    /**
+     * Playing but no picture yet: give it 10 seconds, then report a failure rather than leave a
+     * frozen tile (some devices open one decoder too many without an error). Radio has no picture.
+     */
+    private fun watchForPicture() {
+        if (firstFrameShown) return
+        handler.removeCallbacks(noPicture)
+        handler.postDelayed(noPicture, 10_000)
+    }
+
+    private fun checkPicture() {
+        val player = player ?: return
+        if (firstFrameShown || player.playbackState != Player.STATE_READY || !player.currentTracks.isTypeSelected(C.TRACK_TYPE_VIDEO)) return
+        val kind = if (PlayerEngines.othersHoldDecoders(id)) "noFreeDecoder" else "decoder"
+        send("failed", "kind" to kind, "detail" to "no picture after 10 s")
     }
 
     private fun send(type: String, vararg fields: Pair<String, Any?>) {
@@ -257,11 +317,24 @@ class ExoEngine(private val context: Context, private val id: String) {
                 PlaybackException.ERROR_CODE_PARSING_MANIFEST_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED,
                 PlaybackException.ERROR_CODE_DECODING_FORMAT_EXCEEDS_CAPABILITIES -> "unsupported" to null
+                PlaybackException.ERROR_CODE_DECODING_RESOURCES_RECLAIMED -> "noFreeDecoder" to null
                 PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
                 PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED,
                 PlaybackException.ERROR_CODE_DECODING_FAILED -> "decoder" to null
                 else -> "unknown" to null
             }
+        }
+
+        /** The codec itself said it's out of resources (or they were taken by another app). */
+        fun resourceShortage(error: PlaybackException): Boolean {
+            var cause: Throwable? = error.cause
+            while (cause != null) {
+                if (cause is MediaCodec.CodecException &&
+                    (cause.errorCode == MediaCodec.CodecException.ERROR_INSUFFICIENT_RESOURCE ||
+                        cause.errorCode == MediaCodec.CodecException.ERROR_RECLAIMED)) return true
+                cause = cause.cause
+            }
+            return false
         }
     }
 }
@@ -276,6 +349,9 @@ object PlayerEngines {
     }
 
     fun engine(player: String): ExoEngine = engines.getOrPut(player) { ExoEngine(context, player) }
+
+    /** Whether any engine other than [player] has a video decoder open. */
+    fun othersHoldDecoders(player: String): Boolean = engines.any { (id, engine) -> id != player && engine.holdsVideoDecoder }
 
     /** A command from the core (on the UI thread); returns `{"result": …}`. */
     fun handle(json: String): String {

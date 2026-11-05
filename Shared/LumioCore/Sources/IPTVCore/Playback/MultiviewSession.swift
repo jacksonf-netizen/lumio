@@ -1,81 +1,86 @@
 import Foundation
 import Observation
-import IPTVCore
 
-/// 2–4 live channels at once. Tiles are spread across providers so the total capacity is the sum of
-/// every provider's free connections; one tile has audio focus.
+/// Multiview: 2–4 live channels at once, shared by the Mac and Android TV. Tiles are spread across
+/// providers so the total capacity is the sum of every provider's free connections (see
+/// `SourceSelector.assignTiles`); one tile has audio focus. Each tile is its own PlaybackController,
+/// so reconnects and fallbacks work as in the full-screen player.
 @MainActor
 @Observable
-final class MultiviewModel {
-    struct Tile: Identifiable {
-        let index: Int
-        let controller: PlaybackController
-        var channel: ChannelListItem?
+public final class MultiviewSession {
+    public struct Tile: Identifiable {
+        public let index: Int
+        public let controller: PlaybackController
+        public var channel: ChannelListItem?
         /// User override: always use this provider for the tile.
-        var pinnedProvider: ProviderID?
+        public var pinnedProvider: ProviderID?
         /// Provider chosen by automatic assignment.
-        var assignedProvider: ProviderID?
+        public var assignedProvider: ProviderID?
 
-        var id: Int { index }
+        public var id: Int { index }
     }
 
-    private(set) var tiles: [Tile] = []
-    var layout = 4 {
+    public private(set) var tiles: [Tile] = []
+    public var layout = 4 {
         didSet { applyLayout() }
     }
-    private(set) var audioTile = 0
+    public private(set) var audioTile = 0
     /// Shown when some tile can't get a connection on any provider.
-    private(set) var warning: String?
-    private(set) var isActive = false
+    public private(set) var warning: String?
+    public private(set) var isActive = false
 
-    @ObservationIgnored private let hub: PlayerHub
     /// Reassignments run one after another so rapid changes can't interleave.
     @ObservationIgnored private var reassignChain: Task<Void, Never>?
     @ObservationIgnored private let environment: AppEnvironment
 
-    init(hub: PlayerHub, environment: AppEnvironment) {
-        self.hub = hub
+    /// `makeController` makes tile `index`'s player (purpose `.tile(index)`).
+    public init(environment: AppEnvironment, layout: Int = 4, makeController: (Int) -> PlaybackController) {
         self.environment = environment
-        tiles = (0..<4).map { Tile(index: $0, controller: hub.makeTileController($0)) }
+        self.layout = layout
+        tiles = (0..<4).map { Tile(index: $0, controller: makeController($0)) }
         updateAudio()
     }
 
-    var visibleTiles: [Tile] { Array(tiles.prefix(layout)) }
+    public var visibleTiles: [Tile] { Array(tiles.prefix(layout)) }
 
-    /// Enters multiview. The main player and preview stop first so their connections are free.
-    func start(with channel: ChannelListItem?) {
+    /// Enters multiview with `channel` (if any) in the first empty tile. `stopOthers` stops the
+    /// app's other players first (the full-screen player, the preview) so their connections are free.
+    public func start(with channel: ChannelListItem?, stopOthers: @escaping @MainActor () async -> Void) {
         isActive = true
-        let main = hub.main
-        let preview = hub.preview
-        Task {
-            await main.stop()
-            await preview.stop()
-            if let channel, !tiles.contains(where: { $0.channel?.id == channel.id }) {
+        // The tile shows its channel at once; its stream opens once the others have stopped.
+        if let channel {
+            if let existing = tiles.prefix(layout).firstIndex(where: { $0.channel?.id == channel.id }) {
+                audioTile = existing
+            } else {
                 let target = tiles.prefix(layout).firstIndex { $0.channel == nil } ?? 0
                 tiles[target].channel = channel
+                tiles[target].pinnedProvider = nil
                 audioTile = target
-                updateAudio()
             }
+            updateAudio()
+        }
+        Task {
+            await stopOthers()
             await reassign()
         }
     }
 
     /// Leaves multiview and frees every tile's connection. Returns once every tile's stream is
     /// closed, so whatever plays next can't push the provider over its connection limit.
-    func stopAll() async {
+    public func stopAll() async {
         isActive = false
         // Let a reassignment that's under way finish first; it won't start tiles once inactive.
         await reassignChain?.value
         for tile in tiles { await tile.controller.stop() }
     }
 
-    func setChannel(_ channel: ChannelListItem, forTile index: Int) {
+    public func setChannel(_ channel: ChannelListItem, forTile index: Int) {
         tiles[index].channel = channel
         tiles[index].pinnedProvider = nil
         Task { await reassign() }
     }
 
-    func clearTile(_ index: Int) {
+    public func clearTile(_ index: Int) {
         tiles[index].channel = nil
         tiles[index].assignedProvider = nil
         let controller = tiles[index].controller
@@ -86,12 +91,12 @@ final class MultiviewModel {
     }
 
     /// nil = automatic.
-    func pinProvider(_ provider: ProviderID?, forTile index: Int) {
+    public func pinProvider(_ provider: ProviderID?, forTile index: Int) {
         tiles[index].pinnedProvider = provider
         Task { await reassign() }
     }
 
-    func focusAudio(_ index: Int) {
+    public func focusAudio(_ index: Int) {
         audioTile = index
         updateAudio()
     }
@@ -111,7 +116,7 @@ final class MultiviewModel {
 
     /// Works out which provider each tile uses (see SourceSelector.assignTiles) and (re)starts tiles
     /// whose provider changed. Tiles are stopped before others start, so capacity is never exceeded.
-    func reassign() async {
+    public func reassign() async {
         let previous = reassignChain
         let task = Task { @MainActor [weak self] in
             await previous?.value
@@ -189,7 +194,7 @@ final class MultiviewModel {
     }
 
     /// Providers that carry the tile's channel, for the per-tile override menu.
-    func providers(forTile index: Int) -> [ProviderID] {
+    public func providers(forTile index: Int) -> [ProviderID] {
         tiles[index].channel?.sourceProviders ?? []
     }
 }

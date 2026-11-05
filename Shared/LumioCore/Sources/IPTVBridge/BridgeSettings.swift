@@ -167,5 +167,6 @@ extension Players {
     /// After a playback setting changes: each player uses it from its next stream.
     func reloadSettings() {
         for player in all { player.controller.settings = environment.playbackSettings(engines: [.exoPlayer]) }
+        multiviewIfMade?.reloadSettings()
     }
 }

@@ -118,21 +118,24 @@ public struct BridgeEvent: Codable, Equatable, Sendable {
     /// sync: a refresh started, moved on a step or finished (`provider`, `label`, `error`).
     /// player: a player's state changed (`state`).
     /// vod: watch progress or Recently Watched changed (Movies and Series re-read).
+    /// multiview: the tiles, the layout or a tile's player changed (`multiview`).
     public var type: String
     public var provider: String?
     public var label: String?
     public var finished: Bool?
     public var error: String?
     public var state: PlayerStateDTO?
+    public var multiview: MultiviewStateDTO?
 
     public init(type: String, provider: String? = nil, label: String? = nil, finished: Bool? = nil, error: String? = nil,
-                state: PlayerStateDTO? = nil) {
+                state: PlayerStateDTO? = nil, multiview: MultiviewStateDTO? = nil) {
         self.type = type
         self.provider = provider
         self.label = label
         self.finished = finished
         self.error = error
         self.state = state
+        self.multiview = multiview
     }
 }
 
