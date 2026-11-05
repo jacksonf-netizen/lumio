@@ -19,7 +19,7 @@ source AndroidTV/Tools/env.sh
 
 WORK="$LUMIO_ANDROID_DIR/build/icu"
 OUT="$LUMIO_ANDROID_DIR/core-bridge/Sources/LumioICUData/icudt76l-lumio.dat"
-ARCHIVE="$HOME/Library/org.swift.swiftpm/swift-sdks/$LUMIO_SWIFT_ANDROID_SDK.artifactbundle/swift-android/swift-resources/usr/lib/swift_static-aarch64/android/lib_FoundationICU.a"
+ARCHIVE="$LUMIO_SWIFT_SDK_DIR/swift-android/swift-resources/usr/lib/swift_static-aarch64/android/lib_FoundationICU.a"
 BIN="$(echo "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin)"
 
 mkdir -p "$WORK"
@@ -83,4 +83,4 @@ PY
 
 cp icudt76l-lumio.dat "$OUT"
 touch "$LUMIO_ANDROID_DIR/core-bridge/Sources/LumioICUData/icu_data.S"   # the build doesn't track .incbin
-printf "==> Done: %.1f MB (was %.1f MB)\n" "$(echo "$(stat -f%z "$OUT")/1048576" | bc -l)" "$(echo "$(stat -f%z icudt76l.dat)/1048576" | bc -l)"
+awk -v new="$(wc -c < "$OUT")" -v old="$(wc -c < icudt76l.dat)" 'BEGIN { printf "==> Done: %.1f MB (was %.1f MB)\n", new / 1048576, old / 1048576 }'

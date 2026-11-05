@@ -19,8 +19,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
 setting() { grep -E "^[[:space:]]+$1:" Mac/project.yml | head -1 | sed -E 's/.*: *"?([^"]*)"?.*/\1/'; }
-VERSION=$(setting MARKETING_VERSION)
-BUILD=$(setting CURRENT_PROJECT_VERSION)
+version() { grep -E "^$1=" version.properties | head -1 | cut -d= -f2 | tr -d '[:space:]'; }
+VERSION=$(version MARKETING_VERSION)
+BUILD=$(version CURRENT_PROJECT_VERSION)
 NAME="Lumio"
 OUT="Mac/build/release"
 APP="$OUT/$NAME.app"

@@ -18,7 +18,7 @@ ABI="$(lumio_android_abi "$ARCH")"
 SCRATCH="$LUMIO_ANDROID_DIR/build/core-tests-$ARCH"
 PRODUCTS="$SCRATCH/out/Products/Debug-android-$ARCH"
 DEVICE_DIR="/data/local/tmp/lumio-core-tests"
-RUNTIME="$HOME/Library/org.swift.swiftpm/swift-sdks/$LUMIO_SWIFT_ANDROID_SDK.artifactbundle/swift-android/swift-resources/usr/lib/swift-$ARCH/android"
+RUNTIME="$LUMIO_SWIFT_SDK_DIR/swift-android/swift-resources/usr/lib/swift-$ARCH/android"
 case "$ARCH" in
     armv7) NDK_TRIPLE=arm-linux-androideabi ;;
     aarch64) NDK_TRIPLE=aarch64-linux-android ;;

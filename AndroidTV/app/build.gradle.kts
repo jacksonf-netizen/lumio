@@ -1,11 +1,15 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
 }
 
-// The version is shared with the Mac app; until it moves to a top-level file (plan, phase 1) it's
-// read from Mac/project.yml. 0.1.7 → versionCode 1007.
-val marketingVersion: String = Regex("""MARKETING_VERSION:\s*"([^"]+)"""")
-    .find(rootDir.resolve("../Mac/project.yml").readText())!!.groupValues[1]
+// The version is shared with the Mac app: version.properties at the top of the repository.
+// 0.1.7 → versionCode 1007.
+val sharedVersion = Properties().apply {
+    rootDir.resolve("../version.properties").inputStream().use { load(it) }
+}
+val marketingVersion: String = sharedVersion.getProperty("MARKETING_VERSION")
 val versionParts = marketingVersion.split(".").map { it.toInt() }
 
 android {
