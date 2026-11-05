@@ -1,0 +1,5 @@
+# SHA-256 of the certificate every published Lumio-AndroidTV.apk is signed with. Public, not a
+# secret: AndroidTV/Tools/make_release.sh and Tools/Release/publish.sh refuse an APK signed with
+# anything else. The key itself is in the Keychain ("Lumio Android signing key") and an offline
+# backup; see AndroidTV/Tools/apk_signing_key.swift.
+55595681fe5a08c1f5465ab7c20f2bb4ab9a0ca5864d3ac9f2f0a818edbb32b5

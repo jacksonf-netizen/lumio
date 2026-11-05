@@ -28,7 +28,10 @@ PATTERNS = {
     "GitHub token": re.compile(rb"\b(?:ghp|gho|ghu|ghs|github_pat)_[A-Za-z0-9_]{20,}"),
     "Apple app-specific password": re.compile(rb"\b[a-z]{4}-[a-z]{4}-[a-z]{4}-[a-z]{4}\b"),
 }
-BINARY_SUFFIXES = {".p12", ".cer", ".mobileprovision", ".provisionprofile", ".keychain", ".keychain-db"}
+BINARY_SUFFIXES = {".p12", ".cer", ".mobileprovision", ".provisionprofile", ".keychain", ".keychain-db",
+                   ".jks", ".keystore"}
+# Files that only ever hold signing secrets.
+SECRET_NAMES = {"keystore.properties"}
 
 
 def committable_files():
@@ -113,6 +116,9 @@ def main():
     for name in files:
         path = os.path.join(ROOT, name)
         if not os.path.isfile(path):
+            continue
+        if os.path.basename(name) in SECRET_NAMES:
+            problems.append(f"{name}: signing passwords")
             continue
         if os.path.splitext(name)[1].lower() in BINARY_SUFFIXES:
             problems.append(f"{name}: signing or key file")

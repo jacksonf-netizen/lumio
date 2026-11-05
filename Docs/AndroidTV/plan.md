@@ -280,10 +280,12 @@ Not on Android: extra windows, the AVPlayer engine, and backup import/export (Ja
   confuse it (checked in phase 6).
 - Every release carries both builds, even when only one platform changed, so "latest" always
   has both, and the existing rule (delete the previous release, keep its tag) keeps working.
-- To avoid offering a pointless update, each release's notes carry a hidden marker of which
-  platforms changed (`<!-- platforms: mac, android -->`). Each app only prompts when its own
-  platform is listed. The changelog gets "Mac:" / "Android TV:" prefixes where a line applies
-  to one platform.
+- To avoid offering a pointless update, each release's notes carry a hidden marker of the version
+  in which each platform's code last changed (`<!-- lumio-changed: mac=0.2.1 android=0.2.0 -->`,
+  worked out from git by `publish.sh`). An app only prompts when its own platform changed after the
+  version it runs. (Changed in phase 6 from a list of the platforms changed in that release, which
+  would have hidden an Android change from a TV that skipped a release followed by a Mac-only
+  one.) The changelog gets "Mac:" / "Android TV:" prefixes where a line applies to one platform.
 - Verification after publishing, extended for Android: checksums, `apksigner verify` with the
   expected certificate fingerprint, `versionName`/`versionCode` inside the APK, the `.sig`
   check, and a fresh install of the published APK on the emulator.
@@ -691,6 +693,43 @@ the test server sends it faster than real time; to check on a TV.
 - In-app updater (signature check, PackageInstaller), APK signing key, `publish.sh` for both
   platforms, platform markers, the extended verification.
 - First public Android release; the Downloader code is created after that release exists.
+
+Done 2026-11-05 (branch `android/phase-6-release`), everything but the release itself:
+
+- Shared: `UpdateChecker` takes a platform. On Android it uses `Lumio-AndroidTV.apk` and its `.sig`
+  (a release without them isn't an update); the Mac keeps the `.dmg` and signed `.zip` and never
+  looks at the APK. The `lumio-changed` marker decides whether a platform is offered the release,
+  and is removed from the notes shown.
+- Bridge: `update.check` (the Android platform, with the build's repository and version) and
+  `update.verify` (the shared Ed25519 check, with the Mac's release key).
+- Android: checks 5 seconds after launch (release builds; debug builds with `-e checkUpdates true`)
+  and from Settings → About. The update panel offers Update now / Later / Skip this version,
+  downloads the APK with progress (200 MB cap), checks the signature, asks once for "install
+  unknown apps" (opens Google TV's screen for Lumio directly) and hands the APK to
+  `PackageInstaller`, whose own prompt the user confirms. The repository and public key come from
+  `Mac/project.yml`, so the two apps can't disagree.
+- The APK signing key: `AndroidTV/Tools/apk_signing_key.swift` (generate, fingerprint, sign,
+  backup). RSA 4096 in a PKCS12 keystore with a random password, together in one Keychain item;
+  never in a file except a private temporary one while signing. v3 signature scheme (apksigner
+  leaves out v2 with minSdk 28). Certificate SHA-256 in `AndroidTV/signing-certificate.txt`.
+  Generated 2026-11-05; **the offline backup is Jackson's to make**.
+- `AndroidTV/Tools/make_release.sh`: release core for both ARM types, R8 release APK, signed and
+  checked (certificate, package/version, v3, size, both cores), and the `.sig` checked with the
+  apps' public key. 0.1.7 built: 34 MB.
+- `Tools/Release/publish.sh`: builds both apps, one `SHA256SUMS.txt`, the marker, Android install
+  steps in the notes, refuses a release where neither app changed; afterwards downloads the
+  release and checks checksums, both signatures, the APK's certificate and version, and that
+  `releases/latest/download/Lumio-AndroidTV.apk` serves it; then deletes the previous release
+  (keeping its tag). Release builds are unsigned until this signs them (CI checks the unsigned
+  APK's size).
+- On the emulator: the release APK (R8) installs fresh, checks GitHub (up to date: v0.1.7 has no
+  APK), adds a provider, plays, runs multiview (91.9 MB PSS with 2 tiles). The install path, with a
+  debug 0.1.7 and a locally served 0.1.8: a wrong signature is refused before Android sees the
+  file; the right one downloads and verifies, and the permission step opens Google TV's "Install
+  unknown apps" screen for Lumio. Switching that on, and Android's install prompt, were left for
+  Jackson (a security setting).
+
+Still to do: the first release with the Android build (0.2.0), then the Downloader code.
 
 ### Phase 7: low-end polish
 

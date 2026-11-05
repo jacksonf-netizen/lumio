@@ -230,6 +230,17 @@ object LumioCore {
         if (id != null) call("player.selectTrack", "kind" to kind, "id" to id) else call("player.selectTrack", "kind" to kind)
     }
 
+    // MARK: Updates (the shared UpdateChecker and UpdateSignature, as on the Mac)
+
+    /** Asks GitHub for the latest release of [repository] newer than [version] with an Android build. */
+    suspend fun checkForUpdate(repository: String, version: String): UpdateInfo =
+        UpdateInfo(call("update.check", "repository" to repository, "version" to version) as JSONObject)
+
+    /** Throws unless [file] matches [signature] (the .sig file's text) under [publicKey]. */
+    suspend fun verifyUpdate(file: String, signature: String, publicKey: String) {
+        call("update.verify", "file" to file, "signature" to signature, "publicKey" to publicKey)
+    }
+
     // MARK: Multiview (the shared MultiviewSession; tiles are players "tile0" to "tile3")
 
     /**

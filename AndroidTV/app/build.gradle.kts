@@ -10,7 +10,8 @@ plugins {
 val sharedVersion = Properties().apply {
     rootDir.resolve("../version.properties").inputStream().use { load(it) }
 }
-val marketingVersion: String = sharedVersion.getProperty("MARKETING_VERSION")
+// -PlumioVersion=0.1.8 builds as another version (to test updating from one build to the next).
+val marketingVersion: String = (project.findProperty("lumioVersion") as String?) ?: sharedVersion.getProperty("MARKETING_VERSION")
 
 // AndroidTV/THIRD-PARTY-NOTICES.md ships inside the app (Settings → About shows it).
 val noticesDir = layout.buildDirectory.dir("generated/notices")
@@ -20,6 +21,14 @@ val copyNotices by tasks.registering(Copy::class) {
 }
 tasks.named("preBuild") { dependsOn(copyNotices) }
 val versionParts = marketingVersion.split(".").map { it.toInt() }
+
+// Where releases are published and the key their signatures are checked with: the same settings
+// as the Mac app's (UPDATE_REPOSITORY and UPDATE_PUBLIC_KEY in Mac/project.yml), read from there so
+// the two can't differ.
+fun macSetting(name: String): String {
+    val line = rootDir.resolve("../Mac/project.yml").readLines().firstOrNull { it.trim().startsWith("$name:") } ?: return ""
+    return line.substringAfter(":").trim().trim('"')
+}
 
 android {
     namespace = "com.jackson.lumio"
@@ -39,6 +48,8 @@ android {
             abiFilters += abis
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "UPDATE_REPOSITORY", "\"${macSetting("UPDATE_REPOSITORY")}\"")
+        buildConfigField("String", "UPDATE_PUBLIC_KEY", "\"${macSetting("UPDATE_PUBLIC_KEY")}\"")
     }
 
     buildFeatures {
@@ -51,9 +62,9 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
-            // Until phase 6: signed with the debug key so test builds install. The real release key
-            // comes in phase 6 (plan, "The APK signing key").
-            signingConfig = signingConfigs.getByName("debug")
+            // Built unsigned: AndroidTV/Tools/make_release.sh signs it with the release key from the
+            // Keychain. Every update must carry the same key, or Android refuses to install it.
+            signingConfig = null
         }
     }
 

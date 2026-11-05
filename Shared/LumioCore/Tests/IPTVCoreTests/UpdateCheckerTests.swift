@@ -29,10 +29,16 @@ struct UpdateCheckerTests {
     }
 
     static func release(tag: String, draft: Bool = false, page: String? = nil, signed: Bool = false,
-                        downloads: String = "https://github.com/owner/repo/releases/download") -> String {
-        let signature = signed ? #", {"name": "Lumio.zip.sig", "browser_download_url": "\#(downloads)/\#(tag)/Lumio.zip.sig"}"# : ""
+                        downloads: String = "https://github.com/owner/repo/releases/download",
+                        body: String = "Fixes and polish.", android: Bool = false) -> String {
+        var signature = signed ? #", {"name": "Lumio.zip.sig", "browser_download_url": "\#(downloads)/\#(tag)/Lumio.zip.sig"}"# : ""
+        if android {
+            signature += #", {"name": "Lumio-AndroidTV.apk", "browser_download_url": "\#(downloads)/\#(tag)/Lumio-AndroidTV.apk"}"#
+            signature += #", {"name": "Lumio-AndroidTV.apk.sig", "browser_download_url": "\#(downloads)/\#(tag)/Lumio-AndroidTV.apk.sig"}"#
+        }
+        let escapedBody = body.replacingOccurrences(of: "\n", with: "\\n")
         return """
-        {"tag_name": "\(tag)", "name": "Lumio \(tag)", "body": "Fixes and polish.", "draft": \(draft),
+        {"tag_name": "\(tag)", "name": "Lumio \(tag)", "body": "\(escapedBody)", "draft": \(draft),
          "html_url": "\(page ?? "https://github.com/owner/repo/releases/tag/\(tag)")", "published_at": "2026-10-01T12:00:00Z",
          "assets": [{"name": "Lumio.zip", "browser_download_url": "\(downloads)/\(tag)/a.zip"},
                     {"name": "Lumio.dmg", "browser_download_url": "\(downloads)/\(tag)/a.dmg"}\(signature)]}
@@ -150,5 +156,49 @@ struct UpdateCheckerTests {
         await #expect(throws: UpdateError.badResponse("tag “nightly” isn't a version")) {
             try await UpdateChecker(feed: feed, currentVersion: version, transport: ReleaseStub(body: Self.release(tag: "nightly"))).check()
         }
+    }
+
+    // MARK: Platforms
+
+    private func check(_ body: String, current: String, platform: UpdatePlatform, android: Bool = true) async throws -> UpdateCheckResult {
+        try await UpdateChecker(feed: .gitHub(owner: "owner", repository: "repo"), currentVersion: SemanticVersion(current)!,
+                                platform: platform, transport: ReleaseStub(body: Self.release(tag: "v0.3.0", signed: true, body: body, android: android))).check()
+    }
+
+    /// The TV takes the APK and its signature; the Mac never does.
+    @Test func eachPlatformTakesItsOwnBuild() async throws {
+        guard case .available(let tv) = try await check("Notes.", current: "0.2.0", platform: .android),
+              case .available(let mac) = try await check("Notes.", current: "0.2.0", platform: .mac)
+        else {
+            Issue.record("expected updates")
+            return
+        }
+        #expect(tv.archiveURL?.lastPathComponent == "Lumio-AndroidTV.apk")
+        #expect(tv.signatureURL?.lastPathComponent == "Lumio-AndroidTV.apk.sig")
+        #expect(tv.downloadURL?.lastPathComponent == "Lumio-AndroidTV.apk")
+        #expect(mac.archiveURL?.lastPathComponent == "a.zip")
+        #expect(mac.downloadURL?.lastPathComponent == "a.dmg")
+        // A release from before there was an Android build isn't an update for the TV.
+        #expect(try await check("Notes.", current: "0.2.0", platform: .android, android: false) == .upToDate(latest: SemanticVersion("0.3.0")!))
+    }
+
+    /// Only offered when the app's own platform changed after the version it runs.
+    @Test func theMarkerSaysWhichPlatformsChanged() async throws {
+        let marker = "Summary.\n\n---\n- A Mac fix.\n\n<!-- lumio-changed: mac=0.3.0 android=0.2.1 -->"
+        guard case .available(let mac) = try await check(marker, current: "0.2.1", platform: .mac) else {
+            Issue.record("expected an update for the Mac")
+            return
+        }
+        #expect(!mac.notes.contains("lumio-changed"))
+        #expect(mac.notes.hasSuffix("- A Mac fix."))
+        // The TV already runs the last Android change.
+        #expect(try await check(marker, current: "0.2.1", platform: .android) == .upToDate(latest: SemanticVersion("0.3.0")!))
+        // A TV that skipped 0.2.1 still gets it, from this release's APK.
+        if case .upToDate = try await check(marker, current: "0.2.0", platform: .android) { Issue.record("0.2.0 should update") }
+        // A marker without the platform: nothing for it.
+        #expect(try await check("<!-- lumio-changed: mac=0.3.0 -->", current: "0.1.0", platform: .android)
+            == .upToDate(latest: SemanticVersion("0.3.0")!))
+        #expect(UpdateChecker.changedVersions(in: "no marker") == nil)
+        #expect(UpdateChecker.changedVersions(in: "<!--lumio-changed: android=1.2.0 bogus mac=x-->") == [.android: SemanticVersion("1.2.0")!])
     }
 }

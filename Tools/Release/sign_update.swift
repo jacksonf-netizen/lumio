@@ -6,6 +6,8 @@
 //                                                       Mac/project.yml.
 //   swift Tools/Release/sign_update.swift public-key    Print the public key again.
 //   swift Tools/Release/sign_update.swift sign FILE     Print FILE's signature (base64).
+//   swift Tools/Release/sign_update.swift verify FILE SIGFILE PUBLICKEY
+//                                                       Check a signature the way the apps do.
 //
 // The private key never leaves the Keychain (item "Lumio update signing key"), and is never
 // written to the repository. Back it up (Keychain Access → File → Export Items…, or copy the
@@ -73,6 +75,21 @@ case "sign":
     } catch {
         fail("couldn't sign \(path): \(error.localizedDescription)")
     }
+case "verify":
+    guard arguments.count == 4 else { fail("usage: verify FILE SIGFILE PUBLICKEY") }
+    let list = Array(arguments)
+    guard let keyData = Data(base64Encoded: list[3]), let key = try? Curve25519.Signing.PublicKey(rawRepresentation: keyData)
+    else { fail("unreadable public key") }
+    guard let text = try? String(contentsOfFile: list[2], encoding: .utf8),
+          let signature = Data(base64Encoded: text.trimmingCharacters(in: .whitespacesAndNewlines))
+    else { fail("unreadable signature file \(list[2])") }
+    do {
+        let message = Data("lumio-update-v1".utf8) + (try digest(of: URL(fileURLWithPath: list[1])))
+        guard key.isValidSignature(signature, for: message) else { fail("\(list[1]): the signature doesn't match") }
+        print("\(list[1]): signature OK")
+    } catch {
+        fail("couldn't read \(list[1]): \(error.localizedDescription)")
+    }
 default:
-    fail("usage: sign_update.swift generate | public-key | sign FILE")
+    fail("usage: sign_update.swift generate | public-key | sign FILE | verify FILE SIGFILE PUBLICKEY")
 }
