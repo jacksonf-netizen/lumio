@@ -15,6 +15,8 @@ offers the update. The list below it appears on the release page.
   follows the same rules as the Mac.
 - For developers: the player's setup, the fallback ladder's choice of engines and the zapping
   rules (channel up/down, numbers, previous channel) are shared with the Android TV app.
+- For developers: the Android TV app's guide, Favorites and Recents use the shared core's guide
+  reads and Favorites and Recents rules, through new bridge requests.
 - For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
   when its part of the repository changes. The Android TV workflow runs the shared core's tests on
   an Android emulator and builds the APK.

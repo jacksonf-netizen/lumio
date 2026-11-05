@@ -577,6 +577,36 @@ Still to do: the measurements on the onn HD stick.
   programme details.
 - Favorites and Recents, with the shared rules.
 
+Done 2026-11-05 (branch `android/phase-4-guide`), on the emulator:
+
+- Bridge: `guide.programmes` (a window of up to two days for the rows asked for, with each
+  provider's time offset applied by the shared `GuideRepository`), `library.toggleFavorite`,
+  `library.moveFavorite`, `library.removeRecent`, `library.clearRecents`. Favorites and Recents use
+  the core's `LibraryRepository`, so a favorite covers every provider's copy of a channel and Recents
+  keeps the Mac's limits. `ProgrammeDTO` gained `category` and `episode`; new fixture `guide.json`.
+- Guide grid in Compose, drawn by hand rather than one focusable view per programme: the grid is one
+  focusable box that moves its own highlight. Left/right go through programmes (a programme cut off
+  at the left edge first scrolls back to its start), up/down keep the time, CH+/CH- page, rewind and
+  fast-forward change day, digits jump to a channel number, Back returns to now and then to the
+  sidebar. The window is as many half hours as fit (90 minutes on a 1080p TV beside the sidebar).
+  The movement rules are in `GuideNavigation.kt`, with tests.
+- Programmes load in four-hour blocks for the rows on screen and six either side; at most 600 blocks
+  stay in memory, least recently shown dropped first.
+- Details of the highlighted programme above the grid (time left or time until, episode, category,
+  description). OK watches what's on; OK on a past or future programme, Hold OK or Menu opens the
+  options panel (watch, Favorites, and in Favorites move up/down/top/bottom, in Recents remove or
+  clear with a confirmation). Hold OK opens the panel on release, so the release can't pick its
+  first choice.
+- Sidebar: Guide (any group, with a group picker), Favorites and Recents (the same grid on those
+  lists, with empty-list messages). Live TV rows show a star for favorites and Hold OK adds or
+  removes one. Watching from a list zaps through that list; closing the player returns the
+  highlight to the channel that was playing.
+- The remote's Guide key can't be used: Google TV claims it globally (`GlobalKeyManager` sends it to
+  its own Live tab), so apps never receive it.
+- Memory with the guide open and nothing playing: 115.6 MB PSS (debug build).
+
+Still to do: check the guide's scrolling speed on the onn HD stick with a full-size provider.
+
 ### Phase 5: movies, series, search, settings
 
 - VOD shelves, details, resume; search; remaining settings (regions, hidden, sidebar sections,

@@ -77,6 +77,15 @@ public struct ProgrammeDTO: Codable, Equatable, Sendable {
     public var stop: Double
     public var subtitle: String?
     public var summary: String?
+    public var category: String?
+    /// The provider's episode number as written ("S2 E5").
+    public var episode: String?
+}
+
+/// One guide row: a channel's programmes in the window asked for, in order.
+public struct GuideRowDTO: Codable, Equatable, Sendable {
+    public var epg: EPGRefDTO
+    public var programmes: [ProgrammeDTO]
 }
 
 public struct TrackDTO: Codable, Equatable, Sendable {
@@ -144,6 +153,8 @@ extension ProgrammeDTO {
         stop = programme.stop.timeIntervalSince1970
         subtitle = programme.subtitle
         summary = programme.summary
+        category = programme.category
+        episode = programme.episodeNumber
     }
 }
 

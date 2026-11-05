@@ -32,15 +32,20 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
+import com.jackson.lumio.ui.guide.GuideScope
+import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.live.LiveTvScreen
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
 import com.jackson.lumio.ui.providers.ProvidersScreen
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 
-/** The sections in the sidebar. More arrive with later phases (Guide, Movies, Series, Search). */
+/** The sections in the sidebar. More arrive with later phases (Movies, Series, Search). */
 enum class Section(val title: String) {
     Live("Live TV"),
+    Guide("Guide"),
+    Favorites("Favorites"),
+    Recents("Recents"),
     Settings("Settings"),
 }
 
@@ -97,8 +102,14 @@ fun LumioApp() {
             }
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
+            val play = { channel: String, group: String -> player.watch(channel, group) }
+            val playing = player.state?.channel?.id
+            val toSidebar = { runCatching { sidebarFocus.requestFocus() }; Unit }
             when (shown) {
-                Section.Live -> LiveTvScreen(onPlay = { channel, group -> player.watch(channel, group) }, playerShowing = player.showing)
+                Section.Live -> LiveTvScreen(onPlay = play, playerShowing = player.showing)
+                Section.Guide -> GuideScreen(GuideScope.All, play, player.showing, playing)
+                Section.Favorites -> GuideScreen(GuideScope.Favorites, play, player.showing, playing, toSidebar)
+                Section.Recents -> GuideScreen(GuideScope.Recents, play, player.showing, playing, toSidebar)
                 Section.Settings -> ProvidersScreen(providers)
             }
         }

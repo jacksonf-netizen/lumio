@@ -88,6 +88,28 @@ object LumioCore {
         return list.associateBy { it.epg }
     }
 
+    /** Programmes between [start] and [end] (seconds since 1970; at most two days) for each channel. */
+    suspend fun guide(refs: List<EPGRef>, start: Double, end: Double): Map<EPGRef, List<Programme>> {
+        if (refs.isEmpty()) return emptyMap()
+        val rows = call("guide.programmes", "epg" to JSONArray(refs.map { it.toJson() }), "start" to start, "end" to end)
+            .asArray().map(::GuideRow)
+        return rows.associate { it.epg to it.programmes }
+    }
+
+    // MARK: Favorites and Recents (the core's LibraryRepository, as on the Mac)
+
+    /** Adds the channel to Favorites or takes it out. Returns whether it's a favorite now. */
+    suspend fun toggleFavorite(channel: String): Boolean =
+        call("library.toggleFavorite", "channel" to channel).asObject().getBoolean("favorite")
+
+    /** Moves a favorite to position [to] (0 is the top; past the end is the bottom). */
+    suspend fun moveFavorite(channel: String, to: Int) { call("library.moveFavorite", "channel" to channel, "to" to to) }
+
+    suspend fun removeRecent(channel: String) { call("library.removeRecent", "channel" to channel) }
+
+    /** Empties Recently Watched (channels only). */
+    suspend fun clearRecents() { call("library.clearRecents") }
+
     /** network (with [available]), willSleep or didWake. Sent in the background, in order. */
     fun systemEvent(type: String, available: Boolean? = null) {
         background.launch {

@@ -1,0 +1,9 @@
+[
+  {"epg": {"id": "bbcone.uk", "providers": ["p1"]},
+   "programmes": [
+     {"title": "Quiz Night", "start": 1793815200, "stop": 1793817000, "category": "Entertainment", "episode": "S4 E12",
+      "summary": "Four teams, one trophy."},
+     {"title": "News at Six", "start": 1793817000, "stop": 1793818800}
+   ]},
+  {"epg": {"id": "empty.uk", "providers": ["p1"]}, "programmes": []}
+]
