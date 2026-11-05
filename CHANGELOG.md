@@ -17,6 +17,9 @@ offers the update. The list below it appears on the release page.
   rules (channel up/down, numbers, previous channel) are shared with the Android TV app.
 - For developers: the Android TV app's guide, Favorites and Recents use the shared core's guide
   reads and Favorites and Recents rules, through new bridge requests.
+- For developers: fetching movie and series details, the resume rule, saving watch progress and
+  the Movies and Series home page moved into the shared core, so the Mac and Android TV apps
+  follow the same rules. Nothing changes in how the Mac app behaves.
 - For developers: CI is split into Mac, Android TV and secrets-check workflows, each running only
   when its part of the repository changes. The Android TV workflow runs the shared core's tests on
   an Android emulator and builds the APK.

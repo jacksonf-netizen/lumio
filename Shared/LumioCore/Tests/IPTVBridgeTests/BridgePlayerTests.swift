@@ -37,6 +37,10 @@ struct BridgePlayerTests {
                 try Channel(providerID: provider.id, streamID: name.0, number: 101 + n, name: name.1, categoryID: "1", sortIndex: n).insert(db)
             }
         }
+        try await environment.database.writer.write { db in
+            try Category(providerID: provider.id, kind: .movie, categoryID: "m1", name: "Films", sortIndex: 0).insert(db)
+            try Movie(providerID: provider.id, streamID: 42, name: "The Test Film", categoryID: "m1", containerExtension: "mkv").insert(db)
+        }
         try environment.logicalChannels.rebuild()
         let bridge = BridgeCore(environment: environment, playerCommands: { engine.handle($0) }, events: { log.append($0) })
         await bridge.start(backgroundWork: false)
@@ -82,6 +86,60 @@ struct BridgePlayerTests {
         try await log.waitFor { $0.contains(#""phase":"playing""#) }
         _ = await bridge.handle(#"{"method":"player.stop"}"#)
         #expect(engine.commands.contains { $0["command"] as? String == "stop" })
+    }
+
+    @Test func aMovieResumesAndSavesItsPositionWhenStopped() async throws {
+        let (bridge, engine, log) = try await makeBridge()
+        let providerID = try #require(try bridge.environment.providers.repository.all().first?.id)
+        let state = try await call(bridge, "vod.play", [
+            "kind": "movie", "provider": providerID.rawValue, "id": "42", "position": 120, "title": "The Test Film",
+        ])
+        #expect((state["vod"] as? [String: Any])?["title"] as? String == "The Test Film")
+        #expect(state["channel"] == nil)
+
+        await waitFor { !engine.loads.isEmpty }
+        let load = try #require(engine.loads.first)
+        #expect(load["url"] as? String == "http://a.example/movie/viewer/pw/42.mkv")
+        #expect(load["live"] as? Bool == false)
+        #expect(load["startPosition"] as? Double == 120)
+
+        deliver(engine, "playing")
+        try await log.waitFor { $0.contains(#""phase":"playing""#) }
+        // Zapping does nothing during a movie.
+        _ = try await call(bridge, "player.zap", ["by": 1])
+        #expect(engine.loads.count == 1)
+        // The watchdog reads the position; stopping saves it.
+        await waitFor { engine.commands.contains { $0["command"] as? String == "metrics" } }
+        try await Task.sleep(for: .milliseconds(1500)) // the tracker reads the position once a second
+        _ = try await call(bridge, "player.stop")
+        let vod = VODCatalog(database: bridge.environment.database)
+        var saved: WatchProgress?
+        for _ in 0..<100 {
+            saved = try await vod.progress(kind: .movie, providerID: providerID, itemID: "42")
+            if saved != nil { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect((saved?.positionSeconds ?? 0) > 0)
+        try await log.waitFor { $0.contains(#""type":"vod""#) }
+        // And it's in Recently Watched.
+        #expect(try await vod.recentlyWatched(.movie).map(\.itemID) == ["42"])
+    }
+
+    @Test func pauseResumeAndSeekReachTheEngine() async throws {
+        let (bridge, engine, _) = try await makeBridge()
+        let providerID = try #require(try bridge.environment.providers.repository.all().first?.id)
+        _ = try await call(bridge, "vod.play", ["kind": "movie", "provider": providerID.rawValue, "id": "42", "title": "Film"])
+        await waitFor { !engine.loads.isEmpty }
+        #expect(engine.loads.first?["startPosition"] == nil)
+        deliver(engine, "playing")
+        _ = try await call(bridge, "player.pause")
+        _ = try await call(bridge, "player.seek", ["position": 300])
+        _ = try await call(bridge, "player.resume")
+        let names = engine.commands.compactMap { $0["command"] as? String }
+        #expect(names.contains("pause"))
+        #expect(names.contains("play"))
+        #expect(engine.commands.contains { $0["command"] as? String == "seek" && $0["position"] as? Double == 300 })
+        _ = try await call(bridge, "player.stop")
     }
 
     @Test func aRefusedStreamMovesToTheNextFormat() async throws {

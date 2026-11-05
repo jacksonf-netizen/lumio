@@ -20,6 +20,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,12 +48,15 @@ import androidx.tv.material3.Text
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.player.PlayerEngines
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.vod.clock
+import kotlinx.coroutines.delay
 
 /**
  * Full-screen live TV. Up/down and CH+/CH- change channel (through the list playback started
  * from), number keys pick a channel by number, OK shows the info banner, the last-channel key
  * goes back to the previous channel, Right (or Menu) opens audio and subtitles, Back closes the
- * player.
+ * player. For a movie or episode: OK pauses, left/right skip 10 s (rewind and fast-forward 30 s),
+ * Down or Menu opens audio and subtitles, and Back closes (the core saves where it got to).
  */
 @OptIn(UnstableApi::class)
 @Composable
@@ -69,6 +74,21 @@ fun PlayerScreen(model: PlayerViewModel) {
             .focusable()
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown || state?.phase == "failed" || model.tracks != null) return@onPreviewKeyEvent false
+                if (state?.vod != null) {
+                    // A movie or episode: pause, skip, audio and subtitles. No zapping.
+                    when (event.key.nativeKeyCode) {
+                        AndroidKeyEvent.KEYCODE_DPAD_CENTER, AndroidKeyEvent.KEYCODE_ENTER, AndroidKeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
+                        AndroidKeyEvent.KEYCODE_MEDIA_PLAY, AndroidKeyEvent.KEYCODE_MEDIA_PAUSE -> model.togglePause()
+                        AndroidKeyEvent.KEYCODE_DPAD_LEFT -> model.skip(-10.0)
+                        AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> model.skip(10.0)
+                        AndroidKeyEvent.KEYCODE_MEDIA_REWIND -> model.skip(-30.0)
+                        AndroidKeyEvent.KEYCODE_MEDIA_FAST_FORWARD -> model.skip(30.0)
+                        AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_INFO -> model.showBanner()
+                        AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_CAPTIONS -> model.openTracks()
+                        else -> return@onPreviewKeyEvent false
+                    }
+                    return@onPreviewKeyEvent true
+                }
                 when (val code = event.key.nativeKeyCode) {
                     AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> model.zap(-1)
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_CHANNEL_UP -> model.zap(1)
@@ -83,7 +103,9 @@ fun PlayerScreen(model: PlayerViewModel) {
     ) {
         Video()
         Status(model)
-        if (model.bannerVisible || state?.phase == "failed") Banner(model)
+        if (state?.vod != null) {
+            if (model.bannerVisible || state.phase == "paused" || model.seekTarget != null) VODControls(model)
+        } else if (model.bannerVisible || state?.phase == "failed") Banner(model)
         TopRight(model)
         model.tracks?.let { TracksPanel(it, onSelect = model::selectTrack) }
     }
@@ -173,6 +195,52 @@ private fun Banner(model: PlayerViewModel) {
                     }
                 }
                 next?.let { Text("Next: ${it.title}", color = LumioColors.secondaryText, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+        }
+    }
+}
+
+/** A movie's or episode's title, where it is, and how long it is, along the bottom. */
+@Composable
+private fun VODControls(model: PlayerViewModel) {
+    val vod = model.state?.vod ?: return
+    val engine = remember { PlayerEngines.engine("main") }
+    // The position, read from the player twice a second while the controls show.
+    val timeline by produceState(engine.timeline, engine) {
+        while (true) {
+            value = engine.timeline
+            delay(500)
+        }
+    }
+    val duration = timeline?.second
+    val position = model.seekTarget ?: timeline?.first ?: 0.0
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
+                .padding(start = 56.dp, end = 56.dp, top = 60.dp, bottom = 36.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (model.state?.phase == "paused") {
+                    Text("Paused", color = Color.Black, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.background(Color.White, RoundedCornerShape(4.dp)).padding(horizontal = 8.dp, vertical = 2.dp))
+                    Spacer(Modifier.width(12.dp))
+                }
+                Text(vod.title, color = Color.White, fontSize = 26.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            vod.subtitle?.let { Text(it, color = LumioColors.secondaryText, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Spacer(Modifier.height(14.dp))
+            Box(Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(3.dp)).background(Color(0x55FFFFFF))) {
+                val fraction = if (duration != null && duration > 0) (position / duration).toFloat().coerceIn(0f, 1f) else 0f
+                Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().background(LumioColors.accent))
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                Text(clock(position), color = Color.White, fontSize = 15.sp)
+                Spacer(Modifier.weight(1f))
+                Text("◀ ▶ skip 10 s   ·   OK pause   ·   ▼ audio and subtitles", color = LumioColors.secondaryText, fontSize = 13.sp)
+                Spacer(Modifier.weight(1f))
+                Text(duration?.let { "-" + clock(maxOf(0.0, it - position)) } ?: "", color = Color.White, fontSize = 15.sp)
             }
         }
     }

@@ -21,7 +21,7 @@ public actor BridgeCore {
     private let guide: GuideRepository
     private let library: LibraryRepository
     private var syncing: [ProviderID: String] = [:]
-    private nonisolated let players: Players
+    nonisolated let players: Players
     private var observers: [AnyDatabaseCancellable] = []
     private var tasks: [Task<Void, Never>] = []
 
@@ -94,6 +94,8 @@ public actor BridgeCore {
     // MARK: Methods
 
     private func perform(_ method: String, _ params: Params) async throws -> any Encodable {
+        if method.hasPrefix("vod.") || method == "search.query" { return try await vodRequest(method, params) }
+        if method.hasPrefix("settings.") || method.hasPrefix("content.") { return try await settingsRequest(method, params) }
         switch method {
         case "providers.list":
             return try await providerList()
@@ -183,6 +185,20 @@ public actor BridgeCore {
             case "player.retry": await player.controller.retry()
             default: break
             }
+            return await player.state
+
+        case "player.pause", "player.resume":
+            struct P: Decodable { var player: String? }
+            let player = try await players.player(try params.decode(P.self).player)
+            await MainActor.run { method == "player.pause" ? player.controller.pause() : player.controller.resume() }
+            return await player.state
+
+        case "player.seek":
+            // To `position` seconds (movies and episodes).
+            struct P: Decodable { var player: String?; var position: Double }
+            let p = try params.decode(P.self)
+            let player = try await players.player(p.player)
+            await MainActor.run { player.controller.seek(to: max(0, p.position)) }
             return await player.state
 
         case "player.tracks":
@@ -313,6 +329,11 @@ public actor BridgeCore {
 
     // MARK: Events
 
+    /// Watch progress or Recently Watched changed: Movies and Series screens re-read.
+    func emitVODChange() {
+        Self.emit(BridgeEvent(type: "vod"), to: send)
+    }
+
     private func providersChanged() {
         // Logos and posters on a link that isn't in use load from the one that is (as on the Mac).
         if let providers = try? environment.providers.repository.all(),
@@ -369,7 +390,7 @@ public actor BridgeCore {
 /// The app's players, created on first use. "main" is the full-screen player.
 @MainActor
 final class Players {
-    private let environment: AppEnvironment
+    let environment: AppEnvironment
     private let send: (@MainActor @Sendable (String) -> String?)?
     private let emit: @Sendable (BridgeEvent) -> Void
     private var players: [String: BridgePlayer] = [:]
@@ -381,6 +402,8 @@ final class Players {
         self.emit = emit
     }
 
+    var all: [BridgePlayer] { Array(players.values) }
+
     func player(_ id: String?) throws -> BridgePlayer {
         let id = id ?? "main"
         if let player = players[id] { return player }
@@ -391,7 +414,7 @@ final class Players {
     }
 }
 
-private struct Params {
+struct Params {
     let data: Data
     func decode<T: Decodable>(_ type: T.Type) throws -> T {
         do {
@@ -403,7 +426,7 @@ private struct Params {
 }
 
 private struct ID: Decodable { var id: String }
-private struct Empty: Encodable {}
+struct Empty: Encodable {}
 
 struct BridgeError: Error, LocalizedError {
     let message: String

@@ -1,0 +1,17 @@
+{
+  "recentlyWatched": [
+    {"kind": "movie", "provider": "p1", "id": "42", "title": "Arrival", "image": "http://a.example/arrival.jpg",
+     "position": 1820, "duration": 6960, "watched": false, "canResume": true},
+    {"kind": "episode", "provider": "p1", "id": "e12", "title": "A Show", "subtitle": "S1 E2 · Second",
+     "position": 0, "series": 9, "watched": true, "canResume": false}
+  ],
+  "recentlyAdded": [
+    {"kind": "movie", "provider": "p1", "id": 43, "name": "Dune", "poster": "http://a.example/dune.jpg", "rating": 8.1,
+     "year": 2021, "favorite": false}
+  ],
+  "shelves": [
+    {"category": {"provider": "p1", "id": "m1", "name": "Science Fiction"},
+     "items": [{"kind": "movie", "provider": "p1", "id": 42, "name": "Arrival", "year": 2016, "progress": 0.26, "favorite": true}]}
+  ],
+  "categories": [{"provider": "p1", "id": "m1", "name": "Science Fiction"}]
+}

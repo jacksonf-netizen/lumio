@@ -21,7 +21,10 @@ public struct VODItem: Hashable, Sendable, Identifiable {
     public var isFavorite: Bool
 
     /// Title without a trailing "(2019)" (the year is shown separately).
-    public var displayName: String {
+    public var displayName: String { Self.displayName(name) }
+
+    /// A movie's or series' name without a trailing "(2019)".
+    public static func displayName(_ name: String) -> String {
         name.replacing(/\s*\((19|20)\d{2}\)\s*$/, with: "")
     }
 }
@@ -60,6 +63,19 @@ public struct ContinueItem: Hashable, Sendable, Identifiable {
     }
 }
 
+/// The Movies or Series home page (`VODCatalog.home`).
+public struct VODHome: Sendable {
+    public var categories: [Category]
+    public var recentlyAdded: [VODItem]
+    public var shelves: [VODShelf]
+    public var recentlyWatched: [ContinueItem]
+}
+
+public struct VODShelf: Sendable {
+    public var category: Category
+    public var items: [VODItem]
+}
+
 /// Read model for Movies and Series.
 public struct VODCatalog: Sendable {
     private let database: AppDatabase
@@ -87,7 +103,7 @@ public struct VODCatalog: Sendable {
     /// Outside a specific category, items in hidden categories are left out unless `includeHidden`
     /// (favorites and recently watched always show). Region switches only apply to Live TV.
     public func items(_ kind: VODItem.Kind, category: Category? = nil, filter: ProviderFilter = .all,
-                      search: String? = nil, recent: Bool = false, limit: Int? = nil,
+                      search: String? = nil, recent: Bool = false, limit: Int? = nil, offset: Int = 0,
                       keys: [(ProviderID, Int)]? = nil, includeHidden: Bool = false) async throws -> [VODItem] {
         try await database.reader.read { db in
             var conditions = ["p.isEnabled"]
@@ -134,7 +150,7 @@ public struct VODCatalog: Sendable {
                 \(isMovie ? "LEFT JOIN watchProgress w ON w.providerID = m.providerID AND w.itemKind = 'movie' AND w.itemID = CAST(m.streamID AS TEXT)" : "")
                 WHERE \(conditions.joined(separator: " AND "))
                 ORDER BY \(order)
-                \(limit.map { "LIMIT \($0)" } ?? "")
+                \(limit.map { "LIMIT \($0) OFFSET \(max(0, offset))" } ?? "")
                 """
             return try Row.fetchAll(db, sql: sql, arguments: arguments).map { row in
                 let position: Double? = row["positionSeconds"]
@@ -150,6 +166,21 @@ public struct VODCatalog: Sendable {
                     progress: progress, isFavorite: row["fav"])
             }
         }
+    }
+
+    /// The Movies or Series home page: Recently Watched, Recently Added, a shelf for each of the
+    /// first `shelves` categories that have something in them, and every category.
+    public func home(_ kind: VODItem.Kind, filter: ProviderFilter = .all, shelves: Int = 8, perShelf: Int = 24,
+                     recentlyAdded: Int = 30) async throws -> VODHome {
+        let categories = try await categories(kind, filter: filter)
+        let recent = try await items(kind, filter: filter, recent: true, limit: recentlyAdded)
+        var rows: [VODShelf] = []
+        for category in categories.prefix(shelves) {
+            let items = try await items(kind, category: category, filter: filter, limit: perShelf)
+            if !items.isEmpty { rows.append(VODShelf(category: category, items: items)) }
+        }
+        return VODHome(categories: categories, recentlyAdded: recent, shelves: rows,
+                       recentlyWatched: try await recentlyWatched(kind))
     }
 
     public func favorites(_ kind: VODItem.Kind) async throws -> [VODItem] {

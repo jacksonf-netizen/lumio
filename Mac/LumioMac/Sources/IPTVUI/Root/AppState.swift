@@ -20,7 +20,7 @@ public final class AppState {
     let vod: VODCatalog
     /// Release checks (inactive unless the build has a release feed).
     public let updates = UpdateController()
-    @ObservationIgnored private var vodTracker: Task<Void, Never>?
+    @ObservationIgnored private let vodTracker = VODProgressTracker()
 
     /// Selected sidebar section in the main window. The app opens on Recents (or the first section
     /// the user hasn't switched off).
@@ -129,45 +129,12 @@ public final class AppState {
         if !playerWindowOpen { isPlayerPresented = true }
     }
 
-    /// Plays a movie or episode and saves its position every 10 s and when playback stops. Reaching
-    /// the end (or the last 5%) marks it watched.
+    /// Plays a movie or episode and saves its position as it plays (the shared VODProgressTracker:
+    /// every 10 s and when playback stops; the end marks it watched).
     public func playVOD(_ item: PlaybackItem, kind: LibraryItemKind, providerID: ProviderID, itemID: String) {
-        vodTracker?.cancel()
         play(item)
-        let main = hub.main
-        let library = self.library
-        Task { try? await library.recordPlayed(providerID: providerID, kind: kind, itemID: itemID) }
-        vodTracker = Task { @MainActor in
-            var position = 0.0
-            var duration: Double?
-            var lastSaved = Date()
-            @MainActor func save() async {
-                guard position > 0 else { return }
-                try? await library.saveProgress(kind: kind, providerID: providerID, itemID: itemID, position: position, duration: duration)
-                vodProgressVersion += 1
-            }
-            // Wait for this item to start.
-            while !Task.isCancelled, main.item?.id == item.id, main.phase != .playing {
-                try? await Task.sleep(for: .milliseconds(500))
-                if case .failed = main.phase { return }
-            }
-            while !Task.isCancelled, main.item?.id == item.id {
-                if let metrics = main.metrics, let current = metrics.position, current > 0 {
-                    position = current
-                    duration = metrics.duration ?? duration
-                }
-                if main.phase == .ended {
-                    try? await library.setWatched(true, kind: kind, providerID: providerID, itemID: itemID)
-                    vodProgressVersion += 1
-                    return
-                }
-                if Date().timeIntervalSince(lastSaved) >= 10 {
-                    await save()
-                    lastSaved = Date()
-                }
-                try? await Task.sleep(for: .seconds(1))
-            }
-            await save()
+        vodTracker.track(item, on: hub.main, kind: kind, providerID: providerID, itemID: itemID, library: library) { [weak self] in
+            self?.vodProgressVersion += 1
         }
     }
 

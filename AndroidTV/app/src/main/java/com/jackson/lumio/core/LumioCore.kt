@@ -96,6 +96,93 @@ object LumioCore {
         return rows.associate { it.epg to it.programmes }
     }
 
+    // MARK: Movies and Series (kind: movie or series)
+
+    suspend fun vodHome(kind: String): VODHome = VODHome(call("vod.home", "kind" to kind).asObject())
+
+    /** A page of a category, in the provider's order. */
+    suspend fun vodCategory(kind: String, provider: String, category: String, offset: Int, limit: Int = 120): List<VODItem> =
+        call("vod.category", "kind" to kind, "provider" to provider, "category" to category, "offset" to offset, "limit" to limit)
+            .asArray().map(::VODItem)
+
+    suspend fun vodSearch(kind: String, query: String, limit: Int = 60): List<VODItem> =
+        call("vod.search", "kind" to kind, "query" to query, "limit" to limit).asArray().map(::VODItem)
+
+    /** Channels, guide programmes, movies and series matching [text]. */
+    suspend fun search(text: String): SearchResults = SearchResults(call("search.query", "text" to text).asObject())
+
+    /** What the catalog has; with [fetch], the provider's full details first (slower). */
+    suspend fun movie(provider: String, id: Int, fetch: Boolean = false): MovieInfo =
+        MovieInfo(call("vod.movie", "provider" to provider, "id" to id, "fetch" to fetch).asObject())
+
+    /** With [fetch], the seasons and episodes are fetched again from the provider first. */
+    suspend fun series(provider: String, id: Int, fetch: Boolean = false): SeriesInfo =
+        SeriesInfo(call("vod.series", "provider" to provider, "id" to id, "fetch" to fetch).asObject())
+
+    /**
+     * Plays a movie ([kind] movie, [id] its stream id) or an episode ([kind] episode, [id] its episode
+     * id) from [position] seconds (null: the start). The core saves the position as it plays.
+     */
+    suspend fun playVOD(kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?): PlayerState {
+        val params = mutableListOf<Pair<String, Any>>("kind" to kind, "provider" to provider, "id" to id, "title" to title)
+        if (position != null && position > 0) params += "position" to position
+        if (subtitle != null) params += "subtitle" to subtitle
+        return PlayerState(call("vod.play", *params.toTypedArray()) as JSONObject)
+    }
+
+    suspend fun setVODFavorite(kind: String, provider: String, id: String, favorite: Boolean) {
+        call("vod.setFavorite", "kind" to kind, "provider" to provider, "id" to id, "favorite" to favorite)
+    }
+
+    /** [kind] movie or episode. */
+    suspend fun setWatched(kind: String, provider: String, id: String, watched: Boolean) {
+        call("vod.setWatched", "kind" to kind, "provider" to provider, "id" to id, "watched" to watched)
+    }
+
+    /** A movie ([kind] movie, its stream id) or a whole series ([kind] series, its series id). */
+    suspend fun removeVODRecent(kind: String, provider: String, id: String) {
+        call("vod.removeRecent", "kind" to kind, "provider" to provider, "id" to id)
+    }
+
+    suspend fun clearVODRecents(kind: String) { call("vod.clearRecents", "kind" to kind) }
+
+    suspend fun pause(): PlayerState = PlayerState(call("player.pause") as JSONObject)
+
+    suspend fun resume(): PlayerState = PlayerState(call("player.resume") as JSONObject)
+
+    suspend fun seek(position: Double): PlayerState = PlayerState(call("player.seek", "position" to position) as JSONObject)
+
+    // MARK: Settings and content switches
+
+    suspend fun settings(): AppSettings = AppSettings(call("settings.get").asObject())
+
+    /** A number setting (epgRefreshHours, catalogRefreshHours, epgFutureDays, stallTimeoutSeconds). */
+    suspend fun setSetting(key: String, number: Double) { call("settings.set", "key" to key, "number" to number) }
+
+    /** A text setting (preferredFormat, bufferPreset, userAgent; empty user agent: the default). */
+    suspend fun setSetting(key: String, text: String) { call("settings.set", "key" to key, "text" to text) }
+
+    /** A list setting (hiddenSidebarItems). */
+    suspend fun setSetting(key: String, list: List<String>) { call("settings.set", "key" to key, "list" to JSONArray(list)) }
+
+    suspend fun regions(): Regions = Regions(call("content.regions").asObject())
+
+    /** Switching a region on or off resets its single groups. */
+    suspend fun setRegion(code: String, shown: Boolean) { call("content.setRegion", "code" to code, "shown" to shown) }
+
+    suspend fun setAllRegions(shown: Boolean) { call("content.setAllRegions", "shown" to shown) }
+
+    suspend fun setRegionCategory(provider: String, id: String, shown: Boolean) {
+        call("content.setRegionCategory", "provider" to provider, "id" to id, "shown" to shown)
+    }
+
+    suspend fun hiddenCategories(): List<ContentCategory> = call("content.hiddenCategories").asArray().map(::ContentCategory)
+
+    /** [kind] live, movie or series. */
+    suspend fun setCategoryHidden(provider: String, kind: String, id: String, hidden: Boolean) {
+        call("content.setCategoryHidden", "provider" to provider, "kind" to kind, "id" to id, "hidden" to hidden)
+    }
+
     // MARK: Favorites and Recents (the core's LibraryRepository, as on the Mac)
 
     /** Adds the channel to Favorites or takes it out. Returns whether it's a favorite now. */

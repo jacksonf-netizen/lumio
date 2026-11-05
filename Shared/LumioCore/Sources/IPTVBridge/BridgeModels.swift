@@ -117,6 +117,7 @@ public struct BridgeEvent: Codable, Equatable, Sendable {
     /// live: the Live TV groups or channels changed. guide: now/next may have changed.
     /// sync: a refresh started, moved on a step or finished (`provider`, `label`, `error`).
     /// player: a player's state changed (`state`).
+    /// vod: watch progress or Recently Watched changed (Movies and Series re-read).
     public var type: String
     public var provider: String?
     public var label: String?

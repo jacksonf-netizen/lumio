@@ -36,6 +36,26 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -1)" && xcodebuild -version
 
+      # MPVKit's prebuilt libraries are large downloads from GitHub releases, which sometimes
+      # answer 504. Keep SwiftPM's download cache between runs, and retry resolving a few times.
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Shared/LumioCore/Package.resolved', 'Mac/LumioMac/Package.resolved') }}
+          restore-keys: swiftpm-${{ runner.os }}-
+
+      - name: Resolve packages
+        run: |
+          for package in Shared/LumioCore Mac/LumioMac; do
+            for attempt in 1 2 3 4; do
+              swift package resolve --package-path "$package" && break
+              [ "$attempt" = 4 ] && exit 1
+              echo "Resolving $package failed (attempt $attempt); retrying in $((attempt * 30)) s"
+              sleep $((attempt * 30))
+            done
+          done
+
       - name: Unit tests (shared core)
         run: swift test --package-path Shared/LumioCore
 

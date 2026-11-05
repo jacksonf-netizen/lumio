@@ -35,18 +35,25 @@ import androidx.tv.material3.Text
 import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.live.LiveTvScreen
+import com.jackson.lumio.ui.search.SearchScreen
+import com.jackson.lumio.ui.vod.VODScreen
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
-import com.jackson.lumio.ui.providers.ProvidersScreen
+import com.jackson.lumio.ui.settings.SettingsScreen
+import com.jackson.lumio.ui.settings.SettingsViewModel
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 
-/** The sections in the sidebar. More arrive with later phases (Movies, Series, Search). */
-enum class Section(val title: String) {
-    Live("Live TV"),
-    Guide("Guide"),
-    Favorites("Favorites"),
-    Recents("Recents"),
-    Settings("Settings"),
+/** The sections in the sidebar, close to the Mac's order. */
+enum class Section(val title: String, val key: String?) {
+    Live("Live TV", "liveTV"),
+    Guide("Guide", "guide"),
+    Movies("Movies", "movies"),
+    Series("Series", "series"),
+    Favorites("Favorites", "favorites"),
+    Recents("Recents", "recents"),
+    Search("Search", "search"),
+    /** Always shown. */
+    Settings("Settings", null),
 }
 
 /** The whole app: a sidebar on the left (moved through with the remote) and the chosen section. */
@@ -54,6 +61,10 @@ enum class Section(val title: String) {
 fun LumioApp() {
     val providers: ProvidersViewModel = viewModel()
     val player: PlayerViewModel = viewModel()
+    val settings: SettingsViewModel = viewModel()
+    // Sections switched off in Settings → General leave the sidebar.
+    val hidden = settings.settings?.hiddenSidebarItems.orEmpty()
+    val sections = Section.entries.filter { it.key == null || it.key !in hidden }
     val state = providers.state
     var section by rememberSaveable { mutableStateOf(Section.Live) }
     // The first time, with no provider yet, Settings is where to start.
@@ -64,7 +75,7 @@ fun LumioApp() {
             if (state.providers.isEmpty()) section = Section.Settings
         }
     }
-    val shown = section
+    val shown = if (section in sections) section else sections.first()
     // Back from a screen's content returns to the sidebar; Back on the sidebar leaves the app.
     val sidebarFocus = remember { FocusRequester() }
     var sidebarFocused by remember { mutableStateOf(false) }
@@ -87,7 +98,7 @@ fun LumioApp() {
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                 modifier = Modifier.padding(start = 12.dp, bottom = 24.dp),
             )
-            for (item in Section.entries) {
+            for (item in sections) {
                 ListItem(
                     selected = item == shown,
                     onClick = { section = item },
@@ -108,9 +119,21 @@ fun LumioApp() {
             when (shown) {
                 Section.Live -> LiveTvScreen(onPlay = play, playerShowing = player.showing)
                 Section.Guide -> GuideScreen(GuideScope.All, play, player.showing, playing)
+                Section.Movies, Section.Series -> {
+                    val kind = if (shown == Section.Movies) "movie" else "series"
+                    // One screen per kind, each keeping its own pages.
+                    androidx.compose.runtime.key(kind) {
+                        VODScreen(kind, onPlay = { k, provider, id, position, title, subtitle ->
+                            player.playVOD(k, provider, id, position, title, subtitle)
+                        }, playerShowing = player.showing)
+                    }
+                }
+                Section.Search -> SearchScreen(onWatch = play, onPlay = { k, provider, id, position, title, subtitle ->
+                    player.playVOD(k, provider, id, position, title, subtitle)
+                }, playerShowing = player.showing)
                 Section.Favorites -> GuideScreen(GuideScope.Favorites, play, player.showing, playing, toSidebar)
                 Section.Recents -> GuideScreen(GuideScope.Recents, play, player.showing, playing, toSidebar)
-                Section.Settings -> ProvidersScreen(providers)
+                Section.Settings -> SettingsScreen(providers, settings)
             }
         }
     }

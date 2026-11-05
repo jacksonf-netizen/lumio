@@ -612,6 +612,39 @@ Still to do: check the guide's scrolling speed on the onn HD stick with a full-s
 - VOD shelves, details, resume; search; remaining settings (regions, hidden, sidebar sections,
   refresh, playback, About, acknowledgements).
 
+Done 2026-11-05 (branch `android/phase-5-vod`), on the emulator:
+
+- Shared, and now used by the Mac too: fetching movie and series details from the provider and
+  saving them (`fetchMovieDetails`, `refreshSeriesDetails`), the resume rule
+  (`WatchProgress.canResume`: 30 seconds watched and not finished), `VODProgressTracker` (saves the
+  position every 10 seconds and on stop, marks the end watched) and `VODCatalog.home` (the Movies
+  and Series home). These were in the Mac's screens before.
+- Bridge: `vod.*` (home, category pages with offset and limit, movie and series pages, play,
+  favorite, watched, Recently Watched), `search.query`, `settings.get`/`settings.set` (only the
+  keys the TV offers, each within the Mac's ranges), `content.*` (regions, single groups, hidden
+  categories), `player.pause`/`resume`/`seek`. The bridge player plays movies and episodes with
+  the shared tracker and doesn't zap during them. Fixtures `vod_home.json`, `movie.json`,
+  `series.json`.
+- Movies and Series: shelves (Recently Watched, Recently Added, a shelf per category, all
+  categories), category pages loaded 120 at a time, movie pages (Resume from 30:20, Start over,
+  Favorite, Mark watched) and series pages (Play or Resume the next episode, seasons, episodes
+  with progress). Each page opens over the one below, which stays as it was, so Back returns to
+  the same poster. Hold OK on a poster, a Recently Watched card, an episode or a category opens
+  its options (Hide category among them).
+- Player controls for movies and episodes: OK pauses, left/right skip 10 seconds (presses add up
+  before one seek), rewind and fast-forward 30 seconds, Down or Menu for audio and subtitles, a
+  progress bar with time left.
+- Search: a field that opens the keyboard on OK, results as you type (channels, movies, series,
+  then guide programmes). A channel plays and zaps through all channels; a programme on now
+  plays its channel, a later one shows its details; movies and series open over the results.
+- Settings, in tabs: Providers, General (sidebar sections, refresh times), Playback (format,
+  buffer, reconnect time, user agent), Content (Live TV regions with a list of single groups on
+  Hold OK, hidden categories to show again) and About (version, the third-party notices read
+  from the app). Region merging stays on the Mac.
+
+Still to do: check poster loading and the shelves' scrolling on the onn HD stick with a provider
+that has thousands of titles.
+
 ### Phase 5b: multiview
 
 - Read each device's decoder limits, offer only the tile counts it can play. Tiles share the

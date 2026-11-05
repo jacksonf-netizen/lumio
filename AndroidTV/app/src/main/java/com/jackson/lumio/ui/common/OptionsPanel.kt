@@ -44,6 +44,8 @@ fun OptionsPanel(
     actions: List<MenuAction>,
     onDismiss: () -> Unit,
     detail: (@Composable () -> Unit)? = null,
+    /** False for a list of switches: a choice runs and the panel stays (Back closes it). */
+    closeOnChoice: Boolean = true,
 ) {
     val first = remember { FocusRequester() }
     val start = actions.indexOfFirst { it.selected }.coerceAtLeast(0)
@@ -72,7 +74,7 @@ fun OptionsPanel(
                     ListItem(
                         selected = action.selected,
                         onClick = {
-                            onDismiss()
+                            if (closeOnChoice) onDismiss()
                             action.run()
                         },
                         headlineContent = { Text(action.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },

@@ -120,15 +120,12 @@ struct VODHomeView: View {
     }
 
     private func load() async {
-        categories = (try? await state.vod.categories(vodKind, filter: filter)) ?? []
-        recent = (try? await state.vod.items(vodKind, filter: filter, recent: true, limit: 30)) ?? []
-        var loadedRows: [(IPTVCore.Category, [VODItem])] = []
-        for category in categories.prefix(8) {
-            let items = (try? await state.vod.items(vodKind, category: category, filter: filter, limit: 24)) ?? []
-            if !items.isEmpty { loadedRows.append((category, items)) }
+        if let home = try? await state.vod.home(vodKind, filter: filter) {
+            categories = home.categories
+            recent = home.recentlyAdded
+            rows = home.shelves.map { ($0.category, $0.items) }
+            recents = home.recentlyWatched
         }
-        rows = loadedRows
-        await loadRecents()
         loaded = true
     }
 

@@ -15,6 +15,9 @@ final class BridgePlayer {
     private let catalog: LiveCatalog
     private let emit: @Sendable (BridgeEvent) -> Void
     private var zap = ZapList<ChannelListItem>()
+    /// The movie or episode playing, or nil for live TV.
+    private var vod: VODNowDTO?
+    private let tracker = VODProgressTracker()
 
     init(id: String, environment: AppEnvironment, send: @escaping @MainActor (String) -> String?,
          emit: @escaping @Sendable (BridgeEvent) -> Void) {
@@ -40,16 +43,19 @@ final class BridgePlayer {
         try play(channel, in: channels)
     }
 
-    /// A one-channel list doesn't reopen the stream.
+    /// A one-channel list doesn't reopen the stream. Zapping is for live TV only.
     func zap(by offset: Int) throws {
+        guard vod == nil else { return }
         if let next = zap.channel(by: offset), next.id != zap.current?.id { try play(next, debounce: true) }
     }
 
     func jump(toNumber number: Int) throws {
+        guard vod == nil else { return }
         if let match = zap.channel(number: number, numberOf: \.number) { try play(match) }
     }
 
     func previous() throws {
+        guard vod == nil else { return }
         if let previous = zap.previous { try play(previous) }
     }
 
@@ -58,10 +64,32 @@ final class BridgePlayer {
         emitState()
     }
 
+    /// Plays a movie (`itemID` its stream id) or an episode (its episode id) from `position`, saving
+    /// the position as it plays (the shared VODProgressTracker, as on the Mac).
+    func playVOD(kind: LibraryItemKind, providerID: ProviderID, itemID: String, position: Double?,
+                 title: String, subtitle: String?) throws {
+        let start = (position ?? 0) > 0 ? position : nil
+        let item: PlaybackItem?
+        switch kind {
+        case .movie: item = try Int(itemID).flatMap { try environment.items.movieItem(providerID: providerID, streamID: $0, startPosition: start) }
+        default: item = try environment.items.episodeItem(providerID: providerID, episodeID: itemID, startPosition: start)
+        }
+        guard let item else { throw BridgeError("This can't be played.") }
+        vod = VODNowDTO(kind: kind.rawValue, title: title, subtitle: subtitle)
+        controller.play(item)
+        let emit = self.emit
+        tracker.track(item, on: controller, kind: kind, providerID: providerID, itemID: itemID, library: library) {
+            emit(BridgeEvent(type: "vod"))
+        }
+        emitState()
+    }
+
     private func play(_ channel: ChannelListItem, in list: [ChannelListItem]? = nil, debounce: Bool = false) throws {
         guard let item = try environment.items.liveItem(providerID: channel.providerID, streamID: channel.streamID) else {
             throw BridgeError("This channel can't be played.")
         }
+        vod = nil
+        tracker.cancel()
         zap.watch(channel, in: list)
         controller.play(item, debounce: debounce)
         emitState()
@@ -87,8 +115,9 @@ final class BridgePlayer {
         case .failed(let failure): (phase, attempt, message) = ("failed", nil, CredentialRedactor.redact(failure.message))
         }
         return PlayerStateDTO(player: id, phase: phase, attempt: attempt, message: message, notice: controller.notice,
-                              channel: zap.current.map(ChannelDTO.init), provider: controller.plan?.source.providerName,
-                              hasPrevious: zap.previous != nil)
+                              channel: vod == nil ? zap.current.map(ChannelDTO.init) : nil,
+                              provider: controller.plan?.source.providerName,
+                              hasPrevious: vod == nil && zap.previous != nil, vod: vod)
     }
 
     private func emitState() {
@@ -126,4 +155,14 @@ public struct PlayerStateDTO: Codable, Equatable, Sendable {
     /// The provider the stream comes from.
     public var provider: String?
     public var hasPrevious: Bool
+    /// The movie or episode playing (nil for live TV, which has `channel`).
+    public var vod: VODNowDTO?
+}
+
+/// What the player shows for a movie or episode.
+public struct VODNowDTO: Codable, Equatable, Sendable {
+    /// movie or episode.
+    public var kind: String
+    public var title: String
+    public var subtitle: String?
 }
