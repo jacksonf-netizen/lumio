@@ -40,8 +40,9 @@ You need Android 9 or later.
 1. On the TV, install **Downloader** (by AFTVnews) from the Google Play Store.
 2. Let Downloader install apps: Settings → Apps → Security & restrictions → Unknown sources →
    Downloader. The menu names differ a little between TVs.
-3. Open Downloader, enter this address and install:
-   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`
+3. Open Downloader, enter the code **9446363** and install. (The code stands for
+   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`, which
+   you can enter instead.)
 4. Open Lumio and add your provider in Settings → Providers.
 
 ## Updates

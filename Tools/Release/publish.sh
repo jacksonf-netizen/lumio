@@ -33,6 +33,8 @@ fail() { echo "publish: $1" >&2; exit 1; }
 VERSION=$(version MARKETING_VERSION)
 REPOSITORY=$(setting UPDATE_REPOSITORY)
 TAG="v$VERSION"
+# The AFTVnews code for releases/latest/download/Lumio-AndroidTV.apk, typed into Downloader on a TV.
+DOWNLOADER_CODE="9446363"
 OUT="Mac/build/release"
 BASE="Lumio-$VERSION"
 
@@ -92,8 +94,8 @@ for your device (on a Mac you can also use Lumio → Check for Updates…; on a 
 1. Install **Downloader** (by AFTVnews) from the Google Play Store on the TV.
 2. Allow Downloader to install apps: Settings → Apps → Security & restrictions → Unknown sources →
    Downloader.
-3. Open Downloader and enter this address:
-   \`https://github.com/$REPOSITORY/releases/latest/download/Lumio-AndroidTV.apk\`
+3. Open Downloader and enter the code **$DOWNLOADER_CODE** (or this address:
+   \`https://github.com/$REPOSITORY/releases/latest/download/Lumio-AndroidTV.apk\`).
    Install, then open Lumio and add your provider in Settings → Providers.
    Lumio updates itself after that (Android asks you to confirm each update).
 
