@@ -60,6 +60,9 @@ targets:
         RELEASE_TEAM_ID: "WJ9633G98F"
         ENABLE_HARDENED_RUNTIME: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Lumio's cyan (the app icon's TV, as on Android TV), deep enough for white text on it.
+        # macOS uses it unless the user picked an accent colour of their own in System Settings.
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         Release:
           # No get-task-allow in Release builds (Xcode adds it to locally signed builds otherwise),

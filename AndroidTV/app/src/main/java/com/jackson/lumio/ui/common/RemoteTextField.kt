@@ -18,6 +18,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
@@ -60,9 +61,13 @@ fun RemoteTextField(
     modifier: Modifier = Modifier,
     /** Opens the keyboard straight away (Search). */
     startEditing: Boolean = false,
+    /** Called when the keyboard closes (done, Back, or moving off the field). */
+    onEditingDone: () -> Unit = {},
     onChange: (String) -> Unit,
 ) {
     var editing by remember { mutableStateOf(startEditing) }
+    var wasEditing by remember { mutableStateOf(startEditing) }
+    val editingDone by rememberUpdatedState(onEditingDone)
     var hadFocus by remember { mutableStateOf(false) }
     var highlighted by remember { mutableStateOf(false) }
     val box = remember { FocusRequester() }
@@ -74,7 +79,10 @@ fun RemoteTextField(
         if (editing) {
             text.requestFocus()
             keyboardController?.show()
+        } else if (wasEditing) {
+            editingDone()
         }
+        wasEditing = editing
     }
 
     Column(modifier) {

@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.guide
 
 import android.view.KeyEvent as AndroidKeyEvent
+import com.jackson.lumio.ui.common.LumioButton
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -48,7 +49,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.Programme
@@ -270,7 +270,7 @@ private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         when (model.scope) {
-            GuideScope.All -> Button(onClick = onPickGroup) {
+            GuideScope.All -> LumioButton(onClick = onPickGroup) {
                 Text("Group: ${model.groups.firstOrNull { it.id == model.groupID }?.name ?: "All"}", maxLines = 1)
             }
             GuideScope.Favorites -> Text("Favorites", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
@@ -445,7 +445,8 @@ private fun GuideRow(
 ) {
     val windowEnd = windowStart + window
     val selectedCell = selectedTime?.let { GuideNavigation.cell(programmes.orEmpty(), it) }
-    val highlight = if (focused) LumioColors.accent else Color(0xFF3A3A46)
+    val highlight = if (focused) LumioColors.accent else LumioColors.focus
+    val onHighlight = if (focused) LumioColors.onAccent else Color.White
     Row(Modifier.fillMaxWidth().height(RowHeight).padding(vertical = 2.dp)) {
         Row(
             Modifier
@@ -478,11 +479,11 @@ private fun GuideRow(
                     width = ((stop - start) * dpPerSecond).toFloat().dp,
                     background = when {
                         selected -> highlight
-                        on -> Color(0xFF30303A)
+                        on -> LumioColors.focus.copy(alpha = 0.6f)
                         else -> LumioColors.surface
                     },
                     color = when {
-                        selected -> Color.White
+                        selected -> onHighlight
                         programme.stop <= now -> LumioColors.secondaryText
                         else -> LumioColors.text
                     },
@@ -497,7 +498,7 @@ private fun GuideRow(
                         text = if (programmes == null) "" else "No information",
                         x = ((start - windowStart) * dpPerSecond).toFloat().dp,
                         width = ((stop - start) * dpPerSecond).toFloat().dp,
-                        background = highlight, color = Color.White,
+                        background = highlight, color = onHighlight,
                     )
                 }
             }

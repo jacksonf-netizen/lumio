@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.common
 
 import androidx.activity.compose.BackHandler
+import com.jackson.lumio.ui.common.LumioListItem
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -26,8 +27,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ListItem
-import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.ui.LumioColors
 
@@ -51,12 +50,12 @@ fun OptionsPanel(
     val start = actions.indexOfFirst { it.selected }.coerceAtLeast(0)
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize().background(Color(0x66000000)), contentAlignment = Alignment.CenterEnd) {
+    Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.CenterEnd) {
         Column(
             Modifier
                 .width(440.dp)
                 .fillMaxHeight()
-                .background(Color(0xFF141418))
+                .background(LumioColors.surface)
                 .padding(horizontal = 24.dp, vertical = 28.dp)
                 .focusProperties { onExit = { cancelFocusChange() } }
                 .focusGroup(),
@@ -71,7 +70,7 @@ fun OptionsPanel(
                 state = androidx.compose.foundation.lazy.rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, start - 3)),
             ) {
                 itemsIndexed(actions) { index, action ->
-                    ListItem(
+                    LumioListItem(
                         selected = action.selected,
                         onClick = {
                             if (closeOnChoice) onDismiss()
@@ -79,7 +78,6 @@ fun OptionsPanel(
                         },
                         headlineContent = { Text(action.label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         trailingContent = if (action.selected) ({ Text("✓", color = LumioColors.accent) }) else null,
-                        colors = ListItemDefaults.colors(selectedContainerColor = LumioColors.raised),
                         modifier = Modifier.fillMaxWidth().then(if (index == start) Modifier.focusRequester(first) else Modifier),
                     )
                 }

@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.player
 
 import androidx.compose.foundation.background
+import com.jackson.lumio.ui.common.LumioListItem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,7 +22,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.ListItem
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.Track
 import com.jackson.lumio.ui.LumioColors
@@ -35,7 +35,7 @@ fun TracksPanel(tracks: List<Track>, onSelect: (kind: String, id: Int?) -> Unit)
     val subtitles = tracks.filter { it.kind == "subtitle" }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         LazyColumn(
-            Modifier.width(420.dp).fillMaxHeight().background(Color(0xE6101014)).padding(24.dp),
+            Modifier.width(420.dp).fillMaxHeight().background(LumioColors.surface.copy(alpha = 0.95f)).padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item { Heading("Audio") }
@@ -64,7 +64,7 @@ private fun Heading(text: String) {
 
 @Composable
 private fun Row(name: String, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    ListItem(
+    LumioListItem(
         selected = selected,
         onClick = onClick,
         headlineContent = { Text(name) },

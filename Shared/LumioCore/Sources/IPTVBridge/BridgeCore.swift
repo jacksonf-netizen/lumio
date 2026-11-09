@@ -123,6 +123,13 @@ public actor BridgeCore {
             return ProviderEditorDTO(servers: environment.serverLinksText(for: provider),
                                      username: environment.savedUsername(for: provider.id))
 
+        case "providers.parseLinks":
+            // What was typed or pasted into a link field, read as the Mac's link box reads it.
+            struct P: Decodable { var text: String }
+            let list = try ServerURL.parseList(try params.decode(P.self).text)
+            return ParsedLinksDTO(links: list.urls.map(\.absoluteString),
+                                  username: list.credentials?.username, password: list.credentials?.password)
+
         case "providers.remove":
             try await environment.removeProvider(ProviderID(try params.decode(ID.self).id))
             return Empty()

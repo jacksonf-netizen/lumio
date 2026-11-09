@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Lumio's app icon: the cyan TV on navy, filling whatever shape the TV cuts icons into (a
+     circle on Google TV). The banner (drawable/banner.png) is still what the home screen's row of
+     apps shows. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground" />
+</adaptive-icon>

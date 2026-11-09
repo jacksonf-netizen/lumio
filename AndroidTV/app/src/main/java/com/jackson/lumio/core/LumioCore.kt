@@ -65,6 +65,9 @@ object LumioCore {
 
     suspend fun providerEditor(id: String): ProviderEditor = ProviderEditor(call("providers.editor", "id" to id).asObject())
 
+    /** Reads typed or pasted server links as the Mac's link box does; throws with a message when it can't. */
+    suspend fun parseLinks(text: String): ParsedLinks = ParsedLinks(call("providers.parseLinks", "text" to text).asObject())
+
     suspend fun removeProvider(id: String) { call("providers.remove", "id" to id) }
 
     suspend fun setProviderEnabled(id: String, enabled: Boolean) { call("providers.setEnabled", "id" to id, "enabled" to enabled) }

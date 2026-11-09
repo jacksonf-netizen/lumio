@@ -1,6 +1,9 @@
 package com.jackson.lumio.ui.vod
 
 import androidx.activity.compose.BackHandler
+import com.jackson.lumio.ui.common.LumioListItem
+import com.jackson.lumio.ui.common.LumioButton
+import com.jackson.lumio.ui.common.ButtonStyle
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
@@ -49,10 +52,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Button
 import androidx.tv.material3.Card
-import androidx.tv.material3.ListItem
-import androidx.tv.material3.ListItemDefaults
+import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.ContinueItem
 import com.jackson.lumio.core.Episode
@@ -65,6 +66,8 @@ import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
 import com.jackson.lumio.ui.common.MenuAction
 import com.jackson.lumio.ui.common.OptionsPanel
+import com.jackson.lumio.ui.common.LumioTabs
+import androidx.compose.runtime.saveable.rememberSaveable
 
 /** Starts a movie or episode: kind (movie or episode), provider, id, position (null: the start), title, subtitle. */
 typealias PlayVOD = (kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?) -> Unit
@@ -140,15 +143,22 @@ class VODHostScope(
 }
 
 /**
- * Movies or Series ([kind] movie or series). The home shows Recently Watched, Recently Added and a
- * shelf per category; a category, movie or series opens over it.
+ * On Demand: Movies and Series ([kinds], those not switched off in Settings) under tabs. Each home
+ * shows Recently Watched, Recently Added and a shelf per category; a category, movie or series
+ * opens over it.
  */
 @Composable
-fun VODScreen(kind: String, onPlay: PlayVOD, playerShowing: Boolean) {
+fun OnDemandScreen(kinds: List<String>, onPlay: PlayVOD, playerShowing: Boolean) {
+    var chosen by rememberSaveable { mutableStateOf("movie") }
+    val kind = if (chosen in kinds) chosen else kinds.first()
     VODHost(onPlay, playerShowing) {
         Home(model(kind), kind, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
             onCategoryOptions = { categoryOptions(kind, it) },
-            onRecent = ::openRecent, onRecentOptions = { recentOptions(it, kind) }, onItemOptions = ::itemOptions)
+            onRecent = ::openRecent, onRecentOptions = { recentOptions(it, kind) }, onItemOptions = ::itemOptions,
+            header = {
+                LumioTabs(kinds.map { if (it == "movie") "Movies" else "Series" }, kinds.indexOf(kind), onSelect = { chosen = kinds[it] },
+                    modifier = Modifier.padding(start = 32.dp, top = 28.dp, bottom = 4.dp))
+            })
     }
 }
 
@@ -282,20 +292,22 @@ private fun Home(
     onRecent: (ContinueItem) -> Unit,
     onRecentOptions: (ContinueItem) -> Unit,
     onItemOptions: (VODItem) -> Unit,
+    header: @Composable () -> Unit,
 ) {
     val home = model.home
     val title = if (kind == "movie") "Movies" else "Series"
     val empty = home != null && home.recentlyAdded.isEmpty() && home.shelves.isEmpty() && home.recentlyWatched.isEmpty()
+    Column(Modifier.fillMaxSize()) {
+    header()
     when {
         home == null && model.message != null -> Message(model.message!!, LumioColors.error)
         empty -> Message("No ${title.lowercase()} yet. They appear here once your provider has loaded.", LumioColors.secondaryText)
         home == null -> Message("Loading…", LumioColors.secondaryText)
         else -> LazyColumn(
             Modifier.fillMaxSize().focusRestorer(),
-            contentPadding = PaddingValues(top = 28.dp, bottom = 48.dp),
-            verticalArrangement = Arrangement.spacedBy(22.dp),
+            contentPadding = PaddingValues(top = 20.dp, bottom = 48.dp),
+            verticalArrangement = Arrangement.spacedBy(26.dp),
         ) {
-            item { Text(title, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 32.dp)) }
             if (home.recentlyWatched.isNotEmpty()) {
                 item(key = "recent") {
                     Shelf("Recently Watched") {
@@ -333,6 +345,7 @@ private fun Home(
             }
         }
     }
+    }
 }
 
 @OptIn(ExperimentalComposeUiApi::class)
@@ -359,7 +372,7 @@ private fun Message(text: String, color: Color) {
 @Composable
 fun PosterCard(item: VODItem, onClick: () -> Unit, onLongClick: () -> Unit) {
     Column(Modifier.width(PosterWidth)) {
-        Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(PosterWidth, PosterHeight)) {
+        Card(onClick = onClick, onLongClick = onLongClick, scale = CardDefaults.scale(focusedScale = 1.05f), modifier = Modifier.size(PosterWidth, PosterHeight)) {
             Box(Modifier.fillMaxSize().background(LumioColors.raised)) {
                 if (item.poster == null) {
                     Text(item.name, color = LumioColors.secondaryText, fontSize = 14.sp, maxLines = 4,
@@ -374,7 +387,7 @@ fun PosterCard(item: VODItem, onClick: () -> Unit, onLongClick: () -> Unit) {
                 item.progress?.takeIf { it > 0 }?.let { ProgressBar(it.toFloat(), Modifier.align(Alignment.BottomCenter)) }
             }
         }
-        Text(item.name, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        Text(item.name, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp))
     }
 }
 
@@ -382,7 +395,7 @@ fun PosterCard(item: VODItem, onClick: () -> Unit, onLongClick: () -> Unit) {
 private fun ContinueCard(item: ContinueItem, onClick: () -> Unit, onLongClick: () -> Unit) {
     val width = 230.dp
     Column(Modifier.width(width)) {
-        Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(width, 130.dp)) {
+        Card(onClick = onClick, onLongClick = onLongClick, scale = CardDefaults.scale(focusedScale = 1.05f), modifier = Modifier.size(width, 130.dp)) {
             Box(Modifier.fillMaxSize().background(LumioColors.raised)) {
                 RemoteImage(item.image, width, 130.dp)
                 val fraction = when {
@@ -393,7 +406,7 @@ private fun ContinueCard(item: ContinueItem, onClick: () -> Unit, onLongClick: (
                 if (fraction > 0) ProgressBar(fraction, Modifier.align(Alignment.BottomCenter), done = item.watched)
             }
         }
-        Text(item.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 8.dp))
+        Text(item.title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 14.dp))
         val detail = listOfNotNull(item.subtitle, if (item.canResume) "${clock(item.position)} watched" else if (item.watched) "Watched" else null)
         Text(detail.joinToString("  ·  "), color = LumioColors.secondaryText, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
@@ -401,7 +414,7 @@ private fun ContinueCard(item: ContinueItem, onClick: () -> Unit, onLongClick: (
 
 @Composable
 private fun MoreCard(text: String, onLongClick: () -> Unit, onClick: () -> Unit) {
-    Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(PosterWidth, PosterHeight)) {
+    Card(onClick = onClick, onLongClick = onLongClick, scale = CardDefaults.scale(focusedScale = 1.05f), modifier = Modifier.size(PosterWidth, PosterHeight)) {
         Box(Modifier.fillMaxSize().background(LumioColors.surface), contentAlignment = Alignment.Center) {
             Text(text, fontSize = 16.sp, color = LumioColors.text)
         }
@@ -410,7 +423,7 @@ private fun MoreCard(text: String, onLongClick: () -> Unit, onClick: () -> Unit)
 
 @Composable
 private fun CategoryCard(name: String, onLongClick: () -> Unit, onClick: () -> Unit) {
-    Card(onClick = onClick, onLongClick = onLongClick, modifier = Modifier.size(200.dp, 64.dp)) {
+    Card(onClick = onClick, onLongClick = onLongClick, scale = CardDefaults.scale(focusedScale = 1.05f), modifier = Modifier.size(200.dp, 64.dp)) {
         Box(Modifier.fillMaxSize().background(LumioColors.surface).padding(horizontal = 14.dp), contentAlignment = Alignment.CenterStart) {
             Text(name, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
@@ -484,15 +497,15 @@ private fun MoviePage(model: VODViewModel, page: VODPage.Movie, onPlay: PlayVOD)
             FlowRow(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 val resume = progress?.canResume == true
-                Button(onClick = { onPlay("movie", movie.provider, movie.id.toString(), if (resume) progress?.position else null, movie.name, null) },
+                LumioButton(style = ButtonStyle.Primary, onClick = { onPlay("movie", movie.provider, movie.id.toString(), if (resume) progress?.position else null, movie.name, null) },
                     modifier = Modifier.focusRequester(first)) {
                     Text(if (resume) "Resume from ${clock(progress!!.position)}" else "Play")
                 }
-                if (resume) Button(onClick = { onPlay("movie", movie.provider, movie.id.toString(), null, movie.name, null) }) { Text("Start over") }
-                Button(onClick = { model.setFavorite("movie", movie.provider, movie.id.toString(), !movie.favorite) }) {
+                if (resume) LumioButton(onClick = { onPlay("movie", movie.provider, movie.id.toString(), null, movie.name, null) }) { Text("Start over") }
+                LumioButton(onClick = { model.setFavorite("movie", movie.provider, movie.id.toString(), !movie.favorite) }) {
                     Text(if (movie.favorite) "★ Favorite" else "Favorite")
                 }
-                Button(onClick = { model.setWatched("movie", movie.provider, movie.id.toString(), progress?.watched != true) }) {
+                LumioButton(onClick = { model.setWatched("movie", movie.provider, movie.id.toString(), progress?.watched != true) }) {
                     Text(if (progress?.watched == true) "✓ Watched" else "Mark watched")
                 }
             }
@@ -560,11 +573,11 @@ private fun SeriesPage(model: VODViewModel, page: VODPage.Series, onPlay: PlayVO
                     Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         if (next != null) {
                             val code = "S${next.season} E${next.number}"
-                            Button(onClick = { playEpisode(next) }, modifier = Modifier.focusRequester(first)) {
+                            LumioButton(style = ButtonStyle.Primary, onClick = { playEpisode(next) }, modifier = Modifier.focusRequester(first)) {
                                 Text(if (next.progress?.canResume == true) "Resume $code" else "Play $code")
                             }
                         }
-                        Button(onClick = { model.setFavorite("series", series.provider, series.id.toString(), !series.favorite) },
+                        LumioButton(onClick = { model.setFavorite("series", series.provider, series.id.toString(), !series.favorite) },
                             modifier = if (next == null) Modifier.focusRequester(first) else Modifier) {
                             Text(if (series.favorite) "★ Favorite" else "Favorite")
                         }
@@ -582,11 +595,10 @@ private fun SeriesPage(model: VODViewModel, page: VODPage.Series, onPlay: PlayVO
                 // Moving onto a season shows its episodes.
                 LazyRow(Modifier.padding(top = 24.dp).focusRestorer(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(series.seasons, key = { it.number }) { item ->
-                        ListItem(
+                        LumioListItem(
                             selected = item.number == shownSeason,
                             onClick = { season = item.number },
                             headlineContent = { Text(item.name, maxLines = 1) },
-                            colors = ListItemDefaults.colors(selectedContainerColor = LumioColors.raised),
                             modifier = Modifier.width(170.dp).onFocusChanged { if (it.isFocused) season = item.number },
                         )
                     }
@@ -617,7 +629,7 @@ private fun SeriesPage(model: VODViewModel, page: VODPage.Series, onPlay: PlayVO
 
 @Composable
 private fun EpisodeRow(episode: Episode, onClick: () -> Unit, onLongClick: () -> Unit) {
-    ListItem(
+    LumioListItem(
         selected = false,
         onClick = onClick,
         onLongClick = onLongClick,

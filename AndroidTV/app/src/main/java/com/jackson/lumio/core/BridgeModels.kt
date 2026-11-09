@@ -62,6 +62,11 @@ data class ProviderEditor(val servers: String, val username: String) {
     constructor(json: JSONObject) : this(json.getString("servers"), json.getString("username"))
 }
 
+/** Links read from a paste, and the login from an M3U or stream link among them. */
+data class ParsedLinks(val links: List<String>, val username: String?, val password: String?) {
+    constructor(json: JSONObject) : this(json.getJSONArray("links").strings(), json.text("username"), json.text("password"))
+}
+
 data class ChannelGroup(val id: String, val name: String, val kind: String, val hidden: Boolean) {
     constructor(json: JSONObject) : this(
         id = json.getString("id"),

@@ -50,6 +50,17 @@ struct BridgeCoreTests {
         #expect(editor?["password"] == nil)
     }
 
+    @Test func readsPastedLinksForTheForm() async throws {
+        let (bridge, _) = await makeBridge()
+        let parsed = try await call(bridge, "providers.parseLinks", [
+            "text": "http://a.example:8080/get.php?username=jo&password=pw&type=m3u_plus http://b.example",
+        ]) as? [String: Any]
+        #expect(parsed?["links"] as? [String] == ["http://a.example:8080", "http://b.example"])
+        #expect(parsed?["username"] as? String == "jo")
+        #expect(parsed?["password"] as? String == "pw")
+        await #expect(throws: (any Error).self) { try await call(bridge, "providers.parseLinks", ["text": "Username: jo"]) }
+    }
+
     @Test func savingWithAnEmptyPasswordKeepsTheSavedOne() async throws {
         let (bridge, _) = await makeBridge()
         let id = try await addHarness(bridge)
