@@ -8,6 +8,15 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Android TV: a new look in the app icon's navy and cyan. The sidebar is now a slim rail of icons
+  that opens with names when you move onto it; Movies and Series share On Demand, Search is an
+  icon at the top and Settings sits at the bottom. Favorites and Recently Watched left the rail:
+  they're the first groups in Live TV and the guide. Wherever the remote is, a cyan outline shows
+  it.
+- Android TV: Settings lists its pages on the left with the chosen page's settings on the right,
+  each a row with its current value. A provider's actions (refresh, edit, switch off, reorder,
+  remove) open from its row. The Mac is unchanged.
+
 ## 0.2.0 — 2026-11-08
 
 Lumio now runs on Android TV and Google TV (Android 9 or later); the release notes say how to

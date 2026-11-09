@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.live
 
 import androidx.compose.foundation.background
+import com.jackson.lumio.ui.common.LumioListItem
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,8 +33,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.ListItem
-import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.NowNext
@@ -78,11 +77,10 @@ fun LiveTvScreen(
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(state.groups, key = { it.id }) { group ->
-                ListItem(
+                LumioListItem(
                     selected = group.id == state.selectedGroup,
                     onClick = { model.select(group.id) },
                     headlineContent = { Text(group.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 17.sp) },
-                    colors = ListItemDefaults.colors(selectedContainerColor = LumioColors.raised),
                     modifier = Modifier.onFocusChanged { if (it.isFocused) model.select(group.id) },
                 )
             }
@@ -140,7 +138,7 @@ fun LiveTvScreen(
 @Composable
 private fun ChannelRow(channel: Channel, nowNext: NowNext?, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     val now = System.currentTimeMillis() / 1000.0
-    ListItem(
+    LumioListItem(
         selected = false,
         onClick = onClick,
         onLongClick = onLongClick,

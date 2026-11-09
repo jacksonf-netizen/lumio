@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.search
 
 import androidx.compose.foundation.layout.Arrangement
+import com.jackson.lumio.ui.common.LumioListItem
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,7 +28,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.ListItem
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.CoreException
@@ -182,7 +182,7 @@ private fun Hint(text: String) {
 
 @Composable
 private fun ChannelRow(channel: Channel, onClick: () -> Unit) {
-    ListItem(
+    LumioListItem(
         selected = false,
         onClick = onClick,
         leadingContent = {
@@ -204,7 +204,7 @@ private fun ProgrammeRow(hit: ProgrammeHit, format: java.text.DateFormat, onClic
         programme.isOn(now) -> "On now"
         else -> format.format(Date((programme.start * 1000).toLong()))
     }
-    ListItem(
+    LumioListItem(
         selected = false,
         onClick = onClick,
         headlineContent = { Text(programme.title, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },

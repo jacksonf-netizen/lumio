@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.player
 
 import android.view.KeyEvent as AndroidKeyEvent
+import com.jackson.lumio.ui.common.LumioButton
 import androidx.activity.compose.BackHandler
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
@@ -45,7 +46,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
-import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.player.PlayerEngines
@@ -193,7 +193,7 @@ private fun Status(model: PlayerViewModel) {
                 Spacer(Modifier.height(8.dp))
                 Text(state.message ?: model.error ?: "", color = LumioColors.secondaryText, fontSize = 17.sp)
                 Spacer(Modifier.height(18.dp))
-                Button(onClick = model::retry, modifier = Modifier.focusRequester(retry)) { Text("Try again") }
+                LumioButton(onClick = model::retry, modifier = Modifier.focusRequester(retry)) { Text("Try again") }
             }
         }
     }

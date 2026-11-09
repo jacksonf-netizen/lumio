@@ -5,14 +5,27 @@ import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
-/** Colours close to the Mac app's dark look: near-black surfaces, one blue accent. */
+/**
+ * Lumio's colours, taken from the app icon: a deep navy and the cyan of its glowing TV. The
+ * highlight (where the remote is) is always cyan: an outline on rows and posters, a fill on buttons.
+ */
 object LumioColors {
-    val background = Color(0xFF121216)
-    val surface = Color(0xFF1C1C22)
-    val raised = Color(0xFF26262E)
-    val accent = Color(0xFF3D8BFF)
-    val text = Color(0xFFECECF1)
-    val secondaryText = Color(0xFF9A9AA6)
+    /** Behind everything; darker than the icon's navy so posters and logos stand out. */
+    val background = Color(0xFF060C1C)
+    /** The rail and side panels: the icon's navy. */
+    val surface = Color(0xFF0A142F)
+    /** Rows, cards and fields at rest. */
+    val raised = Color(0xFF12203F)
+    /** A row or card under the highlight. */
+    val focus = Color(0xFF1A2D58)
+    /** Thin lines between things. */
+    val outline = Color(0xFF223358)
+    /** The icon's cyan: the highlight, the current section, progress. */
+    val accent = Color(0xFF2EE6F2)
+    /** Text on a cyan fill. */
+    val onAccent = Color(0xFF04112A)
+    val text = Color(0xFFEAF2FF)
+    val secondaryText = Color(0xFF8E9DBF)
     val warning = Color(0xFFFFB340)
     val error = Color(0xFFFF6B6B)
     val good = Color(0xFF4CC38A)
@@ -23,13 +36,20 @@ fun LumioTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = LumioColors.accent,
-            onPrimary = Color.White,
+            onPrimary = LumioColors.onAccent,
+            secondaryContainer = LumioColors.raised,
+            onSecondaryContainer = LumioColors.accent,
             background = LumioColors.background,
             onBackground = LumioColors.text,
             surface = LumioColors.surface,
             onSurface = LumioColors.text,
             surfaceVariant = LumioColors.raised,
             onSurfaceVariant = LumioColors.secondaryText,
+            // Components left on their defaults still highlight in Lumio's colours.
+            inverseSurface = LumioColors.focus,
+            inverseOnSurface = LumioColors.text,
+            border = LumioColors.accent,
+            borderVariant = LumioColors.outline,
             error = LumioColors.error,
         ),
         content = content,
