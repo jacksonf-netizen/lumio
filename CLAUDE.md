@@ -53,12 +53,16 @@ need Jackson's Mac:
 
 ## Where things stand (2026-11-09)
 
-- Android phases 0–6 are merged. 0.3.0 is published: the Android TV redesign (icon rail, two-pane
-  Settings, Settings → Display → Size, adaptive icon), grey on both apps with the icon's cyan as
-  the accent (the Mac's `AccentColor` asset), and server links read several to a line.
+- Android phases 0–6 are merged. 0.3.1 is published (Android TV fixes: the pause state, Back on
+  the audio and subtitles panel, Live TV's now/next, focus after a channel's options). It's offered
+  to Mac copies too: `publish.sh` counts any change under `Mac/`, and the Debug-only smoke test
+  changed. 0.3.0 brought the Android TV redesign (icon rail, two-pane Settings, Settings → Display
+  → Size, adaptive icon), grey on both apps with the icon's cyan as the accent (the Mac's
+  `AccentColor` asset), and server links read several to a line.
 - The Downloader code is **9446363** (AFTVnews; it points at
   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`, so it
   never needs changing). The README and `publish.sh`'s release notes give it.
 - Still open: trying the last step of an in-app update on a TV (allowing installs and Android's
-  Install prompt) by updating a 0.2.0 copy to 0.3.0; the redesign on the onn TVs; measurements on
-  the onn HD stick and 4K box (need wireless debugging); phase 7 (low-end polish).
+  Install prompt) by updating a 0.3.0 copy to 0.3.1; the redesign and the 0.3.1 fixes on the onn
+  TVs (only tried on the emulator); measurements on the onn HD stick and 4K box (need wireless
+  debugging); phase 7 (low-end polish).
