@@ -1,51 +1,59 @@
 # Lumio
 
-Lumio is a macOS app for watching IPTV from Xtream Codes providers. It's built for live TV first,
-with a channel guide, a player that reconnects by itself when a stream drops, and support for
-several providers at once. It also plays your provider's movies and series.
+Lumio is an IPTV player for the Mac and for Android TV and Google TV. It plays live TV, movies and
+series from Xtream Codes providers, and it's built for live TV first.
+
+- Live TV with logos, what's on now and next, and a guide of what's on later.
+- Several providers at once. Channels they share are merged, and when one provider's stream fails,
+  Lumio switches to another's.
+- Backup server links: paste every link your seller sent, and Lumio moves to the next when one goes
+  down. A dropped stream reconnects by itself.
+- Movies and series, with posters and details, that resume where you stopped.
+- Multiview: up to four channels at once, spread across your providers' connections.
+- Search across channels, programmes, movies and series.
+- Favorites, recents, your own groups, and hiding the regions and groups you don't watch.
+- Signed updates from this page, with no analytics or tracking.
 
 > [!IMPORTANT]
 > **Lumio doesn't provide any content.** It includes no channels, streams, playlists or logins, and
-> it doesn't sell or point you to any. To use it you need your own subscription from an IPTV
-> provider and the Xtream Codes login they give you (a server address, username and password).
-> You're responsible for using Lumio only with services you're entitled to.
+> it doesn't sell or point you to any. You need your own subscription from an IPTV provider and the
+> Xtream Codes login they give you (a server address, username and password). You're responsible
+> for using Lumio only with services you're entitled to.
 
-## Install
+## Install on a Mac
 
-You need a Mac with Apple silicon (M1 or later) running macOS 14 or later.
+You need a Mac with Apple silicon (M1 or later) and macOS 14 or later.
 
-1. Download the latest `Lumio-x.y.z.dmg` from
-   [Releases](https://github.com/jacksonf-netizen/lumio/releases/latest), open it and drag Lumio
-   to Applications.
+1. Download `Lumio-x.y.z.dmg` from the
+   [latest release](https://github.com/jacksonf-netizen/lumio/releases/latest), open it and drag
+   Lumio to Applications.
 2. Open Lumio. The first time, macOS says it can't check the app for malicious software, because
    Lumio isn't signed with a paid Apple developer certificate. Click Done, open System Settings →
-   Privacy & Security, scroll down, click Open Anyway next to Lumio and confirm. You only have to
-   do this once.
+   Privacy & Security, scroll down, click Open Anyway next to Lumio and confirm. You only do this
+   once.
 3. Add your provider in Settings → Providers.
 
-Lumio checks for a new version each time it opens. When there is one, it shows what's new and asks
-before doing anything; if you say yes, it downloads the update, checks that it's genuine, installs
-it and reopens. You can turn the check off in Settings → About.
+## Install on Android TV or Google TV
 
-## What it does
+You need Android 9 or later.
 
-- Live TV with channel numbers, logos, what's on now and next, and a live preview of the selected
-  channel. Channels carried by more than one of your providers are merged, and if one provider's
-  stream fails, Lumio switches to another.
-- Backup server links: paste every link your seller sent (one per line, M3U links too). Lumio uses
-  the first one that works and moves to the next by itself when one goes down, and Settings tells
-  you if none of them answer.
-- A guide of what's on later: switch Live TV or Favorites between List and Guide at the top.
-  Recents shows as a guide too, and you can reorder Favorites.
-- Movies and series with posters, details, seasons and episodes. Lumio remembers where you stopped.
-- Multiview: up to four channels at once, spread across your providers' connections.
-- Search across channels, programmes, movies and series.
-- Live TV regions: providers often name groups "UK | Sports" or "US: News". Settings → Content
-  lists every region it finds, so you can hide whole regions (or single groups) you don't watch.
-- Stream info in the player: resolution, frame rate, video format and more.
-- Backup and restore of favorites, layout and settings (your logins are never included).
+1. On the TV, install **Downloader** (by AFTVnews) from the Google Play Store.
+2. Let Downloader install apps: Settings → Apps → Security & restrictions → Unknown sources →
+   Downloader. The menu names differ a little between TVs.
+3. Open Downloader, enter this address and install:
+   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`
+4. Open Lumio and add your provider in Settings → Providers.
+
+## Updates
+
+Both apps check this page for a new version when they open, show what's new and ask before
+installing anything. Lumio installs an update only if it's signed with the developer's key. On a
+TV, Android asks you to confirm each update, and the first time, to let Lumio install apps. On a
+Mac you can turn the check off in Settings → About.
 
 ## Using the player
+
+On a Mac:
 
 | Key | Does |
 |---|---|
@@ -61,64 +69,59 @@ it and reopens. You can turn the check off in Settings → About.
 | ← → | Back 10 s, forward 30 s (movies and episodes) |
 | Esc | Closes the top-most thing, then the player |
 
-Right-click a channel to favorite, rename or hide it, add it to your own group, fix its guide
-match, or choose which provider's copy it uses. Media keys work, and the Window menu opens the
-guide or the player in a window of its own (handy on a second display).
+Right-click a channel to favorite, rename or hide it, add it to a group, fix its guide match, or
+choose which provider's copy it uses. The Window menu opens the guide or the player in a window of
+its own.
+
+On a TV, up and down (or the channel buttons) change channel, the number buttons go to a channel,
+OK shows the channel banner, and holding OK opens Multiview and the audio and subtitle choices.
 
 ## Changing accounts or servers
 
-When your subscription ends, or your seller gives you a new login, edit the provider in Settings →
-Providers rather than removing it and adding it again. Removing a provider deletes its favorites,
-recents and watch history.
-
-A new login or address on the same panel changes nothing in your library. If the seller moves you
-to a different panel, every channel, movie and series gets new IDs; at the next refresh Lumio
-matches the old list against the new one (by guide ID, name and region, and for movies by TMDB ID
-and year) and moves your favorites, recents, progress and customisations over. If a match isn't
-certain, Lumio leaves that entry alone, so nothing gets linked to the wrong channel.
+When your subscription ends or your seller gives you a new login, edit the provider in Settings →
+Providers instead of removing it: removing a provider deletes its favorites, recents and watch
+history. If the seller moves you to a different panel, Lumio matches the old channels, movies and
+series to the new ones at the next refresh and moves your library over, leaving alone anything it
+can't match with certainty.
 
 ## Privacy and security
 
-Your provider logins are stored only in the macOS Keychain, never in Lumio's database, backups or
-logs. Lumio talks to your providers, the logo and poster hosts they list, and GitHub (one request
-per launch to check for updates, with nothing about you or your providers in it). There are no
-analytics or tracking.
-
-The app runs in the macOS App Sandbox. Updates are signed: Lumio has the developer's public key
-built in and installs only an update whose signature matches, from the same app and newer than
-the version you have. A small helper inside the app does the install, because a sandboxed app
-can't replace itself.
+Your provider logins are kept only in the macOS Keychain or the Android Keystore, never in Lumio's
+database, backups or logs. Lumio talks to your providers, the logo and poster hosts they list, and
+GitHub (to check for updates, with nothing about you or your providers in the request). On the Mac
+it runs in the App Sandbox.
 
 Most Xtream providers use plain HTTP, and the Xtream protocol puts your username and password in
-every stream address. Anyone who can watch your network traffic can see them; only a provider that
-offers HTTPS fixes that.
+every stream address, so anyone who can watch your network traffic can see them. Only a provider
+that offers HTTPS fixes that.
 
 ## Known limitations
 
-- Picture in Picture works only when a stream plays through AVPlayer (HLS). mpv, the main player,
-  can't hand its video to the system PiP window.
-- macOS doesn't let apps switch the display's refresh rate to match a stream.
-- With four multiview tiles playing for hours, memory use slowly grows (about 2 MB a minute).
+- Catch-up, timeshift, recording, and M3U or Stalker playlists aren't supported.
 - Movies and series aren't merged across providers the way live channels are, and there's no
   automatic "next episode".
-- Catch-up, timeshift, recording, and M3U or Stalker playlists aren't supported.
-- New users see the macOS warning described under [Install](#install) once.
+- On a Mac, Picture in Picture works only for streams playing through AVPlayer (HLS), and with four
+  multiview tiles playing for hours, memory use slowly grows (about 2 MB a minute).
+- On a TV, multiview has as many tiles as the TV's video decoder can play at once (2 on some
+  sticks), and there are no extra windows or backups.
 
 ## Licence and credits
 
-Lumio's own code is released under the [MIT licence](LICENSE). Playback uses
-[MPVKit](https://github.com/mpvkit/MPVKit), which packages [mpv](https://mpv.io) and
-[FFmpeg](https://ffmpeg.org) with the libraries they need; the library uses
+Lumio's own code is released under the [MIT licence](LICENSE). The Mac app plays video with
+[MPVKit](https://github.com/mpvkit/MPVKit) ([mpv](https://mpv.io) and [FFmpeg](https://ffmpeg.org)),
+the TV app with [Media3](https://developer.android.com/media/media3), and both use
 [GRDB.swift](https://github.com/groue/GRDB.swift). These and every other bundled component keep
-their own licences (LGPL, MIT, BSD, Apache and others). [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)
-lists each one with its version, licence and copyright notice, and explains how to get the source
-of the LGPL libraries. The same notices are in the app under Settings → About → Acknowledgements.
+their own licences. [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) (Mac) and
+[AndroidTV/THIRD-PARTY-NOTICES.md](AndroidTV/THIRD-PARTY-NOTICES.md) (TV) list each one, and the Mac
+file explains how to get the source of the LGPL libraries. Each app also shows its notices under
+Settings → About.
 
 Lumio isn't affiliated with Xtream Codes or with any IPTV provider.
 
 ## Building it yourself
 
-Lumio is written in Swift and SwiftUI. You need Xcode 27 (26.6 also works) and
+Lumio is written in Swift (SwiftUI on the Mac); the TV app is Kotlin and Compose, sharing Lumio's
+Swift core. For the Mac app you need Xcode 27 (26.6 also works) and
 [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```bash
@@ -127,16 +130,15 @@ xcodegen --spec Mac/project.yml
 open Mac/Lumio.xcodeproj
 ```
 
-Then choose the IPTVMac scheme and press ⌘R. [Docs/Mac/development.md](Docs/Mac/development.md) covers
-testing, the stream test harness, debugging and publishing releases, and
+Then choose the IPTVMac scheme and press ⌘R. [Docs/Mac/development.md](Docs/Mac/development.md)
+covers testing, the stream test harness, debugging and releases;
+[AndroidTV/README.md](AndroidTV/README.md) covers building the TV app.
 [CHANGELOG.md](CHANGELOG.md) lists what changed in each version.
-
-### What's in each folder
 
 | Folder | What it is |
 |---|---|
-| `Shared/` | Code every Lumio app uses: providers, sync, the guide, the database, server links, the reconnect logic, and their tests |
-| `Mac/` | The Mac app only: Xcode project, app shell, Mac screens and players, Mac build scripts |
-| `AndroidTV/` | The Android TV app (planned; see [Docs/AndroidTV/plan.md](Docs/AndroidTV/plan.md)) |
-| `Tools/` | Tools for every app: the test servers, publishing releases, the secrets check |
+| `Shared/` | Code both apps use: providers, sync, the guide, the database, server links, the reconnect logic, and their tests |
+| `Mac/` | The Mac app |
+| `AndroidTV/` | The Android TV and Google TV app |
+| `Tools/` | The test servers, publishing releases, the secrets check |
 | `Docs/` | `Shared/`, `Mac/` and `AndroidTV/` docs, matching the folders above |
