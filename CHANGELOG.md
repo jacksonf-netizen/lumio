@@ -19,6 +19,8 @@ offers the update. The list below it appears on the release page.
 - Android TV: everything is drawn smaller than before, and Settings → Display → Size makes it
   smaller or larger (Smaller, Default, Larger, Largest). The sections you can switch off moved to
   the same page.
+- Android TV: the app icon fills its whole circle (navy with the cyan TV), instead of showing the
+  wide banner shrunk inside it.
 
 ## 0.2.0 — 2026-11-08
 
