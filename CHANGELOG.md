@@ -16,6 +16,9 @@ offers the update. The list below it appears on the release page.
 - Android TV: Settings lists its pages on the left with the chosen page's settings on the right,
   each a row with its current value. A provider's actions (refresh, edit, switch off, reorder,
   remove) open from its row. The Mac is unchanged.
+- Android TV: everything is drawn smaller than before, and Settings → Display → Size makes it
+  smaller or larger (Smaller, Default, Larger, Largest). The sections you can switch off moved to
+  the same page.
 
 ## 0.2.0 — 2026-11-08
 

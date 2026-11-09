@@ -83,8 +83,8 @@ enum class Section(val title: String, val icon: Int) {
 }
 
 /** The rail's width while folded (icons only) and while the remote is on it (icons and names). */
-private val RailFolded = 88.dp
-private val RailOpen = 272.dp
+private val RailFolded = 72.dp
+private val RailOpen = 216.dp
 
 /**
  * The whole app: an icon rail on the left and the chosen section beside it. Moving onto the rail
@@ -241,14 +241,14 @@ private fun Rail(
             .clipToBounds()
             .onFocusChanged { onFocusChanged(it.hasFocus) }
             .focusGroup()
-            .padding(horizontal = 14.dp, vertical = 28.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .padding(horizontal = 10.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Row(Modifier.padding(start = 8.dp, bottom = 26.dp).height(44.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(R.drawable.lumio_mark), contentDescription = null, modifier = Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)))
+        Row(Modifier.padding(start = 6.dp, bottom = 20.dp).height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(R.drawable.lumio_mark), contentDescription = null, modifier = Modifier.size(40.dp).clip(RoundedCornerShape(9.dp)))
             if (open) {
-                Text("Lumio", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, softWrap = false,
-                    modifier = Modifier.padding(start = 14.dp))
+                Text("Lumio", fontSize = 20.sp, fontWeight = FontWeight.SemiBold, softWrap = false,
+                    modifier = Modifier.padding(start = 12.dp))
             }
         }
         for (item in sections) {
@@ -256,19 +256,21 @@ private fun Rail(
                 Spacer(Modifier.weight(1f))
                 if (open && syncSummary != null) {
                     Text(syncSummary, color = LumioColors.secondaryText, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp).width(RailOpen - 52.dp))
+                        modifier = Modifier.padding(start = 12.dp, bottom = 8.dp).width(RailOpen - 44.dp))
                 }
             }
             RailItem(
                 item,
                 selected = item == shown,
                 open = open,
-                onFocus = { onRest(item) },
+                // Only moving along the rail switches sections: arriving on it (Back, or the
+                // highlight landing there while a page redraws) doesn't.
+                onFocus = { if (open) onRest(item) },
                 onClick = { onChoose(item) },
                 modifier = Modifier.focusProperties { right = content }.then(if (item == shown) Modifier.focusRequester(focus) else Modifier),
             )
             // Search sits apart above the sections.
-            if (item == Section.Search) Spacer(Modifier.height(14.dp))
+            if (item == Section.Search) Spacer(Modifier.height(10.dp))
         }
     }
 }
@@ -280,12 +282,12 @@ private fun RailItem(section: Section, selected: Boolean, open: Boolean, onFocus
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(56.dp)
+            .height(48.dp)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) onFocus()
             },
-        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(12.dp)),
+        shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected && !open) LumioColors.raised else Color.Transparent,
             contentColor = if (selected) LumioColors.accent else LumioColors.secondaryText,
@@ -296,11 +298,11 @@ private fun RailItem(section: Section, selected: Boolean, open: Boolean, onFocus
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1f),
     ) {
-        Row(Modifier.fillMaxSize().padding(start = 17.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(painterResource(section.icon), contentDescription = section.title, modifier = Modifier.size(26.dp))
+        Row(Modifier.fillMaxSize().padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(painterResource(section.icon), contentDescription = section.title, modifier = Modifier.size(24.dp))
             if (open) {
-                Text(section.title, fontSize = 19.sp, fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
-                    softWrap = false, maxLines = 1, modifier = Modifier.padding(start = 20.dp))
+                Text(section.title, fontSize = 17.sp, fontWeight = if (selected || focused) FontWeight.SemiBold else FontWeight.Normal,
+                    softWrap = false, maxLines = 1, modifier = Modifier.padding(start = 16.dp))
             }
         }
     }

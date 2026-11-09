@@ -1,6 +1,9 @@
 package com.jackson.lumio.ui
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
@@ -31,8 +34,18 @@ object LumioColors {
     val good = Color(0xFF4CC38A)
 }
 
+/** The theme, drawn at the size chosen in Settings → Display ([DisplaySizes]). */
 @Composable
 fun LumioTheme(content: @Composable () -> Unit) {
+    val system = LocalDensity.current
+    val scale = DisplaySizes.current.scale
+    CompositionLocalProvider(LocalDensity provides Density(system.density * scale, system.fontScale)) {
+        LumioColorScheme(content)
+    }
+}
+
+@Composable
+private fun LumioColorScheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
             primary = LumioColors.accent,

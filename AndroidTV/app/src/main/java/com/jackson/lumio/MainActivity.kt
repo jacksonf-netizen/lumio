@@ -11,6 +11,7 @@ import com.jackson.lumio.update.UpdateViewModel
 import kotlinx.coroutines.launch
 import com.jackson.lumio.ui.LumioApp
 import com.jackson.lumio.ui.LumioTheme
+import com.jackson.lumio.ui.DisplaySizes
 
 class MainActivity : ComponentActivity() {
     /**
@@ -45,6 +46,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG) addTestProvider()
+        DisplaySizes.load(this)
         setContent {
             LumioTheme {
                 LumioApp()

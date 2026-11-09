@@ -65,6 +65,8 @@ import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.Region
 import com.jackson.lumio.core.Regions
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.DisplaySize
+import com.jackson.lumio.ui.DisplaySizes
 import com.jackson.lumio.ui.common.LumioListItem
 import com.jackson.lumio.ui.common.LumioShapes
 import com.jackson.lumio.ui.common.MenuAction
@@ -166,7 +168,7 @@ private enum class SettingsPage(val title: String) {
     Providers("Providers"),
     Playback("Playback"),
     Guide("Guide and refresh"),
-    Sidebar("Sections"),
+    Display("Display"),
     Content("Regions and categories"),
     About("About"),
 }
@@ -215,7 +217,7 @@ fun SettingsScreen(providers: ProvidersViewModel, updates: UpdateViewModel, mode
                     SettingsPage.Providers -> ProvidersPane(providers, paneFocus) { picker = it }
                     SettingsPage.Playback -> Playback(model, paneFocus) { picker = it }
                     SettingsPage.Guide -> GuideAndRefresh(model, paneFocus) { picker = it }
-                    SettingsPage.Sidebar -> Sections(model, paneFocus)
+                    SettingsPage.Display -> Display(model, paneFocus) { picker = it }
                     SettingsPage.Content -> Content(model, paneFocus) { picker = it }
                     SettingsPage.About -> About(updates, paneFocus)
                 }
@@ -370,12 +372,21 @@ private fun GuideAndRefresh(model: SettingsViewModel, focus: FocusRequester, pic
     }
 }
 
-// MARK: Sections
+// MARK: Display
 
 @Composable
-private fun Sections(model: SettingsViewModel, focus: FocusRequester) {
+private fun Display(model: SettingsViewModel, focus: FocusRequester, pick: (Picker) -> Unit) {
     val settings = model.settings ?: return
-    SettingsPane("Sections", focus, model.message) {
+    val context = LocalContext.current
+    SettingsPane("Display", focus, model.message) {
+        item {
+            val size = DisplaySizes.current
+            SettingRow("Size", size.title) {
+                pick(picker("Size", DisplaySize.entries.map { it.title to it }, size) { DisplaySizes.set(context, it) })
+            }
+        }
+        note("How big text, rows and posters are. Larger is easier to read from across the room.")
+        heading("Sections")
         items(SidebarSection.entries) { section ->
             val shown = section.key !in settings.hiddenSidebarItems
             SwitchRow(section.title, shown) { model.setSectionShown(section, !shown) }

@@ -25,6 +25,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,6 +46,7 @@ import com.jackson.lumio.ui.common.OptionsPanel
  * Groups on the left; moving onto a group shows its channels on the right, with what's on now.
  * OK watches a channel; Hold OK opens its options (Favorites).
  */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun LiveTvScreen(
     onPlay: (channel: String, group: String) -> Unit,
@@ -70,10 +72,12 @@ fun LiveTvScreen(
         if (!playerShowing && lastPlayed != null) runCatching { playedRow.requestFocus() }
     }
     var options by remember { mutableStateOf<Channel?>(null) }
+    // Coming in from the rail, the remote lands on the group that's showing.
+    val selectedGroup = remember { FocusRequester() }
     Box(Modifier.fillMaxSize()) {
     Row(Modifier.fillMaxSize()) {
         LazyColumn(
-            Modifier.width(300.dp).fillMaxHeight().padding(vertical = 24.dp, horizontal = 12.dp),
+            Modifier.width(300.dp).fillMaxHeight().focusRestorer(selectedGroup).padding(vertical = 24.dp, horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             items(state.groups, key = { it.id }) { group ->
@@ -81,7 +85,8 @@ fun LiveTvScreen(
                     selected = group.id == state.selectedGroup,
                     onClick = { model.select(group.id) },
                     headlineContent = { Text(group.name, maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 17.sp) },
-                    modifier = Modifier.onFocusChanged { if (it.isFocused) model.select(group.id) },
+                    modifier = Modifier.then(if (group.id == state.selectedGroup) Modifier.focusRequester(selectedGroup) else Modifier)
+                        .onFocusChanged { if (it.isFocused) model.select(group.id) },
                 )
             }
         }
