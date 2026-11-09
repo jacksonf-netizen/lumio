@@ -37,6 +37,7 @@ import com.jackson.lumio.ui.settings.heading
 import com.jackson.lumio.ui.settings.note
 import java.text.DateFormat
 import java.util.Date
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -47,6 +48,15 @@ import kotlinx.coroutines.launch
 fun ProvidersPane(model: ProvidersViewModel, focus: FocusRequester, pick: (Picker) -> Unit) {
     // Null: the list. Otherwise the form, for a new provider (Adding) or an existing one.
     var editing by remember { mutableStateOf<Editing?>(null) }
+    // Closing the form gives the highlight back to the list (it would otherwise fall onto the rail).
+    var wasEditing by remember { mutableStateOf(false) }
+    LaunchedEffect(editing) {
+        if (editing == null && wasEditing) {
+            delay(50)
+            runCatching { focus.requestFocus() }
+        }
+        wasEditing = editing != null
+    }
     when (val current = editing) {
         null -> ProviderList(model, focus, pick, onAdd = { editing = Editing(null) }, onEdit = { editing = Editing(it) })
         else -> ProviderEditor(model, current.provider, onDone = { editing = null })
@@ -142,9 +152,32 @@ private fun ProviderEditor(model: ProvidersViewModel, provider: ProviderInfo?, o
     var password by remember { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var saving by remember { mutableStateOf(false) }
+    // Set when a pasted M3U or stream link carried the login and it filled the fields.
+    var foundLogin by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     val saveButton = remember { FocusRequester() }
+
+    // When the keyboard closes on a link field, read what's in it as the Mac's link box would: a
+    // pasted list becomes one row per link, and a login inside a link fills the empty fields.
+    fun readLinks(index: Int) {
+        val text = links.getOrNull(index)?.trim().orEmpty()
+        if (text.isEmpty()) return
+        scope.launch {
+            val parsed = model.parseLinks(text) ?: return@launch
+            if (links.getOrNull(index)?.trim() != text) return@launch
+            links.removeAt(index)
+            links.addAll(index, parsed.links)
+            val login = parsed.username to parsed.password
+            if (login.first != null && login.second != null &&
+                (username.isEmpty() || username == login.first) && (password.isEmpty() || password == login.second)
+            ) {
+                username = login.first!!
+                password = login.second!!
+                foundLogin = true
+            }
+        }
+    }
 
     BackHandler(onBack = onDone)
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
@@ -163,6 +196,7 @@ private fun ProviderEditor(model: ProvidersViewModel, provider: ProviderInfo?, o
                 RemoteTextField(
                     if (index == 0) "Server link" else "Backup link $index",
                     links[index], keyboard = KeyboardType.Uri, modifier = Modifier.weight(1f),
+                    onEditingDone = { readLinks(index) },
                 ) { links[index] = it }
                 if (links.size > 1) LumioButton(onClick = { links.removeAt(index) }) { Text("Remove") }
             }
@@ -176,6 +210,8 @@ private fun ProviderEditor(model: ProvidersViewModel, provider: ProviderInfo?, o
         item {
             Field(if (provider == null) "Password" else "Password (empty keeps the saved one)", password, secret = true) { password = it }
         }
+        if (foundLogin) note("Username and password filled in from the link.")
+        else note("You can paste several links into one field, or an M3U link with your login in it.")
         item {
             // Coming down from the last field lands on Save, not whichever button is nearest.
             Row(

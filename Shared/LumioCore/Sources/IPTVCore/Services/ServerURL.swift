@@ -37,7 +37,8 @@ public enum ServerURL {
     public static let maxLinks = 20
     static let streamPaths: Set<String> = ["live", "movie", "series", "timeshift"]
 
-    /// Reads what a seller sent: one link per line, top one preferred. Lines may be bare
+    /// Reads what a seller sent: one link per line, top one preferred, or several on a line
+    /// (separated by spaces or commas, as a TV's one-line field gets them). Lines may be bare
     /// addresses, full M3U or player_api links (their username and password are returned separately
     /// and stripped from the address), or have a label or bullet before the link. Blank lines and
     /// duplicates are skipped. Stream links (`/live/user/pass/1.ts`) work like M3U links.
@@ -47,31 +48,56 @@ public enum ServerURL {
         for (index, raw) in text.components(separatedBy: .newlines).enumerated() {
             let line = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
-            let candidate: Substring
-            if let start = line.range(of: "https://", options: .caseInsensitive)?.lowerBound
-                ?? line.range(of: "http://", options: .caseInsensitive)?.lowerBound {
-                candidate = line[start...].prefix { !$0.isWhitespace }
-            } else {
-                // "1. host:8080", "- host:8080", "• host:8080"
-                let bare = line.replacing(/^(\d+[.)]|[-•*])\s+/, with: "")
-                guard !bare.contains(where: \.isWhitespace) else { throw ServerURLError.notALink(line: index + 1) }
-                candidate = Substring(bare)
+            for candidate in try candidates(in: line, number: index + 1) {
+                let (url, login): (URL, ProviderCredentials?)
+                do {
+                    (url, login) = try normalize(String(candidate), allowingCredentials: true)
+                } catch ServerURLError.invalid {
+                    throw ServerURLError.notALink(line: index + 1)
+                }
+                if let login {
+                    if let credentials, credentials != login { throw ServerURLError.differentLogins }
+                    credentials = login
+                }
+                if !urls.contains(url) { urls.append(url) }
             }
-            let (url, login): (URL, ProviderCredentials?)
-            do {
-                (url, login) = try normalize(String(candidate), allowingCredentials: true)
-            } catch ServerURLError.invalid {
-                throw ServerURLError.notALink(line: index + 1)
-            }
-            if let login {
-                if let credentials, credentials != login { throw ServerURLError.differentLogins }
-                credentials = login
-            }
-            if !urls.contains(url) { urls.append(url) }
         }
         guard !urls.isEmpty else { throw ServerURLError.empty }
         guard urls.count <= maxLinks else { throw ServerURLError.tooMany(maxLinks) }
         return ServerList(urls: urls, credentials: credentials)
+    }
+
+    /// The links on one line. With `http://` or `https://`, each runs from there to the next space
+    /// or the next link; of the words around them, only ones shaped like an address
+    /// (`host.example.com:8080`, `203.0.113.7`) count, so labels like "URL:" or "or" are ignored.
+    /// Without, the line is bare addresses: one, or several separated by spaces or commas, each with
+    /// a dot or a port (so "Username: jo" isn't taken for two links).
+    private static func candidates(in line: String, number: Int) throws -> [Substring] {
+        let starts = line.ranges(of: /(?i)https?:\/\//).map(\.lowerBound)
+        if !starts.isEmpty {
+            var found: [Substring] = []
+            var gapStart = line.startIndex
+            func addresses(in gap: Substring) {
+                found += gap.split { $0.isWhitespace || $0 == "," || $0 == ";" }
+                    .filter { $0.wholeMatch(of: /(?i)(([a-z0-9-]+\.)+[a-z]{2,}|\d{1,3}(\.\d{1,3}){3}|[a-z0-9.-]+(?=:))(:\d{1,5})?\/?/) != nil }
+            }
+            for (index, start) in starts.enumerated() {
+                addresses(in: line[gapStart..<start])
+                let limit = index + 1 < starts.count ? starts[index + 1] : line.endIndex
+                let link = line[start..<limit].prefix { !$0.isWhitespace }
+                let kept = link.count - link.reversed().prefix { ",;)]>".contains($0) }.count
+                if kept > 0 { found.append(link.prefix(kept)) }
+                gapStart = link.endIndex
+            }
+            addresses(in: line[gapStart...])
+            return found
+        }
+        // "1. host:8080", "- host:8080", "• host:8080"
+        let bare = line.replacing(/^(\d+[.)]|[-•*])\s+/, with: "")
+        let tokens = bare.split { $0.isWhitespace || $0 == "," || $0 == ";" }
+        guard tokens.count > 1 else { return tokens }
+        guard tokens.allSatisfy({ $0.contains(".") || $0.contains(/:\d/) }) else { throw ServerURLError.notALink(line: number) }
+        return tokens
     }
 
     /// Turns user input into a canonical base URL like `http://host:8080`.

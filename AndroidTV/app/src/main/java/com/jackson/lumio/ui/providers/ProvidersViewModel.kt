@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.jackson.lumio.core.CoreException
 import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.ProviderEditor
+import com.jackson.lumio.core.ParsedLinks
 import com.jackson.lumio.core.ProviderInfo
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
@@ -75,6 +76,13 @@ class ProvidersViewModel : ViewModel() {
     }
 
     suspend fun editor(id: String): ProviderEditor? = runCatching { LumioCore.providerEditor(id) }.getOrNull()
+
+    /** Null when the text isn't a list of links (Save explains why). */
+    suspend fun parseLinks(text: String): ParsedLinks? = try {
+        LumioCore.parseLinks(text)
+    } catch (error: CoreException) {
+        null
+    }
 
     fun remove(id: String) = act { LumioCore.removeProvider(id) }
 

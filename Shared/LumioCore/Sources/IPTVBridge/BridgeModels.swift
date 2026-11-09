@@ -111,6 +111,14 @@ public struct ProviderEditorDTO: Codable, Equatable, Sendable {
     public var username: String
 }
 
+/// Links read from a pasted list (`ServerURL.parseList`). The login comes from an M3U or stream
+/// link the user pasted, so the form can fill its fields; nothing saved crosses the bridge.
+public struct ParsedLinksDTO: Codable, Equatable, Sendable {
+    public var links: [String]
+    public var username: String?
+    public var password: String?
+}
+
 /// Something that changed, pushed to the app as it happens. The app re-reads what it shows.
 public struct BridgeEvent: Codable, Equatable, Sendable {
     /// providers: the provider list or a provider's status changed.

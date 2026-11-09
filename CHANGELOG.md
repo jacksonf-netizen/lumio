@@ -21,6 +21,10 @@ offers the update. The list below it appears on the release page.
   the same page.
 - Android TV: the app icon fills its whole circle (navy with the cyan TV), instead of showing the
   wide banner shrunk inside it.
+- Android TV: pasting several server links into one link field splits them into a row each, and
+  an M3U link with the username and password in it fills those fields, as on the Mac.
+- Mac and Android TV: a line with several server links (separated by spaces or commas) adds them
+  all. Before, only the first link on a line was kept.
 
 ## 0.2.0 — 2026-11-08
 

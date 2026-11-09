@@ -96,6 +96,25 @@ struct ServerLinkTests {
         #expect(list.credentials == nil)
     }
 
+    @Test func readsSeveralLinksOnOneLine() throws {
+        // What a TV's one-line field gets when a list is pasted into it.
+        let list = try ServerURL.parseList(
+            "http://one.example.com:8080 https://two.example.com, http://three.example.com:2095/get.php?username=jo&password=x;"
+                + "HTTP://four.example.com")
+        #expect(list.urls.map(\.absoluteString) == [
+            "http://one.example.com:8080", "https://two.example.com", "http://three.example.com:2095", "http://four.example.com",
+        ])
+        #expect(list.credentials == ProviderCredentials(username: "jo", password: "x"))
+        #expect(try ServerURL.parseList("Main: http://a.example.com or backup http://b.example.com").urls.map(\.absoluteString)
+            == ["http://a.example.com", "http://b.example.com"])
+        #expect(try ServerURL.parseList("a.example.com:8080, b.example.com  203.0.113.7:8000").urls.map(\.absoluteString)
+            == ["http://a.example.com:8080", "http://b.example.com", "http://203.0.113.7:8000"])
+        // Addresses without http:// next to ones with it; labels and numbers around them don't count.
+        #expect(try ServerURL.parseList("URL: http://a.example.com, b.example.com:8080 or 203.0.113.7 (v2.0, 3 links)")
+            .urls.map(\.absoluteString) == ["http://a.example.com", "http://b.example.com:8080", "http://203.0.113.7"])
+        #expect(throws: ServerURLError.notALink(line: 1)) { try ServerURL.parseList("a.example.com and more") }
+    }
+
     @Test func takesTheLoginOutOfM3ULinks() throws {
         let list = try ServerURL.parseList("""
             http://a.example.com:8080/get.php?username=jo&password=p%2Bss&type=m3u_plus&output=ts
