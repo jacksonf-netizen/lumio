@@ -89,7 +89,6 @@ import kotlinx.coroutines.withContext
 enum class SidebarSection(val key: String, val title: String) {
     Search("search", "Search"),
     Live("liveTV", "Live TV"),
-    Guide("guide", "Guide"),
     Movies("movies", "Movies"),
     Series("series", "Series"),
 }
