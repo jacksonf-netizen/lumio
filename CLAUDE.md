@@ -51,13 +51,13 @@ need Jackson's Mac:
 - CI (GitHub Actions) builds and tests both apps on every PR, so changes made elsewhere still get
   checked there.
 
-## Where things stand (2026-11-05)
+## Where things stand (2026-11-08)
 
-- Android phases 0–5b are merged. Phase 6 (in-app updates, APK signing, `publish.sh` for both
-  apps) is PR #7, branch `android/phase-6-release`.
-- Next: merge PR #7 when its checks pass; then, with Jackson's go-ahead, publish 0.2.0 (the first
-  release with `Lumio-AndroidTV.apk`, from his Mac); then the Downloader code (Jackson creates it,
-  or approves Claude doing it), pointing at
+- Android phases 0–6 are merged (phase 6: in-app updates, APK signing, `publish.sh` for both apps).
+- 0.2.0 is prepared (version bumped, CHANGELOG section written) on branch `release/0.2.0`. Next,
+  with Jackson's go-ahead: merge it and run `Tools/Release/publish.sh` on his Mac (the first
+  release with `Lumio-AndroidTV.apk`); then the Downloader code (Jackson creates it, or approves
+  Claude doing it), pointing at
   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`.
 - Still open: Jackson's offline backup of the APK signing key
   (`swift AndroidTV/Tools/apk_signing_key.swift backup /Volumes/USB`); trying the last step of an

@@ -8,13 +8,23 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+## 0.2.0 — 2026-11-08
+
+Lumio now runs on Android TV and Google TV (Android 9 or later); the release notes say how to
+install it. On the Mac, a multiview tile you've just filled waits for a free connection instead of
+stopping a tile that's already playing.
+
+- Android TV and Google TV: the first version of Lumio for TVs, made for the remote. It has the
+  same providers, live TV, player, guide, Favorites, Recents, Movies and Series (with resume),
+  Search and Settings as the Mac, and multiview with 2 to 4 tiles, depending on how many videos
+  the TV's decoder can play at once. Not on the TV: extra windows and backup import and export.
 - Multiview: when the providers don't have a connection free for every tile, a tile you've just
   filled now waits with the "no free connection" message, instead of a tile that's already playing
   being stopped to make room.
 - For developers: the version number lives in `version.properties` at the top of the repository,
   which the Mac and Android TV builds both read.
 - For developers: the services' wiring and the Providers screen's rules (adding, editing,
-  removing, reordering, refreshing) moved into the shared core, so the coming Android TV app
+  removing, reordering, refreshing) moved into the shared core, so the Android TV app
   follows the same rules as the Mac.
 - For developers: the player's setup, the fallback ladder's choice of engines and the zapping
   rules (channel up/down, numbers, previous channel) are shared with the Android TV app.
