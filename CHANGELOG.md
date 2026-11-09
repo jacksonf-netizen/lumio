@@ -8,8 +8,14 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
-- Android TV: a new look in the Mac's dark greys, with the app icon's cyan as the accent. The sidebar is now a slim rail of icons
-  that opens with names when you move onto it; Movies and Series share On Demand, Search is an
+## 0.3.0 — 2026-11-09
+
+Lumio on Android TV has a new look, with a slim sidebar, simpler Settings and a size setting, and
+it now matches the Mac: dark grey with the icon's cyan. Pasting a list of server links now adds
+every link on both apps.
+
+- Android TV: a new look in the Mac's dark greys, with the app icon's cyan as the accent. The
+  sidebar is now a slim rail of icons that opens with names when you move onto it; Movies and Series share On Demand, Search is an
   icon at the top and Settings sits at the bottom. Favorites and Recently Watched left the rail:
   they're the first groups in Live TV and the guide. Wherever the remote is, a cyan outline shows
   it.
