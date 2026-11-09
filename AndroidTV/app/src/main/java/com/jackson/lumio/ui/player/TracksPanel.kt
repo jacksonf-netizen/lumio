@@ -2,6 +2,8 @@ package com.jackson.lumio.ui.player
 
 import androidx.compose.foundation.background
 import com.jackson.lumio.ui.common.LumioListItem
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -35,7 +37,11 @@ fun TracksPanel(tracks: List<Track>, onSelect: (kind: String, id: Int?) -> Unit)
     val subtitles = tracks.filter { it.kind == "subtitle" }
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.CenterEnd) {
         LazyColumn(
-            Modifier.width(420.dp).fillMaxHeight().background(LumioColors.surface.copy(alpha = 0.95f)).padding(24.dp),
+            // The remote stays in the panel. Without this, Back first moves the highlight out of
+            // the list (leaving the panel open with nothing highlighted) and only a second Back closes it.
+            Modifier.width(420.dp).fillMaxHeight().background(LumioColors.surface.copy(alpha = 0.95f)).padding(24.dp)
+                .focusProperties { onExit = { cancelFocusChange() } }
+                .focusGroup(),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             item { Heading("Audio") }

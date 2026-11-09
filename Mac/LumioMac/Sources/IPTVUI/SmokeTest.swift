@@ -558,7 +558,8 @@ public enum SmokeTest {
     /// Region switches (needs the harness started with --region-prefixes).
     private static func regions(state: AppState, t: () -> String) async {
         let found = (try? await state.library.regions()) ?? []
-        guard !found.isEmpty else { return log("\(t()) regions: none (start the harness with --region-prefixes)") }
+        // Without region names every group lands in "Other Groups", which isn't a region to test.
+        guard found.contains(where: { !$0.isOther }) else { return log("\(t()) regions: none (start the harness with --region-prefixes)") }
         log("\(t()) regions: \(found.map { "\($0.code) (\($0.name)): \($0.liveGroups) live groups, seen as \($0.spellings) on \($0.providers)" })")
         let before = ((try? await state.liveCatalog.allChannels()) ?? []).map(\.name)
         let moviesBefore = ((try? await state.vod.items(.movie)) ?? []).count
@@ -761,7 +762,7 @@ public enum SmokeTest {
 
         // Two providers spelling the same regions differently should still give one switch each.
         let regions = (try? await state.library.regions()) ?? []
-        if !regions.isEmpty {
+        if regions.contains(where: { !$0.isOther }) {
             let uk = regions.first { $0.code == "UK" }, us = regions.first { $0.code == "US" }
             let merged = Set(uk?.spellings ?? []) == ["UK", "GB"] && Set(us?.spellings ?? []) == ["US", "NA"]
                 && uk?.providers.count == 2 && us?.providers.count == 2

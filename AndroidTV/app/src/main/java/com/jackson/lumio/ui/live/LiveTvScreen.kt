@@ -72,6 +72,14 @@ fun LiveTvScreen(
         if (!playerShowing && lastPlayed != null) runCatching { playedRow.requestFocus() }
     }
     var options by remember { mutableStateOf<Channel?>(null) }
+    // The remote goes back to the channel once its options have closed. (Asking while the panel
+    // is still up does nothing: the panel keeps the highlight inside itself.)
+    LaunchedEffect(options == null) {
+        if (options == null && lastPlayed != null) {
+            kotlinx.coroutines.delay(50)
+            runCatching { playedRow.requestFocus() }
+        }
+    }
     // Coming in from the rail, the remote lands on the group that's showing.
     val selectedGroup = remember { FocusRequester() }
     Box(Modifier.fillMaxSize()) {
@@ -103,7 +111,7 @@ fun LiveTvScreen(
                         val nowNext = channel.epg?.let { state.nowNext[it] }
                         LaunchedEffect(channel.epg) { channel.epg?.let(model::wantNowNext) }
                         ChannelRow(
-                            channel, nowNext,
+                            channel, nowNext, state.clock,
                             onClick = {
                                 lastPlayed = channel.id
                                 onPlay(channel.id, state.selectedGroup)
@@ -131,18 +139,14 @@ fun LiveTvScreen(
                 },
                 MenuAction(if (channel.favorite) "Remove from Favorites" else "Add to Favorites") { model.toggleFavorite(channel) },
             ),
-            onDismiss = {
-                options = null
-                runCatching { playedRow.requestFocus() }
-            },
+            onDismiss = { options = null },
         )
     }
     }
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, nowNext: NowNext?, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
-    val now = System.currentTimeMillis() / 1000.0
+private fun ChannelRow(channel: Channel, nowNext: NowNext?, now: Double, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
     LumioListItem(
         selected = false,
         onClick = onClick,

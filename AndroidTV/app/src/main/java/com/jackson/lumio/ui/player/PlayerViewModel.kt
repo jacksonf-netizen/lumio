@@ -41,9 +41,24 @@ class PlayerViewModel : ViewModel() {
     private var bannerJob: Job? = null
     private var digitsJob: Job? = null
 
+    /**
+     * How many player events have arrived. A request's reply holds the state from when the core
+     * answered, and an event sent just after it (the engine reporting "paused", say) can reach the
+     * screen first. The reply is then the older of the two, so [showReply] drops it.
+     */
+    private var eventsSeen = 0
+
+    /** Runs a request and shows the state it returns, unless an event brought a newer one meanwhile. */
+    private suspend fun showReply(work: suspend () -> PlayerState) {
+        val before = eventsSeen
+        val reply = work()
+        if (eventsSeen == before) state = reply
+    }
+
     init {
         viewModelScope.launch {
             LumioCore.events.filter { it.type == "player" && it.state?.player == "main" }.collect { event ->
+                eventsSeen++
                 val previousChannel = state?.channel?.id
                 state = event.state
                 if (event.state?.channel?.id != previousChannel) channelChanged()
@@ -94,7 +109,7 @@ class PlayerViewModel : ViewModel() {
         seekJob = viewModelScope.launch {
             delay(600)
             val target = seekTarget ?: return@launch
-            runCatching { state = LumioCore.seek(target) }
+            runCatching { showReply { LumioCore.seek(target) } }
             delay(400) // the player reports the new position
             seekTarget = null
         }
@@ -145,6 +160,7 @@ class PlayerViewModel : ViewModel() {
 
     fun showBanner() {
         bannerVisible = true
+        loadNowNext()
         bannerJob?.cancel()
         bannerJob = viewModelScope.launch {
             delay(5000)
@@ -155,15 +171,22 @@ class PlayerViewModel : ViewModel() {
     private fun channelChanged() {
         nowNext = null
         showBanner()
+    }
+
+    /** What's on, asked each time the banner shows so it's right however long the channel has played. */
+    private fun loadNowNext() {
         val epg = state?.channel?.epg ?: return
-        viewModelScope.launch { nowNext = runCatching { LumioCore.nowNext(listOf(epg))[epg] }.getOrNull() }
+        viewModelScope.launch {
+            val found = runCatching { LumioCore.nowNext(listOf(epg))[epg] }.getOrNull()
+            if (state?.channel?.epg == epg) nowNext = found
+        }
     }
 
     private fun run(work: suspend () -> PlayerState) {
         viewModelScope.launch {
             try {
                 val previousChannel = state?.channel?.id
-                state = work()
+                showReply(work)
                 error = null
                 if (state?.channel?.id != previousChannel) channelChanged()
             } catch (failure: CoreException) {

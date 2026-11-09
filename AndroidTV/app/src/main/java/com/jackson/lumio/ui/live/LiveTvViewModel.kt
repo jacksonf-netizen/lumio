@@ -23,6 +23,8 @@ data class LiveTvState(
     val selectedGroup: String = "all",
     val channels: List<Channel> = emptyList(),
     val nowNext: Map<EPGRef, NowNext> = emptyMap(),
+    /** The time (seconds since 1970) the rows' progress bars are drawn for; moves on every minute. */
+    val clock: Double = System.currentTimeMillis() / 1000.0,
     val loading: Boolean = true,
     val message: String? = null,
 )
@@ -35,6 +37,11 @@ class LiveTvViewModel : ViewModel() {
 
     private var channelJob: Job? = null
     private val wanted = mutableSetOf<EPGRef>()
+    /**
+     * The rows shown lately (most recent last), asked again when the guide changes or a programme
+     * ends. Rows that had no guide yet are here too, so they fill in once it arrives.
+     */
+    private val shown = LinkedHashSet<EPGRef>()
     private var nowNextJob: Job? = null
 
     init {
@@ -43,10 +50,18 @@ class LiveTvViewModel : ViewModel() {
             LumioCore.events.filter { it.type == "live" }.debounce(400).collect { reloadGroups() }
         }
         viewModelScope.launch {
-            LumioCore.events.filter { it.type == "guide" }.debounce(1000).collect {
-                wanted.addAll(state.nowNext.keys)
-                state = state.copy(nowNext = emptyMap())
-                loadNowNext()
+            LumioCore.events.filter { it.type == "guide" }.debounce(1000).collect { refreshNowNext() }
+        }
+        // What's on moves along while the list stays open.
+        viewModelScope.launch {
+            while (true) {
+                delay(60_000)
+                val now = System.currentTimeMillis() / 1000.0
+                state = state.copy(clock = now)
+                val moved = state.nowNext.values.any { entry ->
+                    entry.now?.let { it.stop <= now } ?: (entry.next?.let { it.start <= now } ?: false)
+                }
+                if (moved) refreshNowNext()
             }
         }
     }
@@ -59,9 +74,23 @@ class LiveTvViewModel : ViewModel() {
 
     /** A row came on screen; its now/next loads with the others shown at the same time. */
     fun wantNowNext(ref: EPGRef) {
+        shown.remove(ref)
+        shown.add(ref)
+        if (shown.size > MAX_SHOWN) shown.remove(shown.first())
         if (state.nowNext.containsKey(ref) || !wanted.add(ref)) return
         loadNowNext()
     }
+
+    /** Asks again for every row shown lately, dropping what's no longer on. */
+    private fun refreshNowNext() {
+        if (shown.isEmpty()) return
+        wanted.addAll(shown)
+        replaceNext = true
+        loadNowNext()
+    }
+
+    /** The next load replaces what's known for the rows it asked about, rather than only adding. */
+    private var replaceNext = false
 
     private fun loadNowNext() {
         if (nowNextJob?.isActive == true) return
@@ -69,8 +98,13 @@ class LiveTvViewModel : ViewModel() {
             delay(150)
             val refs = wanted.toList()
             wanted.clear()
-            val found = runCatching { LumioCore.nowNext(refs) }.getOrDefault(emptyMap())
-            state = state.copy(nowNext = state.nowNext + found)
+            val replace = replaceNext
+            replaceNext = false
+            val result = runCatching { LumioCore.nowNext(refs) }
+            val found = result.getOrDefault(emptyMap())
+            // A row whose guide has run out loses its line; a failed request leaves things as they are.
+            val kept = if (replace && result.isSuccess) state.nowNext - refs.toSet() else state.nowNext
+            state = state.copy(nowNext = kept + found)
             if (wanted.isNotEmpty()) loadNowNext()
         }
     }
@@ -84,6 +118,11 @@ class LiveTvViewModel : ViewModel() {
                 state = state.copy(message = error.message)
             }
         }
+    }
+
+    private companion object {
+        /** Enough for the rows on screen and those just scrolled past. */
+        const val MAX_SHOWN = 200
     }
 
     private fun reloadGroups() {
