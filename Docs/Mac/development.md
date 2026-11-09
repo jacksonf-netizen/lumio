@@ -72,10 +72,10 @@ Mac/                            Everything only the Mac app uses
     Tests/                      Playback tests (some need the harness)
   Tools/                        install.sh, AppIcon/, Release/make_release.sh and sign_app.sh
   build/                        Build output (not committed)
-AndroidTV/                      The Android TV app (planned: Docs/AndroidTV/plan.md)
+AndroidTV/                      The Android TV and Google TV app (AndroidTV/README.md)
 Docs/Shared/                    The schema, the core API, the reconnect state machine
 Docs/Mac/                       This guide
-Docs/AndroidTV/                 The Android TV plan
+Docs/AndroidTV/                 The Android TV plan and what each phase added
 Tools/StreamHarness/            Fake Xtream provider with fault injection, for testing both apps
 Tools/Release/                  publish.sh (publishes a release of both apps) and sign_update.swift (update signatures)
 Tools/check_secrets.py          Secrets check, run before every push

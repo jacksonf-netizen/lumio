@@ -53,13 +53,10 @@ need Jackson's Mac:
 
 ## Where things stand (2026-11-08)
 
-- Android phases 0–6 are merged (phase 6: in-app updates, APK signing, `publish.sh` for both apps).
-- 0.2.0 is prepared (version bumped, CHANGELOG section written) on branch `release/0.2.0`. Next,
-  with Jackson's go-ahead: merge it and run `Tools/Release/publish.sh` on his Mac (the first
-  release with `Lumio-AndroidTV.apk`); then the Downloader code (Jackson creates it, or approves
-  Claude doing it), pointing at
-  `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`.
-- Still open: Jackson's offline backup of the APK signing key
-  (`swift AndroidTV/Tools/apk_signing_key.swift backup /Volumes/USB`); trying the last step of an
-  in-app update on a TV (allowing installs and Android's Install prompt); measurements on the onn
-  HD stick and 4K box (need wireless debugging); phase 7 (low-end polish).
+- Android phases 0–6 are merged. 0.2.0 is published, the first release with `Lumio-AndroidTV.apk`.
+- The Downloader code is **9446363** (AFTVnews; it points at
+  `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`, so it
+  never needs changing). The README and `publish.sh`'s release notes give it.
+- Still open: trying the last step of an in-app update on a TV (allowing installs and Android's
+  Install prompt), which needs a release after 0.2.0; measurements on the onn HD stick and 4K box
+  (need wireless debugging); phase 7 (low-end polish).
