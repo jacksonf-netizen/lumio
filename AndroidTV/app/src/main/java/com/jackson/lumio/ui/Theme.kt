@@ -9,26 +9,27 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
 
 /**
- * Lumio's colours, taken from the app icon: a deep navy and the cyan of its glowing TV. The
- * highlight (where the remote is) is always cyan: an outline on rows and posters, a fill on buttons.
+ * Lumio's colours: the Mac's dark-mode greys, so both apps look alike, with the cyan of the app
+ * icon's TV as the one accent. The highlight (where the remote is) is always cyan: an outline on
+ * rows and posters, a fill on buttons.
  */
 object LumioColors {
-    /** Behind everything; darker than the icon's navy so posters and logos stand out. */
-    val background = Color(0xFF060C1C)
-    /** The rail and side panels: the icon's navy. */
-    val surface = Color(0xFF0A142F)
+    /** Behind everything: the Mac's window background in dark mode. */
+    val background = Color(0xFF1E1E1E)
+    /** The rail and side panels. */
+    val surface = Color(0xFF282828)
     /** Rows, cards and fields at rest. */
-    val raised = Color(0xFF12203F)
-    /** A row or card under the highlight. */
-    val focus = Color(0xFF1A2D58)
+    val raised = Color(0xFF323232)
+    /** A row or card under the highlight: the Mac's selected-row grey. */
+    val focus = Color(0xFF464646)
     /** Thin lines between things. */
-    val outline = Color(0xFF223358)
+    val outline = Color(0xFF3A3A3A)
     /** The icon's cyan: the highlight, the current section, progress. */
     val accent = Color(0xFF2EE6F2)
     /** Text on a cyan fill. */
-    val onAccent = Color(0xFF04112A)
-    val text = Color(0xFFEAF2FF)
-    val secondaryText = Color(0xFF8E9DBF)
+    val onAccent = Color(0xFF111111)
+    val text = Color(0xFFEBEBEB)
+    val secondaryText = Color(0xFF9E9E9E)
     val warning = Color(0xFFFFB340)
     val error = Color(0xFFFF6B6B)
     val good = Color(0xFF4CC38A)

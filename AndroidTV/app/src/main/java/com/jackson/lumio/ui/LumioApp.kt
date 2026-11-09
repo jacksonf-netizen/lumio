@@ -229,7 +229,7 @@ private fun Rail(
     if (open) {
         Box(
             Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(0f to Color(0xF2060C1C), 0.45f to Color(0xB3060C1C), 1f to Color(0x66060C1C)),
+                Brush.horizontalGradient(0f to LumioColors.background.copy(alpha = 0.95f), 0.45f to LumioColors.background.copy(alpha = 0.7f), 1f to LumioColors.background.copy(alpha = 0.4f)),
             ),
         )
     }

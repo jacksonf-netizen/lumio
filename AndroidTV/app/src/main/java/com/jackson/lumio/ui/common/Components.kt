@@ -41,7 +41,7 @@ fun focusBorder(shape: androidx.compose.ui.graphics.Shape = LumioShapes.row) =
 
 /**
  * A row in a list (groups, channels, settings, choices). At rest it's flat; under the highlight it
- * lifts to a lighter navy with a cyan outline. [selected] marks the current one (cyan text).
+ * lifts to a lighter grey with a cyan outline. [selected] marks the current one (cyan text).
  */
 @Composable
 fun LumioListItem(
@@ -93,7 +93,7 @@ fun LumioListItem(
 /** How a [LumioButton] looks: the main action, an ordinary one, or one that deletes something. */
 enum class ButtonStyle { Primary, Normal, Destructive }
 
-/** A button: a navy pill at rest, filled cyan under the highlight (red for [ButtonStyle.Destructive]). */
+/** A button: a grey pill at rest, filled cyan under the highlight (red for [ButtonStyle.Destructive]). */
 @Composable
 fun LumioButton(
     onClick: () -> Unit,

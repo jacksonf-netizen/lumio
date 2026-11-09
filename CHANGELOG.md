@@ -8,7 +8,7 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
-- Android TV: a new look in the app icon's navy and cyan. The sidebar is now a slim rail of icons
+- Android TV: a new look in the Mac's dark greys, with the app icon's cyan as the accent. The sidebar is now a slim rail of icons
   that opens with names when you move onto it; Movies and Series share On Demand, Search is an
   icon at the top and Settings sits at the bottom. Favorites and Recently Watched left the rail:
   they're the first groups in Live TV and the guide. Wherever the remote is, a cyan outline shows
@@ -23,6 +23,9 @@ offers the update. The list below it appears on the release page.
   wide banner shrunk inside it.
 - Android TV: pasting several server links into one link field splits them into a row each, and
   an M3U link with the username and password in it fills those fields, as on the Mac.
+- Mac: Lumio's accent is the cyan of its icon instead of the system blue (selections, toggles,
+  buttons, the outline on posters), matching Android TV. If you picked an accent colour in System
+  Settings → Appearance, Lumio keeps using yours.
 - Mac and Android TV: a line with several server links (separated by spaces or commas) adds them
   all. Before, only the first link on a line was kept.
 

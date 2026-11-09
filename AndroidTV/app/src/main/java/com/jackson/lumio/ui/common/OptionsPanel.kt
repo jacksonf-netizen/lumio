@@ -50,7 +50,7 @@ fun OptionsPanel(
     val start = actions.indexOfFirst { it.selected }.coerceAtLeast(0)
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     BackHandler(onBack = onDismiss)
-    Box(Modifier.fillMaxSize().background(Color(0x99030814)), contentAlignment = Alignment.CenterEnd) {
+    Box(Modifier.fillMaxSize().background(Color(0x99000000)), contentAlignment = Alignment.CenterEnd) {
         Column(
             Modifier
                 .width(440.dp)
