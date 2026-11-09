@@ -43,6 +43,8 @@ import androidx.tv.material3.Tab
 import androidx.tv.material3.TabRow
 import androidx.tv.material3.Text
 import com.jackson.lumio.BuildConfig
+import com.jackson.lumio.update.UpdateState
+import com.jackson.lumio.update.UpdateViewModel
 import com.jackson.lumio.core.AppSettings
 import com.jackson.lumio.core.ContentCategory
 import com.jackson.lumio.core.CoreException
@@ -150,7 +152,7 @@ private data class Picker(val title: String, val actions: List<MenuAction>)
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun SettingsScreen(providers: ProvidersViewModel, model: SettingsViewModel = viewModel()) {
+fun SettingsScreen(providers: ProvidersViewModel, updates: UpdateViewModel, model: SettingsViewModel = viewModel()) {
     var tab by rememberSaveable { mutableStateOf(SettingsTab.Providers) }
     var picker by remember { mutableStateOf<Picker?>(null) }
     // Closing a picker gives the remote back to the row it was opened from.
@@ -179,7 +181,7 @@ fun SettingsScreen(providers: ProvidersViewModel, model: SettingsViewModel = vie
                     SettingsTab.General -> General(model, pageFocus) { picker = it }
                     SettingsTab.Playback -> Playback(model, pageFocus) { picker = it }
                     SettingsTab.Content -> Content(model, pageFocus)
-                    SettingsTab.About -> About()
+                    SettingsTab.About -> About(updates)
                 }
             }
         }
@@ -381,14 +383,28 @@ private fun Content(model: SettingsViewModel, focus: FocusRequester) {
 // MARK: About
 
 @Composable
-private fun About() {
+private fun About(updates: UpdateViewModel) {
     val context = LocalContext.current
     val notices by produceState<List<String>>(emptyList()) { value = readNotices(context) }
     Page {
         item { Text("Lumio for Android TV", fontSize = 24.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 8.dp)) }
         item {
             Note("Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}). An IPTV player for Xtream Codes providers. " +
-                "Lumio only talks to your providers (and loads their logos and posters); there's no tracking of any kind.")
+                "Lumio only talks to your providers (and loads their logos and posters) and checks GitHub for updates; " +
+                "there's no tracking of any kind.")
+        }
+        item {
+            val status = when (val state = updates.state) {
+                UpdateState.Checking -> "Checking…"
+                is UpdateState.UpToDate -> "Up to date (latest: ${state.latest})"
+                is UpdateState.Available -> "Lumio ${state.info.latest} is available"
+                is UpdateState.Downloading -> "Downloading…"
+                is UpdateState.Installing -> "Installing…"
+                is UpdateState.NeedsPermission -> "Waiting for permission to install"
+                is UpdateState.Failed -> state.message
+                UpdateState.Idle -> if (updates.configured) "" else "This build has no release feed"
+            }
+            SettingRow("Check for updates", "", detail = status.ifEmpty { null }, onClick = { updates.check(userInitiated = true) })
         }
         item { Heading("Acknowledgements") }
         item { Note("Lumio is built with these open-source components. Their licences follow; move down to read them.") }

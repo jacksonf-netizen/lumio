@@ -77,7 +77,7 @@ Docs/Shared/                    The schema, the core API, the reconnect state ma
 Docs/Mac/                       This guide
 Docs/AndroidTV/                 The Android TV plan
 Tools/StreamHarness/            Fake Xtream provider with fault injection, for testing both apps
-Tools/Release/                  publish.sh (publishes a release) and sign_update.swift (update signatures)
+Tools/Release/                  publish.sh (publishes a release of both apps) and sign_update.swift (update signatures)
 Tools/check_secrets.py          Secrets check, run before every push
 Mac/Tools/install.sh            Build and install your own copy in /Applications
 Tools/check_secrets.py      Fails if anything git would publish contains a credential
@@ -216,19 +216,24 @@ signing key in your Keychain (below).
    is all Lumio shows when it offers the update; the list is on the release page.
 4. Commit, then run `Tools/Release/publish.sh`.
 
-`publish.sh` refuses to run with uncommitted changes, an existing tag or no changelog section. It
-runs the secrets check, builds and signs the release (`make_release.sh`), tags `vX.Y.Z`, pushes,
-and creates the GitHub release with the `.dmg` (new installs), the `.zip` and `.zip.sig` (updates)
-and `SHA256SUMS.txt`. The release notes it writes include the install steps and the "no content,
-bring your own login" notice.
+`publish.sh` refuses to run with uncommitted changes, an existing tag, no changelog section, or
+when neither app's code changed since the last release. It runs the secrets check, builds and
+signs both apps (`Mac/Tools/Release/make_release.sh`, `AndroidTV/Tools/make_release.sh`), tags
+`vX.Y.Z`, pushes, and creates the GitHub release with the `.dmg` (new Mac installs), the `.zip` and
+`.zip.sig` (Mac updates), `Lumio-AndroidTV.apk` and `.apk.sig` (TV installs and updates) and one
+`SHA256SUMS.txt`. The release notes it writes include the install steps for both, the "no
+content, bring your own login" notice, and a hidden marker of the version in which each app last
+changed, so each app only offers the update when there's something new for it. Then it downloads
+the release and checks every file (checksums, both signatures, the APK's certificate and version,
+and that `releases/latest/download/Lumio-AndroidTV.apk` serves it), and deletes the previous
+release, keeping its git tag so its source stays available.
 
 5. Check the update works: let an older copy (or a Debug copy built with an older
-   `MARKETING_VERSION`, kept outside Applications) update itself, and download the new `.dmg`.
-6. Then delete the previous release so only the latest is offered:
-   `gh release delete vOLD --repo jacksonf-netizen/lumio --yes`. Keep its git tag, so its source
-   stays available.
+   `MARKETING_VERSION`, kept outside Applications) update itself, and download the new `.dmg`. On
+   the TV emulator, a debug build started with `-e checkUpdates true -e updateTestVersion 0.0.1`
+   asks as if it were older (it can't install the release APK over itself: different key).
 
-**The signing keys.** Both live only in your login Keychain, never in the repository.
+**The signing keys.** All three live only in your login Keychain, never in the repository.
 
 - The update key (Ed25519, made by `swift Tools/Release/sign_update.swift generate`; item "Lumio
   update signing key", account `release`). Its public half is `UPDATE_PUBLIC_KEY` in
@@ -238,6 +243,13 @@ bring your own login" notice.
   Mac, add the item back with the same name and account.
 - The Apple Development certificate. Xcode can make a new one for the same team at any time,
   so it needs no backup; what must stay the same is the team.
+- The Android APK key (RSA 4096 in a PKCS12 keystore, made by
+  `swift AndroidTV/Tools/apk_signing_key.swift generate`; item "Lumio Android signing key"). Android
+  only installs an update signed with the same key as the installed app, so **if it's lost, no TV
+  can ever update again** and everyone has to uninstall and reinstall. Back it up offline with
+  `swift AndroidTV/Tools/apk_signing_key.swift backup /Volumes/YourUSB` (writes the keystore and a
+  note with its password) and keep the USB stick somewhere safe. Its certificate's SHA-256 is in
+  `AndroidTV/signing-certificate.txt`; the release scripts refuse an APK signed with anything else.
 
 `make_release.sh` won't make a release it couldn't sign for the team unless you set
 `ALLOW_ADHOC=1` (for test builds only).

@@ -59,6 +59,17 @@ public enum UpdateError: Error, LocalizedError, Equatable {
     }
 }
 
+/// Which app is asking. Every release carries both builds; each app takes its own.
+public enum UpdatePlatform: String, Sendable, CaseIterable {
+    /// The .dmg / signed .zip.
+    case mac
+    /// `Lumio-AndroidTV.apk` and its `.sig`. The name never changes, so
+    /// `releases/latest/download/Lumio-AndroidTV.apk` is always the newest build (Downloader uses it).
+    case android
+
+    public static let androidAsset = "Lumio-AndroidTV.apk"
+}
+
 /// Where releases are published. Only GitHub Releases for now.
 public enum UpdateFeed: Hashable, Sendable {
     /// "owner/repo" on GitHub.
@@ -84,14 +95,23 @@ public enum UpdateFeed: Hashable, Sendable {
 }
 
 /// Compares the latest published release with the running version.
+///
+/// A release's notes may carry a hidden marker of the version in which each platform's build last
+/// changed, written by Tools/Release/publish.sh: `<!-- lumio-changed: mac=0.2.1 android=0.2.0 -->`.
+/// An app is only offered the release when its own platform changed after the version it runs, so
+/// a Mac-only fix doesn't ask every TV to update (and an Android user who skipped a release still
+/// gets it). Releases without the marker are offered to every platform that has a build in them.
 public struct UpdateChecker: Sendable {
     private let feed: UpdateFeed
     private let currentVersion: SemanticVersion
+    private let platform: UpdatePlatform
     private let transport: any HTTPTransport
 
-    public init(feed: UpdateFeed, currentVersion: SemanticVersion, transport: any HTTPTransport = URLSessionTransport()) {
+    public init(feed: UpdateFeed, currentVersion: SemanticVersion, platform: UpdatePlatform = .mac,
+                transport: any HTTPTransport = URLSessionTransport()) {
         self.feed = feed
         self.currentVersion = currentVersion
+        self.platform = platform
         self.transport = transport
     }
 
@@ -115,24 +135,61 @@ public struct UpdateChecker: Sendable {
             throw UpdateError.badResponse("tag “\(release.tagName)” isn't a version")
         }
         guard latest > currentVersion, release.draft != true else { return .upToDate(latest: latest) }
-        // Prefer a disk image, then a zip, for the direct download.
+        let body = release.body ?? ""
+        if let changed = Self.changedVersions(in: body) {
+            // Nothing new for this platform since the version it runs.
+            guard let since = changed[platform], currentVersion < since else { return .upToDate(latest: latest) }
+        }
         let assets = release.assets ?? []
-        let download = (assets.first { $0.name.lowercased().hasSuffix(".dmg") } ?? assets.first { $0.name.lowercased().hasSuffix(".zip") })?
-            .browserDownloadURL
         // The app opens and downloads these links, so only GitHub's own https pages count.
         guard Self.isGitHubPage(release.htmlURL) else { throw UpdateError.badResponse("unexpected release page") }
         func onGitHub(_ url: URL?) -> URL? { url.flatMap { Self.isGitHubPage($0) ? $0 : nil } }
-        // A zip with a matching "<name>.sig" can be installed in place.
-        let archive = assets.first { asset in
-            asset.name.lowercased().hasSuffix(".zip") && assets.contains { $0.name == asset.name + ".sig" }
+        let download: URL?, archive: Asset?
+        switch platform {
+        case .mac:
+            // Prefer a disk image, then a zip, for the direct download.
+            download = (assets.first { $0.name.lowercased().hasSuffix(".dmg") } ?? assets.first { $0.name.lowercased().hasSuffix(".zip") })?
+                .browserDownloadURL
+            // A zip with a matching "<name>.sig" can be installed in place.
+            archive = assets.first { asset in
+                asset.name.lowercased().hasSuffix(".zip") && assets.contains { $0.name == asset.name + ".sig" }
+            }
+        case .android:
+            // A release without an Android build (from before there was one) isn't an update.
+            guard let apk = assets.first(where: { $0.name == UpdatePlatform.androidAsset }) else { return .upToDate(latest: latest) }
+            download = apk.browserDownloadURL
+            archive = apk
         }
         let signature = archive.flatMap { archive in assets.first { $0.name == archive.name + ".sig" } }
         let archiveURL = onGitHub(archive?.browserDownloadURL), signatureURL = onGitHub(signature?.browserDownloadURL)
         return .available(AvailableUpdate(
             version: latest, title: release.name?.isEmpty == false ? release.name! : "Version \(latest)",
-            notes: release.body ?? "", pageURL: release.htmlURL, downloadURL: onGitHub(download),
+            notes: Self.removingMarker(body), pageURL: release.htmlURL, downloadURL: onGitHub(download),
             publishedAt: release.publishedAt,
             archiveURL: signatureURL == nil ? nil : archiveURL, signatureURL: archiveURL == nil ? nil : signatureURL))
+    }
+
+    private typealias Asset = GitHubRelease.Asset
+
+    private static let markerPattern = #"<!--\s*lumio-changed:([^>]*)-->"#
+
+    /// The marker's versions by platform, or nil when the notes have none.
+    static func changedVersions(in notes: String) -> [UpdatePlatform: SemanticVersion]? {
+        guard let range = notes.range(of: markerPattern, options: .regularExpression) else { return nil }
+        let inside = notes[range].dropFirst(4).dropLast(3).replacingOccurrences(of: "lumio-changed:", with: "")
+        var versions: [UpdatePlatform: SemanticVersion] = [:]
+        for pair in inside.split(whereSeparator: \.isWhitespace) {
+            let parts = pair.split(separator: "=", maxSplits: 1)
+            guard parts.count == 2, let platform = UpdatePlatform(rawValue: String(parts[0])),
+                  let version = SemanticVersion(String(parts[1])) else { continue }
+            versions[platform] = version
+        }
+        return versions
+    }
+
+    static func removingMarker(_ notes: String) -> String {
+        notes.replacingOccurrences(of: markerPattern, with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     static func isGitHubPage(_ url: URL) -> Bool {

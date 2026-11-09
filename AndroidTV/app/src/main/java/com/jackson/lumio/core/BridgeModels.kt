@@ -471,6 +471,31 @@ data class Track(val id: Int, val kind: String, val name: String, val selected: 
  * A change in the core. type: providers, live, guide, vod (watch progress or Recently Watched), player
  * (with state), or sync (with provider, label, finished, error).
  */
+/** The result of an update check. See `BridgeUpdate.swift`. */
+data class UpdateInfo(
+    /** upToDate or available. */
+    val status: String,
+    val latest: String,
+    val title: String?,
+    /** The release notes' first paragraph. */
+    val summary: String?,
+    val pageURL: String?,
+    val apkURL: String?,
+    val signatureURL: String?,
+) {
+    val available get() = status == "available"
+
+    constructor(json: JSONObject) : this(
+        status = json.getString("status"),
+        latest = json.getString("latest"),
+        title = json.text("title"),
+        summary = json.text("summary"),
+        pageURL = json.text("pageURL"),
+        apkURL = json.text("apkURL"),
+        signatureURL = json.text("signatureURL"),
+    )
+}
+
 /** Multiview: the tiles and which one is heard. See `BridgeMultiview.swift`. */
 data class MultiviewState(
     val active: Boolean,

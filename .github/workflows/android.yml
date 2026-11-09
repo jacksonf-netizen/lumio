@@ -114,9 +114,10 @@ jobs:
         working-directory: AndroidTV
         run: ./gradlew --no-daemon :app:assembleRelease
 
+      # Unsigned here: only Tools/Release/publish.sh signs, with the key in Jackson's Keychain.
       - name: Check the APK size
         run: |
-          apk=AndroidTV/app/build/outputs/apk/release/app-release.apk
+          apk=AndroidTV/app/build/outputs/apk/release/app-release-unsigned.apk
           size=$(wc -c < "$apk")
           echo "APK: $((size / 1048576)) MB (budget 35 MB, limit 50 MB)"
           [ "$size" -le $((50 * 1048576)) ] || { echo "The APK is over the 50 MB limit" >&2; exit 1; }
