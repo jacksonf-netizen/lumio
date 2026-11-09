@@ -8,6 +8,14 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Android TV: moving along the sidebar only moves the highlight. A section opens when you press OK
+  (or Right) on it; before, resting on one switched to it.
+- Android TV: Live TV is now the programme guide, and the separate Guide section is gone. Choose
+  Favorites, Recently Watched or a group with the Group button above the channels. Coming in from
+  the sidebar lands on the channels.
+- Android TV: in Search, Back with the keyboard closed goes to the sidebar in one press.
+- The Mac is unchanged.
+
 ## 0.3.1 — 2026-11-09
 
 Fixes for Lumio on Android TV: pausing a movie, closing the audio and subtitles panel, and Live TV

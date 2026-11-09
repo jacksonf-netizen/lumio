@@ -3,6 +3,8 @@ package com.jackson.lumio.ui.guide
 import android.view.KeyEvent as AndroidKeyEvent
 import com.jackson.lumio.ui.common.LumioButton
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -171,7 +173,8 @@ fun GuideScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize()) {
+        // Coming in from the sidebar, the remote lands on the channels, not the Group button above them.
+        Column(Modifier.fillMaxSize().focusRestorer(gridFocus).focusGroup()) {
             val empty = model.channels.isEmpty()
             if (!empty) Details(model.selectedChannel, model.selectedCell, model.now, timeFormat)
             Toolbar(model, showHints = !empty, onPickGroup = {
@@ -251,7 +254,7 @@ fun GuideScreen(
 }
 
 private fun emptyText(scope: GuideScope) = when (scope) {
-    GuideScope.Favorites -> "No favorite channels yet. Hold OK on a channel in Live TV or the Guide and choose Add to Favorites."
+    GuideScope.Favorites -> "No favorite channels yet. Hold OK on a channel in Live TV and choose Add to Favorites."
     GuideScope.Recents -> "Nothing watched yet. Channels you watch appear here, most recent first."
     GuideScope.All -> "No channels yet. They appear here once your provider has loaded."
 }

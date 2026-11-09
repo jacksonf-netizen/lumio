@@ -150,6 +150,13 @@ fun RemoteTextField(
                                 keyboardController?.show()
                                 true
                             }
+                            // Back with the keyboard already closed leaves the field and carries on
+                            // (to the sidebar, or closing a form) instead of using up a press.
+                            Key.Back -> {
+                                editing = false
+                                box.requestFocus()
+                                false
+                            }
                             else -> false
                         }
                     },

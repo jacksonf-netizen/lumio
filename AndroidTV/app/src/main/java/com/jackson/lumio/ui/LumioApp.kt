@@ -38,6 +38,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,7 +60,6 @@ import androidx.tv.material3.Text
 import com.jackson.lumio.R
 import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
-import com.jackson.lumio.ui.live.LiveTvScreen
 import com.jackson.lumio.ui.multiview.MultiviewScreen
 import com.jackson.lumio.ui.multiview.MultiviewViewModel
 import com.jackson.lumio.ui.player.PlayerScreen
@@ -70,13 +74,12 @@ import com.jackson.lumio.update.UpdateViewModel
 import kotlinx.coroutines.delay
 
 /**
- * The sections in the rail. Favorites and Recently Watched aren't here: they're the first groups
- * in Live TV and the guide. Movies and Series share On Demand.
+ * The sections in the rail. Live TV is the programme guide (there's no separate Guide section);
+ * Favorites and Recently Watched are its first groups. Movies and Series share On Demand.
  */
 enum class Section(val title: String, val icon: Int) {
     Search("Search", R.drawable.ic_search),
     Live("Live TV", R.drawable.ic_live),
-    Guide("Guide", R.drawable.ic_guide),
     OnDemand("On Demand", R.drawable.ic_ondemand),
     /** Always shown, at the bottom of the rail. */
     Settings("Settings", R.drawable.ic_settings),
@@ -113,7 +116,6 @@ fun LumioApp() {
         when (it) {
             Section.Search -> "search" !in hidden
             Section.Live -> "liveTV" !in hidden
-            Section.Guide -> "guide" !in hidden
             Section.OnDemand -> vodKinds.isNotEmpty()
             Section.Settings -> true
         }
@@ -135,21 +137,14 @@ fun LumioApp() {
     // Screens return the highlight to where it was when the player or multiview closes.
     val overlay = player.showing || multiview.showing
     BackHandler(enabled = !railFocused && !overlay) { runCatching { railFocus.requestFocus() } }
-    // Resting on a section for a moment shows it, so passing over the others doesn't load them.
-    // Not Search: it opens the keyboard, which would take the remote off the rail.
-    var resting by remember { mutableStateOf<Section?>(null) }
-    LaunchedEffect(resting) {
-        val target = resting?.takeIf { it != Section.Search } ?: return@LaunchedEffect
-        delay(300)
-        section = target
-    }
     // At launch the remote starts on the section that's showing, not the rail's first icon.
     LaunchedEffect(Unit) {
         delay(50)
         runCatching { railFocus.requestFocus() }
     }
-    // Right (or OK) on the rail goes into the section: to where the remote last was there, else
-    // its first row, rather than whatever happens to be level with the icon.
+    // Moving along the rail only moves the highlight. OK (or Right) on a section opens it and goes
+    // in: to where the remote last was there, else its first row, rather than whatever happens to
+    // be level with the icon.
     val contentFocus = remember { FocusRequester() }
     var enter by remember { mutableStateOf(0) }
     LaunchedEffect(enter) {
@@ -169,8 +164,7 @@ fun LumioApp() {
                 }
                 when (shown) {
                     Section.Search -> SearchScreen(onWatch = play, onPlay = playVOD, playerShowing = overlay)
-                    Section.Live -> LiveTvScreen(onPlay = play, playerShowing = overlay)
-                    Section.Guide -> GuideScreen(GuideScope.All, play, overlay, playing)
+                    Section.Live -> GuideScreen(GuideScope.All, play, overlay, playing)
                     Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay)
                     Section.Settings -> SettingsScreen(providers, updates, settings)
                 }
@@ -183,9 +177,7 @@ fun LumioApp() {
                 focus = railFocus,
                 content = contentFocus,
                 onFocusChanged = { railFocused = it },
-                onRest = { resting = it },
                 onChoose = {
-                    resting = null
                     section = it
                     enter++
                 },
@@ -221,7 +213,6 @@ private fun Rail(
     focus: FocusRequester,
     content: FocusRequester,
     onFocusChanged: (Boolean) -> Unit,
-    onRest: (Section) -> Unit,
     onChoose: (Section) -> Unit,
 ) {
     val width by animateDpAsState(if (open) RailOpen else RailFolded, tween(160), label = "rail")
@@ -263,11 +254,15 @@ private fun Rail(
                 item,
                 selected = item == shown,
                 open = open,
-                // Only moving along the rail switches sections: arriving on it (Back, or the
-                // highlight landing there while a page redraws) doesn't.
-                onFocus = { if (open) onRest(item) },
                 onClick = { onChoose(item) },
-                modifier = Modifier.focusProperties { right = content }.then(if (item == shown) Modifier.focusRequester(focus) else Modifier),
+                // Right goes into the section that's showing; on another section it opens that one,
+                // as OK does, so the remote never lands in a page other than the one highlighted.
+                modifier = if (item == shown) Modifier.focusProperties { right = content }.focusRequester(focus)
+                else Modifier.onPreviewKeyEvent { event ->
+                    if (event.key != Key.DirectionRight) return@onPreviewKeyEvent false
+                    if (event.type == KeyEventType.KeyDown) onChoose(item)
+                    true
+                },
             )
             // Search sits apart above the sections.
             if (item == Section.Search) Spacer(Modifier.height(10.dp))
@@ -276,17 +271,14 @@ private fun Rail(
 }
 
 @Composable
-private fun RailItem(section: Section, selected: Boolean, open: Boolean, onFocus: () -> Unit, onClick: () -> Unit, modifier: Modifier) {
+private fun RailItem(section: Section, selected: Boolean, open: Boolean, onClick: () -> Unit, modifier: Modifier) {
     var focused by remember { mutableStateOf(false) }
     Surface(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
             .height(48.dp)
-            .onFocusChanged {
-                focused = it.isFocused
-                if (it.isFocused) onFocus()
-            },
+            .onFocusChanged { focused = it.isFocused },
         shape = ClickableSurfaceDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ClickableSurfaceDefaults.colors(
             containerColor = if (selected && !open) LumioColors.raised else Color.Transparent,
