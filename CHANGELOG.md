@@ -8,6 +8,15 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Android TV: pausing a movie or episode now shows "Paused" and keeps the controls up, and one
+  press of OK resumes. Before, the screen could miss the pause, hide the controls and need OK twice.
+- Android TV: Back closes the audio and subtitles panel in one press (it took two).
+- Android TV: Live TV rows show what's on as soon as the first guide arrives, and move on to the
+  next programme while the list stays open. The player's banner is also current each time it shows.
+- Android TV: after adding a channel to Favorites (or closing its options), the remote stays on
+  that channel instead of jumping to the group list.
+- The Mac is unchanged.
+
 ## 0.3.0 — 2026-11-09
 
 Lumio on Android TV has a new look, with a slim sidebar, simpler Settings and a size setting, and

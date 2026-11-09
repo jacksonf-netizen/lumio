@@ -32,10 +32,16 @@ class MultiviewViewModel(application: Application) : AndroidViewModel(applicatio
         private set
     var error by mutableStateOf<String?>(null)
         private set
+    private var eventsSeen = 0
 
     init {
         viewModelScope.launch {
-            LumioCore.events.filter { it.type == "multiview" }.collect { event -> event.multiview?.let { state = it } }
+            LumioCore.events.filter { it.type == "multiview" }.collect { event ->
+                event.multiview?.let {
+                    eventsSeen++
+                    state = it
+                }
+            }
         }
     }
 
@@ -79,7 +85,11 @@ class MultiviewViewModel(application: Application) : AndroidViewModel(applicatio
     private fun run(work: suspend () -> MultiviewState) {
         viewModelScope.launch {
             try {
-                state = work()
+                // An event that arrived while the request was out is newer than its reply (see
+                // PlayerViewModel.showReply).
+                val before = eventsSeen
+                val reply = work()
+                if (eventsSeen == before) state = reply
                 error = null
             } catch (failure: CoreException) {
                 error = failure.message

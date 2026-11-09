@@ -167,6 +167,15 @@ real ones (`-databaseName NAME` → `dev-NAME.sqlite`):
 | `-databaseName perf -perfTest YES` | Guide drawing timings |
 | `-databaseName clip -guideClipTest YES` (with `IPTV_DEV_SEED=1`) | Scrolls the guide and checks nothing is drawn outside it |
 
+The smoke test wants three harnesses, with region names on the first two (without them it skips
+the region checks):
+
+```bash
+python3 Tools/StreamHarness/harness.py --port 8098 --region-prefixes --quiet &
+python3 Tools/StreamHarness/harness.py --port 8099 --name "Harness B" --region-prefixes=alt --quiet &
+python3 Tools/StreamHarness/harness.py --port 8097 --name "Harness Moved" --renumber --quiet &
+```
+
 Add `-openSection settings` (any sidebar section) to open on a section, and `-snapshotAfter 6`
 to save the whole window after that many seconds. Snapshots go to the container's tmp folder,
 which Terminal can't read once Lumio is certificate-signed; `-snapshotStdout YES` also prints
