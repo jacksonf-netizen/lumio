@@ -75,7 +75,8 @@ choose which provider's copy it uses. The Window menu opens the guide or the pla
 its own.
 
 On a TV, up and down (or the channel buttons) change channel, the number buttons go to a channel,
-OK shows the channel banner, and holding OK opens Multiview and the audio and subtitle choices.
+OK opens the channel list over the picture, Left shows the channel banner, and holding OK opens
+Multiview and the audio and subtitle choices.
 
 ## Changing accounts or servers
 

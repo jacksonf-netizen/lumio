@@ -87,6 +87,9 @@ class ProvidersViewModel : ViewModel() {
      * to Settings), so browsing Settings' pages never has the form snatch the remote.
      */
     var takeFocus by mutableStateOf(false)
+    /** The provider whose row the list highlights when it comes back (the one edited or added). */
+    var returnTo by mutableStateOf<String?>(null)
+        private set
 
     init {
         reload()
@@ -105,9 +108,12 @@ class ProvidersViewModel : ViewModel() {
                         load()
                         state = state.copy(finished = state.finished + id)
                     } else {
+                        val stepChanged = event.step != state.steps[id]
                         event.label?.let { syncing[id] = it }
                         if (event.step != null) steps[id] = event.step else steps.remove(id)
                         state = state.copy(syncing = syncing, steps = steps, finished = state.finished - id)
+                        // A step finished: its counts (channels, movies…) are read for the rows.
+                        if (stepChanged) load()
                     }
                 }
             }
@@ -135,6 +141,7 @@ class ProvidersViewModel : ViewModel() {
 
     /** Opens the form for a new provider, with what was typed last time if it was never saved. */
     fun startAdding() {
+        returnTo = null
         if (form?.providerId != null) form = null
         if (form == null) form = ProviderForm(null, "")
         show(ProviderScreen.Form)
@@ -148,6 +155,7 @@ class ProvidersViewModel : ViewModel() {
     /** Opens the form for [provider], its links and username filled in (the password stays blank). */
     fun startEditing(provider: ProviderInfo) {
         val editing = ProviderForm(provider.id, provider.name)
+        returnTo = provider.id
         form = editing
         show(ProviderScreen.Form)
         viewModelScope.launch {
@@ -214,6 +222,7 @@ class ProvidersViewModel : ViewModel() {
      * [stay] false when the app goes on to Live TV, so the list doesn't take the remote later.
      */
     fun finishSetup(stay: Boolean = true) {
+        returnTo = (screen as? ProviderScreen.Setup)?.providerId
         form = null
         show(ProviderScreen.List)
         takeFocus = stay

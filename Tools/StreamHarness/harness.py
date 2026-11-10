@@ -248,6 +248,26 @@ def xmltv(now):
     return "\n".join(lines).encode()
 
 
+def short_epg(stream_id, limit, now):
+    """get_short_epg: the next few programmes of one channel (titles in base64, as panels send them)."""
+    import base64
+    c = CHANNELS.get(stream_id)
+    if c is None:
+        return {"epg_listings": []}
+    def b64(text):
+        return base64.b64encode(text.encode()).decode()
+    start = int(now // 1800 * 1800)
+    listings = []
+    for n in range(limit):
+        s = start + n * 1800
+        listings.append({"id": str(n), "epg_id": str(stream_id), "channel_id": c["epg"],
+                         "title": b64(f'{c["name"]} short {n}'), "description": b64(f"From get_short_epg, slot {n}."),
+                         "start": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(s)),
+                         "end": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(s + 1800)),
+                         "start_timestamp": str(s), "stop_timestamp": str(s + 1800)})
+    return {"epg_listings": listings}
+
+
 def make_handler(args, faults, hls, relay, movie_path):
     # --renumber: the same catalog as another panel would list it (new IDs, other name style).
     R = 500 if args.renumber else 0
@@ -390,7 +410,9 @@ def make_handler(args, faults, hls, relay, movie_path):
                                            {"id": str(952 + R), "episode_num": 2, "title": "Second", "container_extension": "mp4",
                                             "info": {"duration_secs": 120}, "season": 1}]}})
             if action == "get_short_epg":
-                return self.send_json({"epg_listings": []})
+                stream = query.get("stream_id", ["0"])[0]
+                limit = int(query.get("limit", ["4"])[0] or 4)
+                return self.send_json(short_epg(int(stream) - R if stream.isdigit() else -1, min(limit, 20), time.time()))
             return self.send_json([])
 
         def logo(self, name):
