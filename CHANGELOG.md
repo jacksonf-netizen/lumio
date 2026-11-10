@@ -8,6 +8,11 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+## 0.4.0 — 2026-11-09
+
+On Android TV, Live TV is now the programme guide, so there's one place for channels instead of
+two. The sidebar only opens a section when you press OK on it.
+
 - Android TV: moving along the sidebar only moves the highlight. A section opens when you press OK
   (or Right) on it; before, resting on one switched to it.
 - Android TV: Live TV is now the programme guide, and the separate Guide section is gone. Choose
