@@ -51,18 +51,21 @@ need Jackson's Mac:
 - CI (GitHub Actions) builds and tests both apps on every PR, so changes made elsewhere still get
   checked there.
 
-## Where things stand (2026-11-09)
+## Where things stand (2026-11-10)
 
-- Android phases 0–6 are merged. 0.3.1 is published (Android TV fixes: the pause state, Back on
-  the audio and subtitles panel, Live TV's now/next, focus after a channel's options). It's offered
-  to Mac copies too: `publish.sh` counts any change under `Mac/`, and the Debug-only smoke test
-  changed. 0.3.0 brought the Android TV redesign (icon rail, two-pane Settings, Settings → Display
-  → Size, adaptive icon), grey on both apps with the icon's cyan as the accent (the Mac's
-  `AccentColor` asset), and server links read several to a line.
+- Android phases 0–6 are merged. 0.4.0 is published, for Android TV only (the Mac last changed in
+  0.3.1): Live TV is the programme guide and the separate Guide section is gone (`LiveTvScreen`
+  remains as multiview's channel picker; the stored `guide` sidebar key is ignored on the TV),
+  and the rail opens a section only on OK or Right, never by resting on it. 0.3.1 fixed the pause
+  state, Back on the audio and subtitles panel, Live TV's now/next and focus after a channel's
+  options; it went to Mac copies too, because `publish.sh` counts any change under `Mac/` (there,
+  only the Debug-only smoke test). 0.3.0 brought the Android TV redesign (icon rail, two-pane
+  Settings, Settings → Display → Size, adaptive icon), grey on both apps with the icon's cyan as
+  the accent (the Mac's `AccentColor` asset), and server links read several to a line.
 - The Downloader code is **9446363** (AFTVnews; it points at
   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`, so it
   never needs changing). The README and `publish.sh`'s release notes give it.
 - Still open: trying the last step of an in-app update on a TV (allowing installs and Android's
-  Install prompt) by updating a 0.3.0 copy to 0.3.1; the redesign and the 0.3.1 fixes on the onn
-  TVs (only tried on the emulator); measurements on the onn HD stick and 4K box (need wireless
+  Install prompt) by updating a 0.3.x copy to 0.4.0; the redesign, 0.3.1 and 0.4.0 on the onn TVs
+  (only tried on the emulator); measurements on the onn HD stick and 4K box (need wireless
   debugging); phase 7 (low-end polish).
