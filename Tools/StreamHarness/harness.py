@@ -27,6 +27,7 @@ Fault injection (curl these while the app plays):
 
 Add --region-prefixes to name the groups like many real providers do ("UK | News", "US | Entertainment"),
 or --region-prefixes=alt for another provider's spellings of the same regions ("GB: News", "NA - Entertainment").
+Add --no-guide to answer xmltv.php with 404, like the many providers that have no guide download.
 
 Run two of these on different ports to simulate two providers:
   python3 Tools/StreamHarness/harness.py --port 8088 --name "Harness A"
@@ -299,6 +300,8 @@ def make_handler(args, faults, hls, relay, movie_path):
                 if url.path == "/xmltv.php":
                     if not self.authorised(query):
                         return self.send_status(401)
+                    if args.no_guide:
+                        return self.send_status(404)
                     return self.send_bytes(xmltv(time.time()), "application/xml")
                 if url.path.startswith("/hls"):
                     return self.hls_file(parts)
@@ -528,6 +531,7 @@ def main():
                         help='name groups "UK | News" / "US | Entertainment" (or with "alt": "GB: News" / "NA - Entertainment")')
     parser.add_argument("--renumber", action="store_true",
                         help="serve the same catalog under different IDs and name styles, like a provider that moved to another panel")
+    parser.add_argument("--no-guide", action="store_true", help="answer xmltv.php with 404 (a provider without a guide)")
     args = parser.parse_args()
     args.media = args.media or os.path.join(HERE, "media", str(args.port))
     os.makedirs(args.media, exist_ok=True)

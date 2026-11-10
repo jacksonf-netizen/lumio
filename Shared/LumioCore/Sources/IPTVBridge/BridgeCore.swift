@@ -21,6 +21,7 @@ public actor BridgeCore {
     private let guide: GuideRepository
     private let library: LibraryRepository
     private var syncing: [ProviderID: String] = [:]
+    private var syncSteps: [ProviderID: SyncStep] = [:]
     nonisolated let players: Players
     /// For update checks (GitHub). Replaceable in tests.
     let updateTransport: any HTTPTransport
@@ -323,6 +324,8 @@ public actor BridgeCore {
             let counts = (try? environment.catalog.counts(providerID: provider.id)) ?? CatalogCounts()
             let providerLinks = links[provider.id] ?? []
             let limit = await environment.connections.limit(for: provider.id)
+            let lastError = provider.lastError.map { CredentialRedactor.redact($0) }
+            let problems = RefreshProblems(lastError: lastError)
             list.append(ProviderDTO(
                 id: provider.id.rawValue, name: provider.name, enabled: provider.isEnabled,
                 server: provider.serverURL.absoluteString,
@@ -334,8 +337,10 @@ public actor BridgeCore {
                 connectionsInUse: usage[provider.id]?.inUse ?? 0, connectionLimit: usage[provider.id]?.limit ?? limit,
                 accountStatus: provider.accountStatus, expiresAt: provider.expiresAt?.timeIntervalSince1970,
                 lastRefreshAt: provider.lastRefreshAt?.timeIntervalSince1970,
-                lastError: provider.lastError.map { CredentialRedactor.redact($0) },
-                syncing: syncing[provider.id], unreachable: provider.isEnabled && providerLinks.allDown))
+                lastError: lastError,
+                syncing: syncing[provider.id], unreachable: provider.isEnabled && providerLinks.allDown,
+                syncStep: syncSteps[provider.id]?.rawValue,
+                problem: problems.serious, guideProblem: problems.guide, failedParts: problems.failedParts))
         }
         return list
     }
@@ -360,15 +365,19 @@ public actor BridgeCore {
         switch event {
         case .started(let id):
             syncing[id] = "Starting…"
+            syncSteps[id] = nil
             Self.emit(BridgeEvent(type: "sync", provider: id.rawValue, label: syncing[id]), to: send)
         case .step(let id, let step):
             syncing[id] = step.label
-            Self.emit(BridgeEvent(type: "sync", provider: id.rawValue, label: step.label), to: send)
+            syncSteps[id] = step
+            Self.emit(BridgeEvent(type: "sync", provider: id.rawValue, label: step.label, step: step.rawValue), to: send)
         case .guideProgress(let id, let count):
             syncing[id] = "Guide: \(count.formatted()) programmes"
-            Self.emit(BridgeEvent(type: "sync", provider: id.rawValue, label: syncing[id]), to: send)
+            syncSteps[id] = .guide
+            Self.emit(BridgeEvent(type: "sync", provider: id.rawValue, label: syncing[id], step: SyncStep.guide.rawValue), to: send)
         case .finished(let id, let error):
             syncing[id] = nil
+            syncSteps[id] = nil
             Self.emit(BridgeEvent(type: "sync", provider: id.rawValue, finished: true,
                                   error: error.map { CredentialRedactor.redact($0) }), to: send)
             Self.emit(BridgeEvent(type: "providers"), to: send)

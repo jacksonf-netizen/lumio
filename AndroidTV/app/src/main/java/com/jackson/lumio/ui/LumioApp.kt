@@ -127,7 +127,11 @@ fun LumioApp() {
     LaunchedEffect(state.loaded) {
         if (state.loaded && !checkedFirstRun) {
             checkedFirstRun = true
-            if (state.providers.isEmpty()) section = Section.Settings
+            // With no provider yet, the add form opens straight away, the remote in its first field.
+            if (state.providers.isEmpty()) {
+                section = Section.Settings
+                providers.startAdding()
+            }
         }
     }
     val shown = if (section in sections) section else sections.first()
@@ -166,7 +170,10 @@ fun LumioApp() {
                     Section.Search -> SearchScreen(onWatch = play, onPlay = playVOD, playerShowing = overlay)
                     Section.Live -> GuideScreen(GuideScope.All, play, overlay, playing)
                     Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay)
-                    Section.Settings -> SettingsScreen(providers, updates, settings)
+                    Section.Settings -> SettingsScreen(providers, updates, settings, onWatch = {
+                        section = Section.Live
+                        enter++
+                    })
                 }
             }
             Rail(

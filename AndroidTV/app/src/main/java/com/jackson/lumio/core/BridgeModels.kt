@@ -27,7 +27,18 @@ data class ProviderInfo(
     /** What a refresh in progress is doing, or null. */
     val syncing: String?,
     val unreachable: Boolean,
+    /** The step a refresh in progress is on: account, live, movies, series, matching or guide. */
+    val syncStep: String? = null,
+    /** What stops something working (the login, channels, films), from [lastError]. */
+    val problem: String? = null,
+    /** Why the guide didn't load. Only a note: channels play without a guide. */
+    val guideProblem: String? = null,
+    /** The parts that failed; empty when the whole refresh did (a refused login, say). */
+    val failedParts: List<String> = emptyList(),
 ) {
+    /** The last refresh stopped before loading anything. */
+    val failedOutright: Boolean get() = problem != null && failedParts.isEmpty()
+
     constructor(json: JSONObject) : this(
         id = json.getString("id"),
         name = json.getString("name"),
@@ -46,6 +57,10 @@ data class ProviderInfo(
         lastError = json.text("lastError"),
         syncing = json.text("syncing"),
         unreachable = json.getBoolean("unreachable"),
+        syncStep = json.text("syncStep"),
+        problem = json.text("problem"),
+        guideProblem = json.text("guideProblem"),
+        failedParts = json.optJSONArray("failedParts")?.let { array -> List(array.length()) { array.getString(it) } }.orEmpty(),
     )
 }
 
@@ -565,11 +580,14 @@ data class BridgeEvent(
     val state: PlayerState?,
     /** For multiview events. */
     val multiview: MultiviewState? = null,
+    /** For sync events: the step a refresh is on (account, live, movies, series, matching, guide). */
+    val step: String? = null,
 ) {
     constructor(json: JSONObject) : this(
         type = json.getString("type"),
         provider = json.text("provider"),
         label = json.text("label"),
+        step = json.text("step"),
         finished = json.optBoolean("finished", false),
         error = json.text("error"),
         state = json.optJSONObject("state")?.let(::PlayerState),
