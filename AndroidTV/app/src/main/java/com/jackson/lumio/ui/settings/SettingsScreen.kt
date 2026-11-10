@@ -181,7 +181,13 @@ data class Picker(val title: String, val actions: List<MenuAction>, val detail: 
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun SettingsScreen(providers: ProvidersViewModel, updates: UpdateViewModel, model: SettingsViewModel = viewModel()) {
+fun SettingsScreen(
+    providers: ProvidersViewModel,
+    updates: UpdateViewModel,
+    model: SettingsViewModel = viewModel(),
+    /** Opens Live TV (after a new provider has loaded). */
+    onWatch: () -> Unit = {},
+) {
     var page by rememberSaveable { mutableStateOf(SettingsPage.Providers) }
     var picker by remember { mutableStateOf<Picker?>(null) }
     // Closing a picker gives the remote back to the row it was opened from.
@@ -213,7 +219,7 @@ fun SettingsScreen(providers: ProvidersViewModel, updates: UpdateViewModel, mode
             Box(Modifier.padding(vertical = 36.dp).width(1.dp).fillMaxHeight().background(LumioColors.outline))
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 when (page) {
-                    SettingsPage.Providers -> ProvidersPane(providers, paneFocus) { picker = it }
+                    SettingsPage.Providers -> ProvidersPane(providers, paneFocus, pick = { picker = it }, onWatch = onWatch)
                     SettingsPage.Playback -> Playback(model, paneFocus) { picker = it }
                     SettingsPage.Guide -> GuideAndRefresh(model, paneFocus) { picker = it }
                     SettingsPage.Display -> Display(model, paneFocus) { picker = it }

@@ -4,10 +4,11 @@
              {"url": "http://backup.example", "inUse": false, "down": true}],
    "channels": 1200, "movies": 5000, "series": 300, "programmes": 84000,
    "connectionsInUse": 1, "connectionLimit": 2, "accountStatus": "Active", "expiresAt": 1800000000,
-   "lastRefreshAt": 1793800100, "unreachable": false},
+   "lastRefreshAt": 1793800100, "lastError": "guide: The provider has no guide download at this address.",
+   "unreachable": false, "guideProblem": "The provider has no guide download at this address.", "failedParts": ["guide"]},
   {"id": "p2", "name": "Provider Two", "enabled": false, "server": "http://two.example",
    "links": [{"url": "http://two.example", "inUse": true, "down": false}],
    "channels": 0, "movies": 0, "series": 0, "programmes": 0, "connectionsInUse": 0, "connectionLimit": 1,
    "lastError": "The provider rejected the username or password.", "syncing": "Updating channels…",
-   "unreachable": false}
+   "unreachable": false, "syncStep": "live", "problem": "The provider rejected the username or password.", "failedParts": []}
 ]

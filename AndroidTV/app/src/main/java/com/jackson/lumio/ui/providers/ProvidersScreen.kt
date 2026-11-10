@@ -1,28 +1,43 @@
 package com.jackson.lumio.ui.providers
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.jackson.lumio.core.ProviderInfo
 import com.jackson.lumio.ui.LumioColors
@@ -36,38 +51,45 @@ import com.jackson.lumio.ui.settings.SettingsPane
 import com.jackson.lumio.ui.settings.heading
 import com.jackson.lumio.ui.settings.note
 import java.text.DateFormat
+import java.text.NumberFormat
 import java.util.Date
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
  * Settings → Providers: a row per provider (its state on the right), OK opens what can be done
- * with it. "Add provider" and Edit open the form in the same pane.
+ * with it. "Add provider" and Edit open the form in the same pane; saving a new provider shows it
+ * loading step by step. Which of these shows, and what's typed in the form, live in the view model,
+ * so leaving and coming back finds them as they were.
  */
 @Composable
-fun ProvidersPane(model: ProvidersViewModel, focus: FocusRequester, pick: (Picker) -> Unit) {
-    // Null: the list. Otherwise the form, for a new provider (Adding) or an existing one.
-    var editing by remember { mutableStateOf<Editing?>(null) }
-    // Closing the form gives the highlight back to the list (it would otherwise fall onto the rail).
-    var wasEditing by remember { mutableStateOf(false) }
-    LaunchedEffect(editing) {
-        if (editing == null && wasEditing) {
-            delay(50)
-            runCatching { focus.requestFocus() }
-        }
-        wasEditing = editing != null
-    }
-    when (val current = editing) {
-        null -> ProviderList(model, focus, pick, onAdd = { editing = Editing(null) }, onEdit = { editing = Editing(it) })
-        else -> ProviderEditor(model, current.provider, onDone = { editing = null })
+fun ProvidersPane(model: ProvidersViewModel, focus: FocusRequester, pick: (Picker) -> Unit, onWatch: () -> Unit) {
+    when (val screen = model.screen) {
+        ProviderScreen.List -> ProviderList(model, focus, pick)
+        ProviderScreen.Form -> model.form?.let { ProviderEditor(model, it, focus, pick) }
+        is ProviderScreen.Setup -> ProviderSetup(model, screen.providerId, focus, onWatch)
     }
 }
 
-private data class Editing(val provider: ProviderInfo?)
+/** Moves the remote to [target] after the pane changed (the view model asks, once). */
+@Composable
+private fun TakeFocus(model: ProvidersViewModel, target: FocusRequester) {
+    LaunchedEffect(model.takeFocus) {
+        if (!model.takeFocus) return@LaunchedEffect
+        // A frame for a list's rows to exist, then again a little later if that was too soon.
+        withFrameNanos {}
+        if (runCatching { target.requestFocus() }.isFailure) {
+            delay(150)
+            runCatching { target.requestFocus() }
+        }
+        model.takeFocus = false
+    }
+}
 
 @Composable
-private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick: (Picker) -> Unit, onAdd: () -> Unit, onEdit: (ProviderInfo) -> Unit) {
+private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick: (Picker) -> Unit) {
     val state = model.state
+    TakeFocus(model, focus)
     SettingsPane("Providers", focus) {
         state.message?.let { message ->
             item { SettingRow(message, "OK", valueColor = LumioColors.error, onClick = model::dismissMessage) }
@@ -75,7 +97,11 @@ private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick:
         if (state.loaded && state.providers.isEmpty()) {
             note("Add your IPTV provider to start: its server link, and your username and password. Logins are stored encrypted on this TV only.")
         }
-        item { SettingRow("Add provider", "", valueColor = LumioColors.accent, onClick = onAdd) }
+        val draft = model.form?.takeIf { it.providerId == null && it.changed }
+        item {
+            SettingRow(if (draft != null) "Carry on adding a provider" else "Add provider", "",
+                valueColor = LumioColors.accent, onClick = model::startAdding)
+        }
         if (state.providers.isNotEmpty()) {
             heading("Your providers")
             items(state.providers, key = { it.id }) { provider ->
@@ -84,13 +110,15 @@ private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick:
                     !provider.enabled -> "Off" to LumioColors.secondaryText
                     provider.unreachable -> "Can't connect" to LumioColors.error
                     syncing != null -> syncing to LumioColors.accent
-                    provider.lastError != null -> "Problem" to LumioColors.warning
+                    provider.problem != null -> "Problem" to LumioColors.warning
                     else -> "On" to LumioColors.accent
                 }
                 val counts = listOfNotNull(plural(provider.channels, "channel"), plural(provider.movies, "movie"), "${provider.series} series",
+                    // Only a note: everything plays without a guide.
+                    "no guide".takeIf { provider.guideProblem != null && provider.programmes == 0 },
                     provider.lastRefreshAt?.let { "updated ${updated(it)}" })
                 SettingRow(provider.name, value, counts.joinToString("  ·  "), valueColor = color) {
-                    pick(options(model, provider, state.providers, onEdit, pick))
+                    pick(options(model, provider, state.providers, pick))
                 }
             }
             item { SettingRow("Refresh all now", "") { model.refresh() } }
@@ -104,13 +132,12 @@ private fun options(
     model: ProvidersViewModel,
     provider: ProviderInfo,
     all: List<ProviderInfo>,
-    onEdit: (ProviderInfo) -> Unit,
     pick: (Picker) -> Unit,
 ): Picker {
     val index = all.indexOfFirst { it.id == provider.id }
     val actions = buildList {
         add(MenuAction("Refresh now") { model.refresh(provider.id) })
-        add(MenuAction("Edit") { onEdit(provider) })
+        add(MenuAction("Edit") { model.startEditing(provider) })
         add(MenuAction(if (provider.enabled) "Switch off" else "Switch on") { model.setEnabled(provider.id, !provider.enabled) })
         if (index > 0) add(MenuAction("Move up") { model.move(provider.id, -1) })
         if (index in 0 until all.lastIndex) add(MenuAction("Move down") { model.move(provider.id, 1) })
@@ -127,33 +154,31 @@ private fun options(
 private fun details(provider: ProviderInfo): String = buildList {
     add("${plural(provider.channels, "channel")}  ·  ${plural(provider.movies, "movie")}  ·  ${provider.series} series  ·  ${plural(provider.programmes, "programme")}")
     add("Connections: ${provider.connectionsInUse} of ${provider.connectionLimit}")
-    provider.expiresAt?.let { add("Expires ${DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date((it * 1000).toLong()))}") }
+    provider.expiresAt?.let { add("Expires ${date(it)}") }
     provider.lastRefreshAt?.let { add("Updated ${updated(it)}") }
     for (link in provider.links) {
         add("${link.url}  ·  ${if (link.down) "down" else if (link.inUse) "in use" else "backup"}")
     }
-    provider.lastError?.let { add(it) }
+    provider.problem?.let { add(it) }
+    provider.guideProblem?.let { add("Guide: $it Channels and films play without one.") }
 }.joinToString("\n")
+
+private fun date(seconds: Double): String = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date((seconds * 1000).toLong()))
 
 /** "15 minutes ago", "yesterday". */
 private fun updated(seconds: Double): String = android.text.format.DateUtils.getRelativeTimeSpanString(
     (seconds * 1000).toLong(), System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS,
 ).toString().replaceFirstChar { it.lowercase() }
 
-private fun plural(count: Int, one: String) = "$count $one${if (count == 1) "" else "s"}"
+private fun plural(count: Int, one: String) = "${NumberFormat.getIntegerInstance().format(count)} $one${if (count == 1) "" else "s"}"
 
-/** Add (provider = null) or edit a provider. An empty password keeps the saved one. Back cancels. */
+/**
+ * Add or change a provider. An empty password keeps the saved one. Back asks before throwing away
+ * what was typed; going to another section keeps it for later.
+ */
 @Composable
-private fun ProviderEditor(model: ProvidersViewModel, provider: ProviderInfo?, onDone: () -> Unit) {
-    var name by remember { mutableStateOf(provider?.name ?: "") }
-    // One field per server link: a TV keyboard has no key for a new line.
-    val links = remember { mutableStateListOf("") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-    var message by remember { mutableStateOf<String?>(null) }
-    var saving by remember { mutableStateOf(false) }
-    // Set when a pasted M3U or stream link carried the login and it filled the fields.
-    var foundLogin by remember { mutableStateOf(false) }
+private fun ProviderEditor(model: ProvidersViewModel, form: ProviderForm, focus: FocusRequester, pick: (Picker) -> Unit) {
+    val adding = form.providerId == null
     val scope = rememberCoroutineScope()
     val first = remember { FocusRequester() }
     val saveButton = remember { FocusRequester() }
@@ -161,79 +186,96 @@ private fun ProviderEditor(model: ProvidersViewModel, provider: ProviderInfo?, o
     // When the keyboard closes on a link field, read what's in it as the Mac's link box would: a
     // pasted list becomes one row per link, and a login inside a link fills the empty fields.
     fun readLinks(index: Int) {
-        val text = links.getOrNull(index)?.trim().orEmpty()
+        val text = form.links.getOrNull(index)?.trim().orEmpty()
         if (text.isEmpty()) return
         scope.launch {
             val parsed = model.parseLinks(text) ?: return@launch
-            if (links.getOrNull(index)?.trim() != text) return@launch
-            links.removeAt(index)
-            links.addAll(index, parsed.links)
-            val login = parsed.username to parsed.password
-            if (login.first != null && login.second != null &&
-                (username.isEmpty() || username == login.first) && (password.isEmpty() || password == login.second)
+            if (form.links.getOrNull(index)?.trim() != text) return@launch
+            form.links.removeAt(index)
+            form.links.addAll(index, parsed.links)
+            val username = parsed.username
+            val password = parsed.password
+            if (username != null && password != null &&
+                (form.username.isEmpty() || form.username == username) && (form.password.isEmpty() || form.password == password)
             ) {
-                username = login.first!!
-                password = login.second!!
-                foundLogin = true
+                form.username = username
+                form.password = password
+                form.foundLogin = true
             }
         }
     }
 
-    BackHandler(onBack = onDone)
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-    LaunchedEffect(provider?.id) {
-        if (provider != null) model.editor(provider.id)?.let { editor ->
-            links.clear()
-            links.addAll(editor.servers.lines().filter { it.isNotBlank() }.ifEmpty { listOf("") })
-            username = editor.username
-        }
+    fun leave() {
+        if (!form.changed) model.discardForm()
+        else pick(Picker(
+            if (adding) "Discard this provider?" else "Discard your changes?",
+            listOf(MenuAction("Keep editing") {}, MenuAction("Discard") { model.discardForm() }),
+            detail = "What you've typed stays while you keep editing, even if you go to another section and come back.",
+        ))
     }
+    BackHandler(onBack = ::leave)
+    TakeFocus(model, first)
 
-    SettingsPane(if (provider == null) "Add provider" else "Edit ${provider.name}", null, message) {
-        item { Field("Name (optional)", name, modifier = Modifier.focusRequester(first)) { name = it } }
-        items(links.size) { index ->
+    SettingsPane(if (adding) "Add provider" else "Edit ${form.name.ifBlank { "provider" }}", focus, form.message) {
+        if (adding && model.state.loaded && model.state.providers.isEmpty()) {
+            note("Welcome to Lumio. Enter your IPTV provider's details: the server link, your username and your password. Your login is stored encrypted on this TV only.")
+        }
+        item {
+            Field("Name (optional)", form.name, modifier = Modifier.focusRequester(first)) {
+                form.name = it
+                form.changed = true
+            }
+        }
+        items(form.links.size) { index ->
             Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 RemoteTextField(
                     if (index == 0) "Server link" else "Backup link $index",
-                    links[index], keyboard = KeyboardType.Uri, modifier = Modifier.weight(1f),
+                    form.links[index], placeholder = if (index == 0) "http://example.com:8080" else null,
+                    keyboard = KeyboardType.Uri, modifier = Modifier.weight(1f),
                     onEditingDone = { readLinks(index) },
-                ) { links[index] = it }
-                if (links.size > 1) LumioButton(onClick = { links.removeAt(index) }) { Text("Remove") }
+                ) {
+                    form.links[index] = it
+                    form.changed = true
+                }
+                if (form.links.size > 1) LumioButton(onClick = {
+                    form.links.removeAt(index)
+                    form.changed = true
+                }) { Text("Remove") }
             }
         }
         item {
             Box(Modifier.padding(start = 16.dp, top = 4.dp)) {
-                LumioButton(onClick = { links.add("") }) { Text("Add a backup link") }
+                LumioButton(onClick = {
+                    form.links.add("")
+                    form.changed = true
+                }) { Text("Add a backup link") }
             }
         }
-        item { Field("Username", username) { username = it } }
         item {
-            Field(if (provider == null) "Password" else "Password (empty keeps the saved one)", password, secret = true) { password = it }
+            Field("Username", form.username) {
+                form.username = it
+                form.changed = true
+            }
         }
-        if (foundLogin) note("Username and password filled in from the link.")
-        else note("You can paste several links into one field, or an M3U link with your login in it.")
+        item {
+            Field(if (adding) "Password" else "Password (empty keeps the saved one)", form.password, secret = true) {
+                form.password = it
+                form.changed = true
+            }
+        }
+        if (form.foundLogin) note("Username and password filled in from the link.")
+        else note("Backup links are other addresses for the same account: Lumio moves to one when the server in use stops answering. You can paste several links into one field, or an M3U link with your login in it.")
         item {
             // Coming down from the last field lands on Save, not whichever button is nearest.
             Row(
                 Modifier.padding(start = 16.dp, top = 16.dp).focusProperties { onEnter = { saveButton.requestFocus() } }.focusGroup(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                LumioButton(
-                    modifier = Modifier.focusRequester(saveButton),
-                    enabled = !saving,
-                    style = ButtonStyle.Primary,
-                    onClick = {
-                        saving = true
-                        val servers = links.map { it.trim() }.filter { it.isNotEmpty() }.joinToString("\n")
-                        scope.launch {
-                            message = if (provider == null) model.add(name, servers, username, password)
-                            else model.save(provider.id, name, servers, username, password)
-                            saving = false
-                            if (message == null) onDone()
-                        }
-                    },
-                ) { Text(if (saving) "Saving…" else "Save") }
-                LumioButton(onClick = onDone) { Text("Cancel") }
+                // Never disabled while saving: a disabled button loses the remote's highlight.
+                LumioButton(modifier = Modifier.focusRequester(saveButton), style = ButtonStyle.Primary, onClick = model::submit) {
+                    Text(if (form.saving) "Checking…" else if (adding) "Add" else "Save")
+                }
+                LumioButton(onClick = ::leave) { Text("Cancel") }
             }
         }
     }
@@ -250,4 +292,153 @@ private fun Field(
     onChange: (String) -> Unit,
 ) = Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
     RemoteTextField(label, value, secret = secret, keyboard = keyboard, modifier = modifier.fillMaxWidth(), onChange = onChange)
+}
+
+// MARK: Setup
+
+/** One line of the setup screen. */
+private enum class StepState { Waiting, Working, Done, Failed, Note, Skipped }
+
+private data class SetupStep(val title: String, val state: StepState, val detail: String?, val extra: String? = null)
+
+/** The order a refresh goes through its steps (matching comes between series and the guide). */
+private val stepOrder = listOf("account", "live", "movies", "series", "matching", "guide")
+
+/**
+ * A new provider's first load, as TiviMate shows a playlist being added: signing in, then
+ * channels, films, series and the guide, each ticked off with what it found. A missing guide is a
+ * note, not a failure. A refused login offers to change the details (the form, as it was typed).
+ */
+@Composable
+private fun ProviderSetup(model: ProvidersViewModel, providerId: String, focus: FocusRequester, onWatch: () -> Unit) {
+    val state = model.state
+    val provider = state.providers.firstOrNull { it.id == providerId }
+    val finished = providerId in state.finished
+    val failed = finished && provider?.failedOutright == true
+    val current = stepOrder.indexOf(state.steps[providerId] ?: provider?.syncStep).coerceAtLeast(0)
+    val liveDone = finished || current > stepOrder.indexOf("live")
+    val canWatch = !failed && liveDone && (provider?.channels ?: 0) > 0
+    val primary = remember { FocusRequester() }
+    var buttonsFocused by remember { mutableStateOf(false) }
+
+    BackHandler { if (failed) model.changeDetails(providerId, provider?.problem) else model.finishSetup() }
+    TakeFocus(model, primary)
+    // When something new can be done (start watching, or it finished), the highlight moves there.
+    LaunchedEffect(canWatch, finished) {
+        if (buttonsFocused) {
+            delay(50)
+            runCatching { primary.requestFocus() }
+        }
+    }
+
+    fun row(part: String, title: String, done: () -> String?): SetupStep {
+        val index = stepOrder.indexOf(part)
+        val p = provider
+        return when {
+            failed -> SetupStep(title, StepState.Skipped, null)
+            finished && p != null && part in p.failedParts ->
+                if (part == "guide") SetupStep(title, StepState.Note, "Not available from this provider. Channels and films play without it.")
+                else SetupStep(title, StepState.Failed, "Didn't load", p.problem)
+            finished || index < current -> SetupStep(title, StepState.Done, done())
+            index == current -> SetupStep(title, StepState.Working,
+                if (part == "guide") state.syncing[providerId]?.takeIf { it.contains("programmes") } ?: "Downloading…" else "Loading…")
+            else -> SetupStep(title, StepState.Waiting, null)
+        }
+    }
+
+    val steps = listOf(
+        when {
+            failed -> SetupStep("Signing in", StepState.Failed, "Couldn't sign in", provider?.problem)
+            finished || current > 0 -> SetupStep("Signing in", StepState.Done, provider?.let { p ->
+                listOfNotNull(p.accountStatus, p.expiresAt?.let { "until ${date(it)}" },
+                    plural(p.connectionLimit, "connection").takeIf { p.connectionLimit > 0 }).joinToString("  ·  ").ifEmpty { null }
+            })
+            else -> SetupStep("Signing in", StepState.Working, "Checking your login…")
+        },
+        row("live", "Channels") { provider?.let { plural(it.channels, "channel") } },
+        row("movies", "Movies") { provider?.let { plural(it.movies, "movie") } },
+        row("series", "Series") { provider?.let { "${NumberFormat.getIntegerInstance().format(it.series)} series" } },
+        row("guide", "TV guide") { provider?.let { plural(it.programmes, "programme") } },
+    )
+
+    val name = provider?.name ?: "provider"
+    val title = when {
+        failed -> "Couldn't add $name"
+        finished -> "$name is ready"
+        else -> "Adding $name"
+    }
+    SettingsPane(title, focus) {
+        // Keyed, so a note appearing above the buttons doesn't rebuild them (and drop the highlight).
+        items(steps, key = { it.title }) { StepRow(it) }
+        if (canWatch && !finished) note("You can start watching now. The rest keeps loading in the background.")
+        if (failed) note("Check the server link, username and password. Change details opens the form as you typed it.")
+        item(key = "buttons") {
+            // The same buttons stay put while their labels change, so the highlight never drops
+            // off a button that went away (it would land on the sidebar).
+            val buttons = when {
+                failed -> listOf(
+                    SetupButton("Change details", ButtonStyle.Primary) { model.changeDetails(providerId, provider?.problem) },
+                    SetupButton("Try again") { model.refresh(providerId) },
+                )
+                canWatch -> listOf(
+                    SetupButton("Start watching", ButtonStyle.Primary) {
+                        model.finishSetup(stay = false)
+                        onWatch()
+                    },
+                    SetupButton("Back to providers") { model.finishSetup() },
+                )
+                else -> listOf(SetupButton(if (finished) "Done" else "Back to providers") { model.finishSetup() })
+            }
+            Row(
+                Modifier.padding(start = 16.dp, top = 20.dp).onFocusChanged { buttonsFocused = it.hasFocus }.focusGroup(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                buttons.forEachIndexed { index, button ->
+                    key(index) {
+                        LumioButton(
+                            modifier = if (index == 0) Modifier.focusRequester(primary) else Modifier,
+                            style = button.style, onClick = button.run,
+                        ) { Text(button.label) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private class SetupButton(val label: String, val style: ButtonStyle = ButtonStyle.Normal, val run: () -> Unit)
+
+@Composable
+private fun StepRow(step: SetupStep) {
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp).fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Box(Modifier.width(36.dp).padding(top = 2.dp), contentAlignment = Alignment.CenterStart) {
+            when (step.state) {
+                StepState.Working -> Spinner()
+                StepState.Done -> Text("✓", color = LumioColors.accent, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                StepState.Failed -> Text("✕", color = LumioColors.error, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                StepState.Note -> Text("–", color = LumioColors.secondaryText, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                StepState.Waiting, StepState.Skipped -> Text("•", color = LumioColors.outline, fontSize = 20.sp)
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(step.title, fontSize = 19.sp,
+                color = if (step.state == StepState.Waiting || step.state == StepState.Skipped) LumioColors.secondaryText else LumioColors.text)
+            step.detail?.let {
+                Text(it, fontSize = 15.sp, color = if (step.state == StepState.Failed) LumioColors.error else LumioColors.secondaryText)
+            }
+            step.extra?.let { Text(it, fontSize = 13.sp, color = LumioColors.secondaryText, maxLines = 3) }
+        }
+    }
+}
+
+/** A small turning arc: work in progress. */
+@Composable
+private fun Spinner() {
+    val turn by rememberInfiniteTransition(label = "spinner").animateFloat(
+        0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "turn",
+    )
+    val color = LumioColors.accent
+    Canvas(Modifier.size(20.dp)) {
+        drawArc(color, startAngle = turn, sweepAngle = 270f, useCenter = false, style = Stroke(width = 2.5.dp.toPx()))
+    }
 }

@@ -33,6 +33,13 @@ class BridgeModelsTest {
         assertNull(first.syncing)
         assertEquals("Updating channels…", providers[1].syncing)
         assertEquals("The provider rejected the username or password.", providers[1].lastError)
+        // A missing guide is a note; a refused login stops everything.
+        assertNull(first.problem)
+        assertEquals(listOf("guide"), first.failedParts)
+        assertTrue(first.guideProblem!!.contains("no guide download"))
+        assertTrue(!first.failedOutright)
+        assertTrue(providers[1].failedOutright)
+        assertEquals("live", providers[1].syncStep)
     }
 
     @Test fun channelsAndGroups() {
@@ -51,6 +58,7 @@ class BridgeModelsTest {
         val events = fixture("events.json").map(::BridgeEvent)
         assertEquals(listOf("providers", "sync", "sync", "live"), events.map { it.type })
         assertTrue(events[2].finished)
+        assertEquals("live", events[1].step)
     }
 
     private fun fixtureObject(name: String): JSONObject =

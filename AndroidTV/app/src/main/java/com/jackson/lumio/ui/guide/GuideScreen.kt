@@ -293,7 +293,7 @@ private fun Details(channel: Channel?, cell: GuideCell?, now: Double, timeFormat
             color = LumioColors.secondaryText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val programme = cell?.programme
         if (programme == null) {
-            Text(if (cell == null && channel.epg != null) "Loading the guide…" else "No guide information",
+            Text(if (cell == null && channel.epg != null) "Loading the guide…" else "No guide information for this channel",
                 fontSize = 24.sp, color = LumioColors.secondaryText, modifier = Modifier.padding(top = 4.dp))
             return@Column
         }
@@ -467,8 +467,11 @@ private fun GuideRow(
             if (channel.favorite) Text("★", color = LumioColors.accent, fontSize = 13.sp, modifier = Modifier.padding(start = 4.dp))
         }
         Box(Modifier.width(timeline).fillMaxHeight()) {
+            // No guide for this channel: its name across the row, highlighted whole, as one cell.
             if (programmes != null && programmes.isEmpty()) {
-                Cell("No guide information", 0.dp, timeline, LumioColors.surface, LumioColors.secondaryText)
+                val selected = selectedCell != null
+                Cell(channel.name, 0.dp, timeline, if (selected) highlight else LumioColors.surface,
+                    if (selected) onHighlight else LumioColors.secondaryText)
             }
             programmes?.forEach { programme ->
                 val start = maxOf(programme.start, windowStart)
@@ -493,7 +496,7 @@ private fun GuideRow(
                 )
             }
             // A highlighted gap (no programme there).
-            if (selectedCell != null && selectedCell.programme == null) {
+            if (selectedCell != null && selectedCell.programme == null && programmes?.isEmpty() != true) {
                 val start = maxOf(selectedCell.start, windowStart)
                 val stop = minOf(selectedCell.stop, windowEnd)
                 if (stop > start) {

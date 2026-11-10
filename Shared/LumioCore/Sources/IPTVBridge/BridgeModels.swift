@@ -29,6 +29,15 @@ public struct ProviderDTO: Codable, Equatable, Sendable {
     public var syncing: String?
     /// Every link failed its last check.
     public var unreachable: Bool
+    /// The step a refresh in progress is on (a `SyncStep` raw value: account, live, movies,
+    /// series, matching, guide), or nil.
+    public var syncStep: String?
+    /// `lastError` split up (`RefreshProblems`): what stops something working, why the guide
+    /// didn't load (a note: channels play without a guide), and the parts that failed (empty when
+    /// the whole refresh failed, as with a refused login).
+    public var problem: String?
+    public var guideProblem: String?
+    public var failedParts: [String]
 }
 
 public struct LinkDTO: Codable, Equatable, Sendable {
@@ -130,16 +139,19 @@ public struct BridgeEvent: Codable, Equatable, Sendable {
     public var type: String
     public var provider: String?
     public var label: String?
+    /// With a sync label: the `SyncStep` it's on (account, live, movies, series, matching, guide).
+    public var step: String?
     public var finished: Bool?
     public var error: String?
     public var state: PlayerStateDTO?
     public var multiview: MultiviewStateDTO?
 
-    public init(type: String, provider: String? = nil, label: String? = nil, finished: Bool? = nil, error: String? = nil,
-                state: PlayerStateDTO? = nil, multiview: MultiviewStateDTO? = nil) {
+    public init(type: String, provider: String? = nil, label: String? = nil, step: String? = nil, finished: Bool? = nil,
+                error: String? = nil, state: PlayerStateDTO? = nil, multiview: MultiviewStateDTO? = nil) {
         self.type = type
         self.provider = provider
         self.label = label
+        self.step = step
         self.finished = finished
         self.error = error
         self.state = state

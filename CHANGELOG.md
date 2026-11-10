@@ -8,6 +8,15 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Android TV: adding a provider shows it loading step by step (signing in, channels, movies,
+  series, the guide), with what each step found. Start watching is offered as soon as the channels
+  are in. A refused login says so and opens the form again as you typed it.
+- Android TV: Back in the provider form no longer throws away what you typed. It asks first, and
+  the form keeps its contents if you go to another section and come back. Cancel asks too.
+- Android TV: a provider without a guide is no longer marked "Problem". It shows "no guide", and
+  channels without guide information show their name across the guide row.
+- Android TV: the first time Lumio opens, the add-provider form is ready with the remote in it.
+
 ## 0.4.0 — 2026-11-09
 
 On Android TV, Live TV is now the programme guide, so there's one place for channels instead of
