@@ -8,6 +8,12 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+## 0.5.0 — 2026-11-11
+
+On Android TV, adding a provider now shows it loading step by step and keeps what you typed, and
+a provider without a guide works fully: Lumio asks it what's on channel by channel. OK while
+watching opens the channel list over the picture.
+
 - Android TV: adding a provider shows it loading step by step (signing in, channels, movies,
   series, the guide), with what each step found. Start watching is offered as soon as the channels
   are in. A refused login says so and opens the form again as you typed it.
@@ -23,6 +29,8 @@ offers the update. The list below it appears on the release page.
   and the playing channel marked; OK switches channel and Back closes it. Left shows the channel
   banner.
 - Android TV: back from editing a provider, the highlight returns to its row.
+- The Mac works as before. It's offered this update because it shares the code these changes
+  added to.
 
 ## 0.4.0 — 2026-11-09
 

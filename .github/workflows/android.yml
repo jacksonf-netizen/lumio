@@ -49,9 +49,14 @@ jobs:
 
       - name: Install Swift
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libncurses-dev libedit2 libpython3-dev libz3-dev \
-            libxml2-dev libcurl4-openssl-dev
+          # Best effort: the runner image already has all of these but libcurl4-openssl-dev, which
+          # the Android cross-builds don't use. When Ubuntu's package servers can't be reached (as on
+          # 2026-11-11), the job carries on with what's there; a package it really needed would make
+          # a later step fail.
+          sudo timeout 90 apt-get update -q || true
+          sudo timeout 90 apt-get install -y -q --no-install-recommends libncurses-dev libedit2 \
+            libpython3-dev libz3-dev libxml2-dev libcurl4-openssl-dev \
+            || echo "::warning::apt couldn't reach Ubuntu's package servers; carrying on with the runner's packages"
           base="swift-$SWIFT_VERSION-RELEASE-ubuntu24.04"
           url="https://download.swift.org/swift-$SWIFT_VERSION-release/ubuntu2404/swift-$SWIFT_VERSION-RELEASE/$base.tar.gz"
           curl -fsSL -o swift.tar.gz "$url"
