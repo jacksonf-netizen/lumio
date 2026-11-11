@@ -51,21 +51,39 @@ need Jackson's Mac:
 - CI (GitHub Actions) builds and tests both apps on every PR, so changes made elsewhere still get
   checked there.
 
-## Where things stand (2026-11-10)
+## Where things stand (2026-11-11)
 
-- Android phases 0–6 are merged. 0.4.0 is published, for Android TV only (the Mac last changed in
-  0.3.1): Live TV is the programme guide and the separate Guide section is gone (`LiveTvScreen`
-  remains as multiview's channel picker; the stored `guide` sidebar key is ignored on the TV),
-  and the rail opens a section only on OK or Right, never by resting on it. 0.3.1 fixed the pause
-  state, Back on the audio and subtitles panel, Live TV's now/next and focus after a channel's
-  options; it went to Mac copies too, because `publish.sh` counts any change under `Mac/` (there,
-  only the Debug-only smoke test). 0.3.0 brought the Android TV redesign (icon rail, two-pane
-  Settings, Settings → Display → Size, adaptive icon), grey on both apps with the icon's cyan as
-  the accent (the Mac's `AccentColor` asset), and server links read several to a line.
+- Android phases 0–6 are merged. 0.5.0 is published, mainly for Android TV (Mac copies are
+  offered it too because `Shared/LumioCore/Sources` changed; the Mac app works as before):
+  - Provider setup: the form's typing lives in `ProvidersViewModel` (Back and Cancel ask before
+    discarding). Add shows each loading step, and a refused login reopens the form as typed. The
+    first launch opens the form.
+  - A guide-only failure is a note, not "Problem": `RefreshProblems` splits `lastError`.
+  - For providers without a guide file, `ShortGuideFiller` asks `get_short_epg` for the channels
+    on screen. Its rows are stored with `importedAt = 0`, and the next guide import replaces them.
+  - OK in the live player opens the channel list (`ChannelListPanel`); Left or Info shows the
+    banner.
+- 0.4.0 made Live TV the programme guide (the separate Guide section is gone; `LiveTvScreen`
+  remains as multiview's channel picker, and the stored `guide` sidebar key is ignored on the TV),
+  and the rail opens a section only on OK or Right. 0.3.1 fixed the pause state, Back on the audio
+  and subtitles panel, Live TV's now/next and focus after a channel's options. 0.3.0 brought the
+  Android TV redesign (icon rail, two-pane Settings, Settings → Display → Size, adaptive icon),
+  grey on both apps with the icon's cyan as the accent (the Mac's `AccentColor` asset), and
+  server links read several to a line.
+- `publish.sh` marks the Mac changed for any change under `Mac/` or `Shared/LumioCore/Sources`.
+- CI's Android job installs its apt packages best effort: on 2026-11-11 GitHub's runners couldn't
+  resolve any `*.ubuntu.com` host, and only `libcurl4-openssl-dev` was missing, which the Android
+  cross-builds don't use.
+- The test harness has `--no-guide` (`xmltv.php` answers 404), and its `get_short_epg` returns
+  programmes.
 - The Downloader code is **9446363** (AFTVnews; it points at
   `https://github.com/jacksonf-netizen/lumio/releases/latest/download/Lumio-AndroidTV.apk`, so it
   never needs changing). The README and `publish.sh`'s release notes give it.
-- Still open: trying the last step of an in-app update on a TV (allowing installs and Android's
-  Install prompt) by updating a 0.3.x copy to 0.4.0; the redesign, 0.3.1 and 0.4.0 on the onn TVs
-  (only tried on the emulator); measurements on the onn HD stick and 4K box (need wireless
-  debugging); phase 7 (low-end polish).
+- Still open:
+  - Trying the last step of an in-app update on a TV (allowing installs and Android's Install
+    prompt) by updating a 0.4.0 copy to 0.5.0.
+  - 0.3.0 to 0.5.0 on the onn TVs (only tried on the emulator), above all adding a real provider.
+  - Measurements on the onn HD stick and 4K box (need wireless debugging).
+  - Phase 7 (low-end polish).
+  - TiviMate-style ideas not done yet: start on the last channel watched, and a small preview of
+    the playing channel in Live TV.
