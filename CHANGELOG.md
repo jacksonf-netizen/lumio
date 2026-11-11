@@ -16,6 +16,13 @@ offers the update. The list below it appears on the release page.
 - Android TV: a provider without a guide is no longer marked "Problem". It shows "no guide", and
   channels without guide information show their name across the guide row.
 - Android TV: the first time Lumio opens, the add-provider form is ready with the remote in it.
+- Android TV: for a provider without a guide file, the guide asks the provider what's on for the
+  channels on screen (a few at a time, at most every half hour per channel), so Live TV, the
+  banner and the channel list still show programmes. A guide file, once one loads, replaces them.
+- Android TV: OK while watching live TV opens the channel list over the picture, with what's on
+  and the playing channel marked; OK switches channel and Back closes it. Left shows the channel
+  banner.
+- Android TV: back from editing a provider, the highlight returns to its row.
 
 ## 0.4.0 — 2026-11-09
 

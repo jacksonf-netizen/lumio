@@ -58,9 +58,9 @@ import kotlinx.coroutines.delay
 
 /**
  * Full-screen live TV. Up/down and CH+/CH- change channel (through the list playback started
- * from), number keys pick a channel by number, OK shows the info banner, the last-channel key
- * goes back to the previous channel, Right (or Menu) opens audio and subtitles, Back closes the
- * player. For a movie or episode: OK pauses, left/right skip 10 s (rewind and fast-forward 30 s),
+ * from), number keys pick a channel by number, OK opens the channel list over the video (as in
+ * TiviMate), Left or Info shows the info banner, the last-channel key goes back to the previous
+ * channel, Right (or Menu) opens audio and subtitles, Back closes the player. For a movie or episode: OK pauses, left/right skip 10 s (rewind and fast-forward 30 s),
  * Down or Menu opens audio and subtitles, and Back closes (the core saves where it got to).
  */
 @OptIn(UnstableApi::class)
@@ -71,7 +71,13 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
     val press = remember { PressTracker() }
     // Hold OK on live TV: multiview, audio and subtitles.
     var options by remember { mutableStateOf(false) }
-    BackHandler(enabled = !options) { if (model.tracks != null) model.closeTracks() else model.close() }
+    BackHandler(enabled = !options) {
+        when {
+            model.channelList != null -> model.closeChannels()
+            model.tracks != null -> model.closeTracks()
+            else -> model.close()
+        }
+    }
     LaunchedEffect(Unit) { focus.requestFocus() }
 
     Box(
@@ -81,12 +87,12 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (state?.phase == "failed" || model.tracks != null || options) return@onPreviewKeyEvent false
+                if (state?.phase == "failed" || model.tracks != null || options || model.channelList != null) return@onPreviewKeyEvent false
                 val code = event.key.nativeKeyCode
                 if (state?.vod == null && (code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER)) {
-                    // Live TV: OK shows the banner, Hold OK the options (on release, so it can't pick one).
+                    // Live TV: OK opens the channel list, Hold OK the options (on release, so it can't pick one).
                     when (press.ok(event.type == KeyEventType.KeyDown, event.nativeKeyEvent.repeatCount)) {
-                        PressTracker.Result.Click -> model.showBanner()
+                        PressTracker.Result.Click -> model.openChannels()
                         PressTracker.Result.LongClick -> options = true
                         PressTracker.Result.None -> {}
                     }
@@ -111,7 +117,7 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
                 when (code) {
                     AndroidKeyEvent.KEYCODE_DPAD_UP, AndroidKeyEvent.KEYCODE_CHANNEL_DOWN -> model.zap(-1)
                     AndroidKeyEvent.KEYCODE_DPAD_DOWN, AndroidKeyEvent.KEYCODE_CHANNEL_UP -> model.zap(1)
-                    AndroidKeyEvent.KEYCODE_INFO -> model.showBanner()
+                    AndroidKeyEvent.KEYCODE_INFO, AndroidKeyEvent.KEYCODE_DPAD_LEFT -> model.showBanner()
                     AndroidKeyEvent.KEYCODE_LAST_CHANNEL, AndroidKeyEvent.KEYCODE_MEDIA_PREVIOUS -> model.previous()
                     AndroidKeyEvent.KEYCODE_DPAD_RIGHT, AndroidKeyEvent.KEYCODE_MENU, AndroidKeyEvent.KEYCODE_CAPTIONS -> model.openTracks()
                     in AndroidKeyEvent.KEYCODE_0..AndroidKeyEvent.KEYCODE_9 -> model.digit(code - AndroidKeyEvent.KEYCODE_0)
@@ -127,6 +133,9 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
         } else if (model.bannerVisible || state?.phase == "failed") Banner(model)
         TopRight(model)
         model.tracks?.let { TracksPanel(it, onSelect = model::selectTrack) }
+        model.channelList?.let { list ->
+            ChannelListPanel(list, playing = state?.channel?.id, onPick = model::pickChannel, onScroll = model::loadNowNextAround)
+        }
         if (options) {
             OptionsPanel(
                 title = state?.channel?.name ?: "Options",
@@ -143,7 +152,8 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
         }
     }
     // Focus comes back to the player when the tracks panel or the options close.
-    LaunchedEffect(model.tracks == null && !options) { if (model.tracks == null && !options) runCatching { focus.requestFocus() } }
+    val bare = model.tracks == null && !options && model.channelList == null
+    LaunchedEffect(bare) { if (bare) runCatching { focus.requestFocus() } }
 }
 
 @OptIn(UnstableApi::class)

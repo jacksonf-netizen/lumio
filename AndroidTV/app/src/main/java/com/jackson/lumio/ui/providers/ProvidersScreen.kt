@@ -89,7 +89,10 @@ private fun TakeFocus(model: ProvidersViewModel, target: FocusRequester) {
 @Composable
 private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick: (Picker) -> Unit) {
     val state = model.state
-    TakeFocus(model, focus)
+    // Back from editing or adding a provider, the highlight goes to its row.
+    val row = remember { FocusRequester() }
+    val returnTo = model.returnTo?.takeIf { id -> state.providers.any { it.id == id } }
+    TakeFocus(model, if (returnTo != null) row else focus)
     SettingsPane("Providers", focus) {
         state.message?.let { message ->
             item { SettingRow(message, "OK", valueColor = LumioColors.error, onClick = model::dismissMessage) }
@@ -117,8 +120,10 @@ private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick:
                     // Only a note: everything plays without a guide.
                     "no guide".takeIf { provider.guideProblem != null && provider.programmes == 0 },
                     provider.lastRefreshAt?.let { "updated ${updated(it)}" })
-                SettingRow(provider.name, value, counts.joinToString("  ·  "), valueColor = color) {
-                    pick(options(model, provider, state.providers, pick))
+                Box(if (provider.id == returnTo) Modifier.focusRequester(row) else Modifier) {
+                    SettingRow(provider.name, value, counts.joinToString("  ·  "), valueColor = color) {
+                        pick(options(model, provider, state.providers, pick))
+                    }
                 }
             }
             item { SettingRow("Refresh all now", "") { model.refresh() } }

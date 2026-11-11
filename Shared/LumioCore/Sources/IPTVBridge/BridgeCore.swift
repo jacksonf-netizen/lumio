@@ -20,6 +20,8 @@ public actor BridgeCore {
     private let liveCatalog: LiveCatalog
     private let guide: GuideRepository
     private let library: LibraryRepository
+    /// Asks providers without a guide file what's on, for the channels the guide is showing.
+    private let shortGuide: ShortGuideFiller
     private var syncing: [ProviderID: String] = [:]
     private var syncSteps: [ProviderID: SyncStep] = [:]
     nonisolated let players: Players
@@ -43,6 +45,7 @@ public actor BridgeCore {
         liveCatalog = LiveCatalog(database: environment.database)
         guide = GuideRepository(database: environment.database)
         library = LibraryRepository(database: environment.database)
+        shortGuide = ShortGuideFiller(database: environment.database, sources: environment.sources)
     }
 
     /// Opens the database at `databasePath` and wires the core with the app's secret store and the
@@ -249,6 +252,7 @@ public actor BridgeCore {
             struct P: Decodable { var epg: [EPGRefDTO] }
             let refs = try params.decode(P.self).epg
             let found = try await guide.nowNext(for: refs.map(\.ref))
+            fillShortGuide(refs.map(\.ref).filter { found[$0]?.now == nil })
             return refs.compactMap { ref -> NowNextDTO? in
                 guard let value = found[ref.ref] else { return nil }
                 return NowNextDTO(epg: ref, now: value.now.map(ProgrammeDTO.init), next: value.next.map(ProgrammeDTO.init))
@@ -263,6 +267,7 @@ public actor BridgeCore {
             let end = Date(timeIntervalSince1970: min(p.end, p.start + 2 * 86_400))
             guard end > start else { return [GuideRowDTO]() }
             let found = try await guide.programmes(for: p.epg.map(\.ref), in: DateInterval(start: start, end: end))
+            fillShortGuide(p.epg.map(\.ref).filter { found[$0]?.isEmpty ?? true })
             return p.epg.map { ref in
                 GuideRowDTO(epg: ref, programmes: (found[ref.ref] ?? []).map(ProgrammeDTO.init))
             }
@@ -343,6 +348,14 @@ public actor BridgeCore {
                 problem: problems.serious, guideProblem: problems.guide, failedParts: problems.failedParts))
         }
         return list
+    }
+
+    /// Channels shown without programmes: their providers may answer for them one by one when
+    /// they have no guide file. In the background; what arrives reaches screens as a guide event.
+    private func fillShortGuide(_ refs: [EPGRef]) {
+        guard !refs.isEmpty else { return }
+        let filler = shortGuide
+        Task.detached(priority: .utility) { await filler.fill(refs) }
     }
 
     // MARK: Events

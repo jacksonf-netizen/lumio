@@ -5,7 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.CoreException
+import com.jackson.lumio.core.EPGRef
 import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.NowNext
 import com.jackson.lumio.core.PlayerState
@@ -166,6 +168,53 @@ class PlayerViewModel : ViewModel() {
             delay(5000)
             bannerVisible = false
         }
+    }
+
+    // MARK: Channel list (OK on live TV)
+
+    /** The channels of the group playing, with what's on, over the video (OK on live TV). */
+    var channelList by mutableStateOf<ChannelList?>(null)
+        private set
+
+    data class ChannelList(val channels: List<Channel>, val nowNext: Map<EPGRef, NowNext>, val start: Int)
+
+    fun openChannels() {
+        val current = state?.channel?.id
+        viewModelScope.launch {
+            val channels = runCatching { LumioCore.channels(group ?: "all") }.getOrNull().orEmpty()
+            if (channels.isEmpty()) {
+                showBanner()
+                return@launch
+            }
+            val start = channels.indexOfFirst { it.id == current }.coerceAtLeast(0)
+            channelList = ChannelList(channels, emptyMap(), start)
+            loadNowNextAround(start)
+        }
+    }
+
+    /** What's on for the rows near [index], for those not read yet (a long group is read as it scrolls). */
+    fun loadNowNextAround(index: Int) {
+        val list = channelList ?: return
+        val refs = list.channels.subList(maxOf(0, index - 20), minOf(list.channels.size, index + 40))
+            .mapNotNull { it.epg }.filter { it !in list.nowNext }.distinct()
+        if (refs.isEmpty()) return
+        viewModelScope.launch {
+            val found = runCatching { LumioCore.nowNext(refs) }.getOrNull() ?: return@launch
+            val now = channelList ?: return@launch
+            // Rows with nothing on are remembered too, so they aren't asked for again.
+            val empty = refs.associateWith { NowNext(it, null, null) }
+            channelList = now.copy(nowNext = now.nowNext + empty + found)
+        }
+    }
+
+    fun closeChannels() {
+        channelList = null
+    }
+
+    /** Plays [channel] from the list (the one playing just closes the list). */
+    fun pickChannel(channel: Channel) {
+        channelList = null
+        if (channel.id != state?.channel?.id) watch(channel.id, group ?: "all")
     }
 
     private fun channelChanged() {
