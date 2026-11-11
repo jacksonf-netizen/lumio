@@ -49,9 +49,17 @@ jobs:
 
       - name: Install Swift
         run: |
-          sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends libncurses-dev libedit2 libpython3-dev libz3-dev \
-            libxml2-dev libcurl4-openssl-dev
+          # The runner's packages come from Azure's Ubuntu mirror only; when that can't be reached,
+          # apt moves on to Ubuntu's own (listed after it), and the whole step is tried 3 times.
+          if [ -f /etc/apt/apt-mirrors.txt ] && ! grep -q "//archive.ubuntu.com" /etc/apt/apt-mirrors.txt; then
+            printf 'http://archive.ubuntu.com/ubuntu/\tpriority:9\n' | sudo tee -a /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          for attempt in 1 2 3; do
+            sudo apt-get update -q && sudo apt-get install -y -q --no-install-recommends libncurses-dev libedit2 \
+              libpython3-dev libz3-dev libxml2-dev libcurl4-openssl-dev && break
+            [ "$attempt" = 3 ] && exit 1
+            sleep 20
+          done
           base="swift-$SWIFT_VERSION-RELEASE-ubuntu24.04"
           url="https://download.swift.org/swift-$SWIFT_VERSION-release/ubuntu2404/swift-$SWIFT_VERSION-RELEASE/$base.tar.gz"
           curl -fsSL -o swift.tar.gz "$url"
