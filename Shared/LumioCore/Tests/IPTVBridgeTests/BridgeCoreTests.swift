@@ -29,6 +29,23 @@ struct BridgeCoreTests {
         return try #require(added?["id"] as? String)
     }
 
+    @Test func guideLinksAreAddedShownWithoutTheirQueryAndRemoved() async throws {
+        let (bridge, _) = await makeBridge()
+        let id = try await addHarness(bridge)
+        await #expect(throws: Failure.self) { try await call(bridge, "providers.addGuideLink", ["id": id, "text": "not a link"]) }
+
+        let added = try await call(bridge, "providers.addGuideLink", ["id": id, "text": "epg.example.com/us.xml.gz?token=t0ken99"])
+        #expect((added as? [String: Any])?["links"] as? [String] == ["epg.example.com/us.xml.gz"])
+        let request = try JSONSerialization.data(withJSONObject: ["method": "providers.list"])
+        let reply = await bridge.handle(String(decoding: request, as: UTF8.self))
+        #expect(!reply.contains("t0ken99"))
+        let list = try JSONDecoder().decode([String: [ProviderDTO]].self, from: Data(reply.utf8))["result"] ?? []
+        #expect(list.first?.guideLinks == 1)
+
+        let removed = try await call(bridge, "providers.removeGuideLink", ["id": id, "index": 0])
+        #expect((removed as? [String: Any])?["links"] as? [String] == [])
+    }
+
     @Test func addingAProviderListsItWithItsLinksAndNeverThePassword() async throws {
         let (bridge, _) = await makeBridge()
         let id = try await addHarness(bridge)

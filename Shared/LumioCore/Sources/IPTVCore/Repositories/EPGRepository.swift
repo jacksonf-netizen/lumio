@@ -22,20 +22,26 @@ public struct EPGRepository: Sendable {
         let from = window.start.addingTimeInterval(-shift).timeIntervalSince1970
         let to = window.end.addingTimeInterval(-shift).timeIntervalSince1970
 
+        // A guide link's programmes (`source` 1) keep their own times. The window is widened by the
+        // shift, so either kind is found; the final filter trims what the shift took out of range.
         let rows = try database.reader.read { db in
-            try Programme.fetchAll(db, sql: """
+            try Row.fetchAll(db, sql: """
                 SELECT * FROM programme
                 WHERE providerID = ? AND epgID IN (\(databaseQuestionMarks(count: ids.count)))
                   AND stop > ? AND start < ?
                 ORDER BY epgID, start
-                """, arguments: StatementArguments([providerID.rawValue] + ids + [from, to]))
+                """, arguments: StatementArguments([providerID.rawValue] + ids + [min(from, window.start.timeIntervalSince1970),
+                                                                                   max(to, window.end.timeIntervalSince1970)]))
+                .map { (try Programme(row: $0), ($0["source"] as Int? ?? 0) == 0) }
         }
         var grouped: [String: [Programme]] = [:]
-        for var programme in rows {
-            if shift != 0 {
+        for (programmeRow, shifted) in rows {
+            var programme = programmeRow
+            if shift != 0, shifted {
                 programme.start.addTimeInterval(shift)
                 programme.stop.addTimeInterval(shift)
             }
+            guard programme.stop > window.start, programme.start < window.end else { continue }
             grouped[programme.epgID, default: []].append(programme)
         }
         return grouped

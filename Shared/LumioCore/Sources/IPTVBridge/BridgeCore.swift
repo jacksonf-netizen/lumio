@@ -138,6 +138,40 @@ public actor BridgeCore {
             return ParsedLinksDTO(links: list.urls.map(\.absoluteString),
                                   username: list.credentials?.username, password: list.credentials?.password)
 
+        case "providers.guideLinks":
+            return try guideLinks(try provider(try params.decode(ID.self).id))
+
+        case "providers.addGuideLink":
+            // A link typed or pasted on the TV; the guide refreshes with it at once.
+            struct P: Decodable { var id: String; var text: String }
+            let p = try params.decode(P.self)
+            let provider = try provider(p.id)
+            guard let url = GuideLinkStore.parse(p.text) else {
+                throw BridgeError("That doesn't look like a link. It should start with http:// or https://.")
+            }
+            let store = GuideLinkStore(secrets: environment.secrets)
+            var links = try store.links(for: provider.id)
+            if !links.contains(url) { links.append(url) }
+            try store.setLinks(links, for: provider.id)
+            environment.refreshProvider(provider.id, parts: .guide)
+            return try guideLinks(provider)
+
+        case "providers.removeGuideLink":
+            // Its programmes go now; the guide refreshes with the links left, if any.
+            struct P: Decodable { var id: String; var index: Int }
+            let p = try params.decode(P.self)
+            let provider = try provider(p.id)
+            let store = GuideLinkStore(secrets: environment.secrets)
+            var links = try store.links(for: provider.id)
+            guard links.indices.contains(p.index) else { throw BridgeError("That guide link is already gone.") }
+            links.remove(at: p.index)
+            try store.setLinks(links, for: provider.id)
+            try await environment.database.writer.write { db in
+                try db.execute(sql: "DELETE FROM programme WHERE providerID = ? AND source = 1", arguments: [provider.id])
+            }
+            if !links.isEmpty { environment.refreshProvider(provider.id, parts: .guide) }
+            return try guideLinks(provider)
+
         case "providers.remove":
             try await environment.removeProvider(ProviderID(try params.decode(ID.self).id))
             return Empty()
@@ -350,9 +384,17 @@ public actor BridgeCore {
                 lastError: lastError,
                 syncing: syncing[provider.id], unreachable: provider.isEnabled && providerLinks.allDown,
                 syncStep: syncSteps[provider.id]?.rawValue,
-                problem: problems.serious, guideProblem: problems.guide, failedParts: problems.failedParts))
+                problem: problems.serious, guideProblem: problems.guide, failedParts: problems.failedParts,
+                guideLinks: (try? GuideLinkStore(secrets: environment.secrets).links(for: provider.id).count) ?? 0,
+                guideLinksProblem: problems.guideLinks))
         }
         return list
+    }
+
+    private func guideLinks(_ provider: Provider) throws -> GuideLinksDTO {
+        let links = try GuideLinkStore(secrets: environment.secrets).links(for: provider.id)
+        return GuideLinksDTO(links: links.map(GuideLinkStore.display),
+                             problem: RefreshProblems(lastError: provider.lastError).guideLinks.map { CredentialRedactor.redact($0) })
     }
 
     /// Channels shown without programmes: their providers may answer for them one by one when

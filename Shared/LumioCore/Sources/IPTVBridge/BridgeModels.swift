@@ -38,6 +38,15 @@ public struct ProviderDTO: Codable, Equatable, Sendable {
     public var problem: String?
     public var guideProblem: String?
     public var failedParts: [String]
+    /// How many guide links the user added (`GuideLinkStore`), and what went wrong with them.
+    public var guideLinks: Int = 0
+    public var guideLinksProblem: String?
+}
+
+/// A provider's guide links, as shown: host and path only (the query often holds a login).
+public struct GuideLinksDTO: Codable, Equatable, Sendable {
+    public var links: [String]
+    public var problem: String?
 }
 
 public struct LinkDTO: Codable, Equatable, Sendable {

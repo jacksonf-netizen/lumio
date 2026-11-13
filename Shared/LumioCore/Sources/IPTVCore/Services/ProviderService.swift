@@ -54,6 +54,7 @@ public struct ProviderService: Sendable {
     public func removeProvider(id: ProviderID) async throws {
         try repository.delete(id: id)
         try secrets.delete(for: id)
+        try? GuideLinkStore(secrets: secrets).delete(for: id)
         Log.app.info("Removed provider \(id, privacy: .public)")
         await sync.localDataDidChange(.providers)
     }

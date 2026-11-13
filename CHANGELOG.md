@@ -29,6 +29,11 @@ offers the update. The list below it appears on the release page.
   and moving the highlight doesn't change it. OK again makes it full screen without
   reconnecting, and Back from full screen makes it small again. It can be switched off in Settings → Playback. Previews aren't
   added to Recently Watched.
+- Android TV: a provider can have guide links: extra XMLTV guide addresses (Settings → Providers
+  → the provider → Guide links) for channels its own guide leaves out. Lumio matches their
+  channels to the provider's by guide ID, else by name and region, and never replaces the
+  provider's own guide. Links are kept with the login in the Keystore, and shown without their
+  query (where a token usually is).
 - Mac: refreshing a big provider is faster too. Otherwise the Mac works as before.
 
 ## 0.5.0 — 2026-11-11

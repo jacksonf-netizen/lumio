@@ -6,6 +6,15 @@ import FoundationNetworking
 /// Builds a `SourceProvider` for a provider (loads credentials, picks the implementation).
 public protocol SourceFactory: Sendable {
     func source(for provider: Provider) throws -> any SourceProvider
+    /// Guide links the user added to `provider` (`GuideLinkStore`).
+    func guideLinks(for provider: Provider) throws -> [URL]
+    /// Downloads a guide link to a temporary file the caller deletes.
+    func downloadGuideLink(_ url: URL) async throws -> URL
+}
+
+public extension SourceFactory {
+    func guideLinks(for provider: Provider) throws -> [URL] { [] }
+    func downloadGuideLink(_ url: URL) async throws -> URL { throw XtreamError.notFound }
 }
 
 public enum SourceFactoryError: Error, CustomStringConvertible {
@@ -31,6 +40,30 @@ public struct XtreamSourceFactory: SourceFactory {
         return XtreamSourceProvider(provider: provider, credentials: credentials, transport: transport,
                                     userAgent: userAgent())
     }
+
+    public func guideLinks(for provider: Provider) throws -> [URL] {
+        try GuideLinkStore(secrets: secrets).links(for: provider.id)
+    }
+
+    public func downloadGuideLink(_ url: URL) async throws -> URL {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 300)
+        request.setValue(userAgent(), forHTTPHeaderField: "User-Agent")
+        do {
+            let (file, response) = try await transport.download(for: request)
+            if let error = XtreamError.from(statusCode: response.statusCode) {
+                try? FileManager.default.removeItem(at: file)
+                throw error
+            }
+            let size = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? NSNumber)?.int64Value ?? 0
+            if size > XtreamClient.maxGuideDownloadBytes {
+                try? FileManager.default.removeItem(at: file)
+                throw XtreamError.invalidResponse("the guide file is \(size >> 20) MB, over the \(XtreamClient.maxGuideDownloadBytes >> 20) MB limit")
+            }
+            return file
+        } catch {
+            throw XtreamError.from(error)
+        }
+    }
 }
 
 /// What to refresh.
@@ -50,6 +83,8 @@ public struct RefreshParts: OptionSet, Sendable, Hashable {
 
 public enum SyncStep: String, Sendable, Equatable {
     case account, live, movies, series, guide, matching
+    /// The guide links the user added (`GuideLinkStore`), after the provider's own guide.
+    case guideLinks
 }
 
 public enum SyncEvent: Sendable, Equatable {
@@ -325,6 +360,11 @@ public actor CatalogSyncService {
             }
         }
 
+        // 6. Guide links: after the provider's own guide, whether or not that loaded.
+        if parts.contains(.guide), !Task.isCancelled {
+            await importGuideLinks(providerID, provider: provider, report: &report, redact: redact)
+        }
+
         provider.lastError = report.partErrors.isEmpty
             ? nil
             : report.partErrors.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.key.rawValue): \($0.value)" }.joined(separator: "\n")
@@ -433,6 +473,56 @@ public actor CatalogSyncService {
         case .timeout, .cannotConnect, .server, .httpStatus, .notFound, .forbidden, .invalidResponse, .decoding: true
         default: false
         }
+    }
+
+    /// Downloads and imports `provider`'s guide links, one at a time. A link that fails is reported
+    /// under `guideLinks` (never `guide`: that would make the provider look as if it had no guide
+    /// file, see `ShortGuideFiller`), shown by its host and path only.
+    private func importGuideLinks(_ providerID: ProviderID, provider: Provider, report: inout SyncReport,
+                                  redact: [ProviderCredentials]) async {
+        let links: [URL]
+        do { links = try sources.guideLinks(for: provider) } catch {
+            report.partErrors[.guideLinks] = "Couldn't read the guide links: \(message(error, redact))"
+            return
+        }
+        guard !links.isEmpty else { return }
+        emit(.step(providerID, .guideLinks))
+        var files: [URL] = []
+        defer { for file in files { try? FileManager.default.removeItem(at: file) } }
+        var problems: [String] = []
+        for link in links {
+            if Task.isCancelled { return }
+            do {
+                files.append(try await sources.downloadGuideLink(link))
+            } catch {
+                problems.append("\(GuideLinkStore.display(link)): \(Self.hideLink(link, in: message(error, redact)))")
+            }
+        }
+        if !files.isEmpty {
+            let window = EPGWindow(
+                pastDays: (try? settings.value(Double.self, for: .epgPastDays)) ?? 1,
+                futureDays: (try? settings.value(Double.self, for: .epgFutureDays)) ?? 7)
+            do {
+                let summary = try await importer.importGuideLinks(files: files, providerID: providerID, window: window,
+                                                                  complete: problems.isEmpty)
+                problems += summary.partialErrors.map { "Partly read: \($0)" }
+                if summary.matchedChannels == 0 { problems.append("None of its channels matched this provider's.") }
+            } catch is CancellationError {
+                return
+            } catch {
+                problems.append(message(error, redact))
+            }
+        }
+        if !problems.isEmpty { report.partErrors[.guideLinks] = problems.joined(separator: " ") }
+    }
+
+    /// `text` with the link (and its query, where a login usually is) replaced by its host and path.
+    static func hideLink(_ link: URL, in text: String) -> String {
+        var text = text.replacingOccurrences(of: link.absoluteString, with: GuideLinkStore.display(link))
+        for item in URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems ?? [] {
+            if let value = item.value, value.count >= 3 { text = text.replacingOccurrences(of: value, with: "***") }
+        }
+        return text
     }
 
     private func message(_ error: Error, _ credentials: [ProviderCredentials]) -> String {

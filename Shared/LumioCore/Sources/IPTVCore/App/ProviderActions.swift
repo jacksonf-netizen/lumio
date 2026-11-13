@@ -103,6 +103,7 @@ extension SyncStep {
         case .series: "Updating series…"
         case .guide: "Downloading guide…"
         case .matching: "Matching channels…"
+        case .guideLinks: "Reading guide links…"
         }
     }
 }
