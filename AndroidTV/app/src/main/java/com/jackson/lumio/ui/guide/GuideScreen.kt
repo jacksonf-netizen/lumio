@@ -3,7 +3,6 @@ package com.jackson.lumio.ui.guide
 import android.view.KeyEvent as AndroidKeyEvent
 import com.jackson.lumio.ui.common.LumioButton
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -36,6 +35,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -83,21 +83,24 @@ private data class Panel(val title: String, val actions: List<MenuAction>, val p
 @Composable
 fun GuideScreen(
     scope: GuideScope,
-    onPlay: (channel: String, group: String) -> Unit,
+    /** Plays a channel (its ID, its name for the "Opening…" line, and the group it was picked from). */
+    onPlay: (channel: String, name: String, group: String) -> Unit,
     playerShowing: Boolean,
     /** The channel the player is on, so closing the player brings the highlight to it. */
     playingChannel: String?,
     /** The list emptied while the grid had the remote (Recents cleared): the remote goes back to the sidebar. */
     onEmptied: () -> Unit = {},
+    /** What a provider refresh in progress is doing ("Updating channels… from TREX"), or null. */
+    refreshText: String? = null,
 ) {
-    val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope) }
+    val context = LocalContext.current
+    val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope, context) }
     val gridFocus = remember { FocusRequester() }
     var gridFocused by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<Panel?>(null) }
     var played by remember { mutableStateOf(false) }
     val press = remember { PressTracker() }
     val listState = rememberLazyListState()
-    val context = LocalContext.current
     val timeFormat = remember { android.text.format.DateFormat.getTimeFormat(context) }
 
     LaunchedEffect(playerShowing) {
@@ -130,7 +133,7 @@ fun GuideScreen(
 
     fun play(channel: Channel) {
         played = true
-        onPlay(channel.id, model.groupID)
+        onPlay(channel.id, channel.name, model.groupID)
     }
 
     fun options(channel: Channel, programme: Programme?) {
@@ -173,8 +176,9 @@ fun GuideScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        // Coming in from the sidebar, the remote lands on the channels, not the Group button above them.
-        Column(Modifier.fillMaxSize().focusRestorer(gridFocus).focusGroup()) {
+        // Coming in from the sidebar, the remote lands on the channels, not the Group button above
+        // them (and not on whatever it last touched, which after picking a group was that button).
+        Column(Modifier.fillMaxSize().focusProperties { onEnter = { runCatching { gridFocus.requestFocus() } } }.focusGroup()) {
             val empty = model.channels.isEmpty()
             if (!empty) Details(model.selectedChannel, model.selectedCell, model.now, timeFormat)
             Toolbar(model, showHints = !empty, onPickGroup = {
@@ -185,7 +189,9 @@ fun GuideScreen(
             when {
                 model.message != null && model.channels.isEmpty() ->
                     Message(model.message!!, LumioColors.error)
-                model.loaded && model.channels.isEmpty() -> Message(emptyText(scope), LumioColors.secondaryText)
+                !model.loaded -> Loading()
+                model.channels.isEmpty() && refreshText != null -> Message(refreshText, LumioColors.secondaryText)
+                model.channels.isEmpty() -> Message(emptyText(scope), LumioColors.secondaryText)
                 else -> BoxWithConstraints(
                     Modifier
                         .weight(1f)
@@ -259,6 +265,19 @@ private fun emptyText(scope: GuideScope) = when (scope) {
     GuideScope.All -> "No channels yet. They appear here once your provider has loaded."
 }
 
+/** While the channel list loads: a line saying so and a few grey rows where the channels will be. */
+@Composable
+private fun Loading() {
+    Column {
+        Message("Loading channels…", LumioColors.secondaryText)
+        Column(Modifier.padding(horizontal = 24.dp)) {
+            repeat(7) {
+                Box(Modifier.fillMaxWidth().height(RowHeight).padding(vertical = 2.dp).background(LumioColors.surface, RoundedCornerShape(4.dp)))
+            }
+        }
+    }
+}
+
 @Composable
 private fun Message(text: String, color: Color) {
     Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(24.dp))
@@ -274,7 +293,7 @@ private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -
     ) {
         when (model.scope) {
             GuideScope.All -> LumioButton(onClick = onPickGroup) {
-                Text("Group: ${model.groups.firstOrNull { it.id == model.groupID }?.name ?: "All"}", maxLines = 1)
+                Text(model.groups.firstOrNull { it.id == model.groupID }?.name?.let { "Group: $it" } ?: "Group", maxLines = 1)
             }
             GuideScope.Favorites -> Text("Favorites", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             GuideScope.Recents -> Text("Recently Watched", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)

@@ -33,7 +33,8 @@ extension KeyedDecodingContainer {
         if let string = try? decode(String.self, forKey: key) { return string }
         if let int = try? decode(Int.self, forKey: key) { return String(int) }
         if let double = try? decode(Double.self, forKey: key) {
-            return double.rounded() == double && abs(double) < 1e15 ? String(Int(double)) : String(double)
+            // Int64: a 32-bit `Int` (Android on armv7) can't hold every whole number below 1e15.
+            return double.rounded() == double && abs(double) < 1e15 ? String(Int64(double)) : String(double)
         }
         if let bool = try? decode(Bool.self, forKey: key) { return bool ? "1" : "0" }
         return nil
@@ -50,13 +51,15 @@ extension KeyedDecodingContainer {
     func lossyInt(_ key: Key) -> Int? {
         guard contains(key), (try? decodeNil(forKey: key)) == false else { return nil }
         if let int = try? decode(Int.self, forKey: key) { return int }
+        // `Int(exactly:)` gives nil, where `Int(_:)` would crash, for a number too big for a 32-bit
+        // `Int` (Android on armv7).
         if let double = try? decode(Double.self, forKey: key), double.isFinite, abs(double) < 1e15 {
-            return Int(double)
+            return Int(exactly: double.rounded(.towardZero))
         }
         if let string = try? decode(String.self, forKey: key) {
             let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
             if let int = Int(trimmed) { return int }
-            if let double = Double(trimmed), double.isFinite, abs(double) < 1e15 { return Int(double) }
+            if let double = Double(trimmed), double.isFinite, abs(double) < 1e15 { return Int(exactly: double.rounded(.towardZero)) }
         }
         if let bool = try? decode(Bool.self, forKey: key) { return bool ? 1 : 0 }
         return nil

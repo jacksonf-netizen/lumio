@@ -235,8 +235,10 @@ enum XMLTVDate {
             offsetSeconds = offsetSign * (h * 3600 + m * 60)
         }
         let days = daysFromCivil(year: year, month: month, day: day)
-        let seconds = days * 86_400 + hour * 3600 + minute * 60 + second - offsetSeconds
-        return Date(timeIntervalSince1970: TimeInterval(seconds))
+        // In Double: on 32-bit Android `Int` overflows (and traps) for dates after 2038 or before
+        // 1901, which some guides use as placeholders.
+        let seconds = Double(days) * 86_400 + Double(hour * 3600 + minute * 60 + second - offsetSeconds)
+        return Date(timeIntervalSince1970: seconds)
     }
 
     /// Days since 1970-01-01 for a proleptic Gregorian date (Howard Hinnant's algorithm).
@@ -256,8 +258,8 @@ enum XMLTVDate {
         func first(_ part: Substring?) -> Int? {
             part.flatMap { Int($0.split(separator: "/").first?.trimmingCharacters(in: .whitespaces) ?? "") }
         }
-        let season = first(parts.first).map { $0 + 1 }
-        let episode = first(parts.count > 1 ? parts[1] : nil).map { $0 + 1 }
+        let season = first(parts.first).map { $0 &+ 1 }
+        let episode = first(parts.count > 1 ? parts[1] : nil).map { $0 &+ 1 }
         switch (season, episode) {
         case let (s?, e?): return "S\(s) E\(e)"
         case let (nil, e?): return "E\(e)"

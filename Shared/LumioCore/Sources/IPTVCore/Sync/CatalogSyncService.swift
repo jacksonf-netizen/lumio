@@ -236,9 +236,11 @@ public actor CatalogSyncService {
                 async let categories = source.fetchCategories(.live)
                 async let channels = source.fetchChannels()
                 let fetched = try await channels
+                let stored = ContinuousClock.now
                 try keepUnlessConfirmedEmpty(fetched.count, part: "live", providerID: providerID)
                 try catalog.replaceCategories(try await categories, providerID: providerID, kind: .live)
                 let stats = try catalog.replaceChannels(fetched, providerID: providerID)
+                Self.logStored(fetched.count, "channels", since: stored)
                 report.live = stats
                 catalogChanged = catalogChanged || stats.changed
             } catch {
@@ -251,9 +253,11 @@ public actor CatalogSyncService {
                 async let categories = source.fetchCategories(.movie)
                 async let movies = source.fetchMovies()
                 let fetched = try await movies
+                let stored = ContinuousClock.now
                 try keepUnlessConfirmedEmpty(fetched.count, part: "movies", providerID: providerID)
                 try catalog.replaceCategories(try await categories, providerID: providerID, kind: .movie)
                 report.movies = try catalog.replaceMovies(fetched, providerID: providerID)
+                Self.logStored(fetched.count, "movies", since: stored)
             } catch {
                 report.partErrors[.movies] = message(error, redact)
             }
@@ -264,9 +268,11 @@ public actor CatalogSyncService {
                 async let categories = source.fetchCategories(.series)
                 async let series = source.fetchSeries()
                 let fetched = try await series
+                let stored = ContinuousClock.now
                 try keepUnlessConfirmedEmpty(fetched.count, part: "series", providerID: providerID)
                 try catalog.replaceCategories(try await categories, providerID: providerID, kind: .series)
                 report.series = try catalog.replaceSeries(fetched, providerID: providerID)
+                Self.logStored(fetched.count, "series", since: stored)
                 // After a renumbering, fetch the episode lists of series the library uses, so their
                 // episodes' progress and Recently Watched entries move to the new episode IDs.
                 for seriesID in try catalog.seriesAwaitingRelink(providerID: providerID).prefix(200) where !Task.isCancelled {
@@ -368,6 +374,14 @@ public actor CatalogSyncService {
         if stored == 0 || empty.remove(part) != nil { return }
         empty.insert(part)
         throw EmptyListKept()
+    }
+
+    /// "Stored 200225 movies in 12.3 s": with the network log's download times, shows where a slow
+    /// refresh spends its time.
+    static func logStored(_ count: Int, _ what: String, since start: ContinuousClock.Instant) {
+        let seconds = Double((ContinuousClock.now - start).components.attoseconds) / 1e18
+            + Double((ContinuousClock.now - start).components.seconds)
+        Log.sync.info("Stored \(count) \(what, privacy: .public) in \(String(format: "%.1f", seconds), privacy: .public) s")
     }
 
     /// Pause between the catalog requests and the guide download.

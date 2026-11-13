@@ -61,6 +61,21 @@ class VODViewModel(val kind: String) : ViewModel() {
             }
         }
         viewModelScope.launch {
+            // A refresh step finishing (movies, series…) can bring new titles, so a long refresh
+            // shows them as it goes. Only a changed step counts, not every progress message.
+            val lastStep = mutableMapOf<String, String?>()
+            LumioCore.events
+                .filter { it.type == "sync" && !it.finished }
+                .filter { event ->
+                    val id = event.provider.orEmpty()
+                    val changed = id !in lastStep || lastStep[id] != event.step
+                    lastStep[id] = event.step
+                    changed
+                }
+                .debounce(1000)
+                .collect { reloadHome() }
+        }
+        viewModelScope.launch {
             // A finished refresh can bring new titles.
             LumioCore.events.filter { it.type == "sync" && it.finished }.debounce(1000).collect {
                 reloadHome()

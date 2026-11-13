@@ -15,6 +15,10 @@ final class BridgePlayer {
     private let catalog: LiveCatalog
     private let emit: @Sendable (BridgeEvent) -> Void
     private var zap = ZapList<ChannelListItem>()
+    /// The group (and channel) whose zap list is being read after a watch.
+    private var loadingGroup: (String, String)?
+    /// That read: zapping waits for it, so channel up right after a watch goes through the group.
+    private var zapListTask: Task<Void, Never>?
     /// The movie or episode playing, or nil for live TV.
     private var vod: VODNowDTO?
     private let tracker = VODProgressTracker()
@@ -35,7 +39,16 @@ final class BridgePlayer {
     // MARK: Watching
 
     /// Plays `channelID` from `group`, zapping through that group from now on.
+    ///
+    /// The channel starts first; the group's list (for channel up/down and numbers) is read after,
+    /// since with tens of thousands of channels that read takes seconds on a TV box.
     func watch(channelID: String, group: String) async throws {
+        if let channel = try await catalog.item(logicalID: channelID) {
+            try play(channel, in: [channel])
+            zapListTask = Task { [weak self] in await self?.loadZapList(group: group, current: channelID) }
+            return
+        }
+        // A channel that isn't one logical channel's member yet (before matching has run).
         let groups = try await catalog.groups()
         guard let found = groups.first(where: { $0.id == group }) else { throw BridgeError("That group no longer exists.") }
         let channels = try await catalog.channels(in: found)
@@ -43,18 +56,33 @@ final class BridgePlayer {
         try play(channel, in: channels)
     }
 
+    /// Reads `group` for zapping, once `current` is playing; dropped if another channel or group
+    /// has been chosen meanwhile.
+    private func loadZapList(group: String, current: String) async {
+        loadingGroup = (group, current)
+        guard let found = try? await catalog.groups().first(where: { $0.id == group }),
+              let channels = try? await catalog.channels(in: found),
+              loadingGroup.map({ $0 == (group, current) }) == true, let playing = zap.current, playing.id == current,
+              channels.contains(where: { $0.id == current }) else { return }
+        zap.watch(playing, in: channels)
+        emitState()
+    }
+
     /// A one-channel list doesn't reopen the stream. Zapping is for live TV only.
-    func zap(by offset: Int) throws {
+    func zap(by offset: Int) async throws {
+        await zapListTask?.value
         guard vod == nil else { return }
         if let next = zap.channel(by: offset), next.id != zap.current?.id { try play(next, debounce: true) }
     }
 
-    func jump(toNumber number: Int) throws {
+    func jump(toNumber number: Int) async throws {
+        await zapListTask?.value
         guard vod == nil else { return }
         if let match = zap.channel(number: number, numberOf: \.number) { try play(match) }
     }
 
-    func previous() throws {
+    func previous() async throws {
+        await zapListTask?.value
         guard vod == nil else { return }
         if let previous = zap.previous { try play(previous) }
     }

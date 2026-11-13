@@ -87,8 +87,10 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
             .focusRequester(focus)
             .focusable()
             .onPreviewKeyEvent { event ->
-                if (state?.phase == "failed" || model.tracks != null || options || model.channelList != null) return@onPreviewKeyEvent false
+                if (state?.phase == "failed" || model.openError != null || model.tracks != null || options || model.channelList != null) return@onPreviewKeyEvent false
                 val code = event.key.nativeKeyCode
+                // Still opening: the keys wait (Back still closes).
+                if (model.opening != null && code != AndroidKeyEvent.KEYCODE_BACK) return@onPreviewKeyEvent true
                 if (state?.vod == null && (code == AndroidKeyEvent.KEYCODE_DPAD_CENTER || code == AndroidKeyEvent.KEYCODE_ENTER)) {
                     // Live TV: OK opens the channel list, Hold OK the options (on release, so it can't pick one).
                     when (press.ok(event.type == KeyEventType.KeyDown, event.nativeKeyEvent.repeatCount)) {
@@ -178,8 +180,14 @@ private fun Video() {
 /** What's happening, when it isn't simply playing. */
 @Composable
 private fun Status(model: PlayerViewModel) {
-    val state = model.state ?: return
-    val text = when (state.phase) {
+    model.openError?.let { reason ->
+        OpenFailed(model, reason)
+        return
+    }
+    val state = model.state
+    // "Opening <channel>…" from the moment OK was pressed, until the core has answered.
+    val text = model.opening ?: when (state?.phase) {
+        null -> return
         "connecting", "buffering" -> "Opening…"
         "reconnecting" -> "Reconnecting…"
         "waitingForNetwork" -> "Waiting for the network…"
@@ -201,10 +209,29 @@ private fun Status(model: PlayerViewModel) {
             ) {
                 Text("Couldn't play this channel", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.height(8.dp))
-                Text(state.message ?: model.error ?: "", color = LumioColors.secondaryText, fontSize = 17.sp)
+                Text(state?.message ?: model.error ?: "", color = LumioColors.secondaryText, fontSize = 17.sp)
                 Spacer(Modifier.height(18.dp))
                 LumioButton(onClick = model::retry, modifier = Modifier.focusRequester(retry)) { Text("Try again") }
             }
+        }
+    }
+}
+
+/** The core refused to open the channel or movie: why, and a Close button (Back works too). */
+@Composable
+private fun OpenFailed(model: PlayerViewModel, reason: String) {
+    val close = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { close.requestFocus() } }
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.background(Color(0xCC000000), RoundedCornerShape(12.dp)).padding(28.dp).width(640.dp),
+        ) {
+            Text("Couldn't open this", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Text(reason, color = LumioColors.secondaryText, fontSize = 17.sp)
+            Spacer(Modifier.height(18.dp))
+            LumioButton(onClick = model::close, modifier = Modifier.focusRequester(close)) { Text("Close") }
         }
     }
 }

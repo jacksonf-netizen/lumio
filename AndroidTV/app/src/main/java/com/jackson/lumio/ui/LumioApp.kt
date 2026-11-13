@@ -1,8 +1,13 @@
 package com.jackson.lumio.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -37,7 +42,12 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -46,6 +56,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -64,6 +75,7 @@ import com.jackson.lumio.ui.multiview.MultiviewScreen
 import com.jackson.lumio.ui.multiview.MultiviewViewModel
 import com.jackson.lumio.ui.player.PlayerScreen
 import com.jackson.lumio.ui.player.PlayerViewModel
+import com.jackson.lumio.ui.providers.ProvidersState
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 import com.jackson.lumio.ui.search.SearchScreen
 import com.jackson.lumio.ui.settings.SettingsScreen
@@ -162,14 +174,16 @@ fun LumioApp() {
         Box(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().padding(start = RailFolded).focusRequester(contentFocus).focusRestorer().focusGroup()) {
                 val play = { channel: String, group: String -> player.watch(channel, group) }
+                // The guide knows the channel's name, so the player can say "Opening <name>…" at once.
+                val playNamed = { channel: String, name: String, group: String -> player.watch(channel, group, name) }
                 val playing = player.state?.channel?.id
                 val playVOD = { k: String, provider: String, id: String, position: Double?, title: String, subtitle: String? ->
                     player.playVOD(k, provider, id, position, title, subtitle)
                 }
                 when (shown) {
                     Section.Search -> SearchScreen(onWatch = play, onPlay = playVOD, playerShowing = overlay)
-                    Section.Live -> GuideScreen(GuideScope.All, play, overlay, playing)
-                    Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay)
+                    Section.Live -> GuideScreen(GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state))
+                    Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay, refreshing = refreshName(state))
                     Section.Settings -> SettingsScreen(providers, updates, settings, onWatch = {
                         section = Section.Live
                         enter++
@@ -189,6 +203,13 @@ fun LumioApp() {
                     enter++
                 },
             )
+            // Progress stays in view on every screen except the full-screen player and multiview.
+            if (!overlay && state.syncSummary != null) {
+                SyncPill(
+                    listOfNotNull(state.syncSummary, state.syncing.values.singleOrNull()).joinToString(" · "),
+                    Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 32.dp),
+                )
+            }
         }
         if (player.showing) {
             PlayerScreen(player, onMultiview = if (multiview.available) ({
@@ -206,6 +227,51 @@ fun LumioApp() {
                 // Every tile's stream closes before the full-screen player opens its own.
                 onFullScreen = { channel, group -> multiview.stop { player.watch(channel, group) } },
                 onClose = { multiview.stop() },
+            )
+        }
+    }
+}
+
+/** "Updating channels… from TREX" while one provider refreshes (its step and its name), or null. */
+private fun refreshText(state: ProvidersState): String? {
+    val (id, label) = state.syncing.entries.firstOrNull() ?: return null
+    val name = state.providers.firstOrNull { it.id == id }?.name
+    return if (name == null) label else "$label from $name"
+}
+
+/** The name of the provider refreshing, "2 providers" for several, or null when none is. */
+private fun refreshName(state: ProvidersState): String? = when (state.syncing.size) {
+    0 -> null
+    1 -> state.providers.firstOrNull { it.id == state.syncing.keys.first() }?.name ?: "your provider"
+    else -> "${state.syncing.size} providers"
+}
+
+/** A small pill in the top-right corner: a spinner and what's updating. Not focusable. */
+@Composable
+private fun SyncPill(text: String, modifier: Modifier) {
+    Row(
+        modifier.background(Color(0xCC000000), RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spinner(16.dp)
+        Text(text, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 10.dp))
+    }
+}
+
+/** A turning arc, to show something is loading. */
+@Composable
+internal fun Spinner(diameter: Dp = 20.dp, color: Color = LumioColors.accent) {
+    val turn by rememberInfiniteTransition(label = "spinner")
+        .animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "turn")
+    Canvas(Modifier.size(diameter)) {
+        val width = diameter.toPx() / 8
+        rotate(turn) {
+            drawArc(
+                color = color, startAngle = 0f, sweepAngle = 270f, useCenter = false,
+                topLeft = Offset(width / 2, width / 2),
+                size = Size(size.width - width, size.height - width),
+                style = Stroke(width = width, cap = StrokeCap.Round),
             )
         }
     }

@@ -142,7 +142,17 @@ public struct XtreamSourceProvider: SourceProvider {
 
     /// "Film Title (2019)" → 2019
     static func year(fromTitle title: String) -> Int? {
-        guard let match = title.firstMatch(of: /\((19|20)\d{2}\)/) else { return nil }
-        return Int(title[match.range].dropFirst().dropLast())
+        // The first "(19xx)" or "(20xx)". A plain scan: a Regex here took seconds for a provider's
+        // 200,000 movies on a TV box.
+        let bytes = Array(title.utf8)
+        guard bytes.count >= 6 else { return nil }
+        func digit(_ byte: UInt8) -> Int? { (48...57).contains(byte) ? Int(byte - 48) : nil }
+        for i in 0...(bytes.count - 6) where bytes[i] == 40 && bytes[i + 5] == 41 {  // "(" … ")"
+            guard let a = digit(bytes[i + 1]), let b = digit(bytes[i + 2]),
+                  let c = digit(bytes[i + 3]), let d = digit(bytes[i + 4]),
+                  (a == 1 && b == 9) || (a == 2 && b == 0) else { continue }
+            return a * 1000 + b * 100 + c * 10 + d
+        }
+        return nil
     }
 }

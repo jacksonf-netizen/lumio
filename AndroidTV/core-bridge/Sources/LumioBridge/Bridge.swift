@@ -150,9 +150,10 @@ private enum Diagnostics {
         }
     }
 
-    private static func residentBytes() -> Int {
+    /// Int64: 2 GB and more doesn't fit a 32-bit `Int` (armv7), where the multiplication would trap.
+    private static func residentBytes() -> Int64 {
         guard let statm = try? String(contentsOfFile: "/proc/self/statm", encoding: .utf8),
-              let pages = statm.split(separator: " ").dropFirst().first.flatMap({ Int($0) }) else { return 0 }
-        return pages * Int(sysconf(Int32(_SC_PAGESIZE)))
+              let pages = statm.split(separator: " ").dropFirst().first.flatMap({ Int64($0) }) else { return 0 }
+        return pages * Int64(sysconf(Int32(_SC_PAGESIZE)))
     }
 }

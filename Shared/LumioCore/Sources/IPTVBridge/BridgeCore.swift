@@ -65,7 +65,11 @@ public actor BridgeCore {
     public func start(backgroundWork: Bool = true) {
         guard tasks.isEmpty else { return }
         let send = self.send
-        observers.append(liveCatalog.observeListChanges { Self.emit(BridgeEvent(type: "live"), to: send) })
+        // Recently Watched changes each time something plays: a "library" event of its own, so the
+        // guide doesn't re-read a whole group (55,000 channels on a big provider) for it.
+        let listTables = LiveCatalog.listTables.filter { $0 != "recentItem" }
+        observers.append(liveCatalog.observeListChanges(tables: listTables) { Self.emit(BridgeEvent(type: "live"), to: send) })
+        observers.append(liveCatalog.observeListChanges(tables: ["recentItem"]) { Self.emit(BridgeEvent(type: "library"), to: send) })
         observers.append(liveCatalog.observeGuideChanges { Self.emit(BridgeEvent(type: "guide"), to: send) })
         let environment = self.environment
         // Database observations here, not the repositories' value streams: those deliver on the main

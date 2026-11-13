@@ -64,6 +64,7 @@ import com.jackson.lumio.core.VODItem
 import com.jackson.lumio.core.WatchProgress
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.Spinner
 import com.jackson.lumio.ui.common.MenuAction
 import com.jackson.lumio.ui.common.OptionsPanel
 import com.jackson.lumio.ui.common.LumioTabs
@@ -148,11 +149,17 @@ class VODHostScope(
  * opens over it.
  */
 @Composable
-fun OnDemandScreen(kinds: List<String>, onPlay: PlayVOD, playerShowing: Boolean) {
+fun OnDemandScreen(
+    kinds: List<String>,
+    onPlay: PlayVOD,
+    playerShowing: Boolean,
+    /** The provider being refreshed right now (its name), or null when none is. */
+    refreshing: String? = null,
+) {
     var chosen by rememberSaveable { mutableStateOf("movie") }
     val kind = if (chosen in kinds) chosen else kinds.first()
     VODHost(onPlay, playerShowing) {
-        Home(model(kind), kind, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
+        Home(model(kind), kind, refreshing, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
             onCategoryOptions = { categoryOptions(kind, it) },
             onRecent = ::openRecent, onRecentOptions = { recentOptions(it, kind) }, onItemOptions = ::itemOptions,
             header = {
@@ -286,6 +293,7 @@ private fun Layer(covered: Boolean, focus: FocusRequester, content: @Composable 
 private fun Home(
     model: VODViewModel,
     kind: String,
+    refreshing: String?,
     onOpen: (VODItem) -> Unit,
     onCategory: (VODCategory) -> Unit,
     onCategoryOptions: (VODCategory) -> Unit,
@@ -301,6 +309,10 @@ private fun Home(
     header()
     when {
         home == null && model.message != null -> Message(model.message!!, LumioColors.error)
+        empty && refreshing != null -> Row(Modifier.padding(24.dp), verticalAlignment = Alignment.CenterVertically) {
+            Spinner()
+            Text("$title are loading from $refreshing…", color = LumioColors.secondaryText, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp))
+        }
         empty -> Message("No ${title.lowercase()} yet. They appear here once your provider has loaded.", LumioColors.secondaryText)
         home == null -> Message("Loading…", LumioColors.secondaryText)
         else -> LazyColumn(

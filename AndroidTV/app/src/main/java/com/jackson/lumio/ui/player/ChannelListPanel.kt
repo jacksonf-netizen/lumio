@@ -43,14 +43,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
  */
 @Composable
 fun ChannelListPanel(list: PlayerViewModel.ChannelList, playing: String?, onPick: (Channel) -> Unit, onScroll: (Int) -> Unit) {
-    val first = remember { FocusRequester() }
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, list.start - 4))
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
-    // What's on is read for the rows coming into view.
-    LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect { onScroll(it + 5) }
-    }
-    val now = System.currentTimeMillis() / 1000.0
     Box(
         Modifier
             .fillMaxSize()
@@ -59,44 +51,63 @@ fun ChannelListPanel(list: PlayerViewModel.ChannelList, playing: String?, onPick
         Column(Modifier.width(600.dp).fillMaxHeight().padding(start = 32.dp, top = 28.dp, end = 16.dp)) {
             Text("Channels", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(start = 12.dp, bottom = 12.dp))
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.focusProperties { onExit = { cancelFocusChange() } }.focusGroup(),
-            ) {
-                itemsIndexed(list.channels, key = { _, channel -> channel.id }) { index, channel ->
-                    val programme = channel.epg?.let { list.nowNext[it]?.now }
-                    val isPlaying = channel.id == playing
-                    LumioListItem(
-                        selected = isPlaying,
-                        onClick = { onPick(channel) },
-                        leadingContent = {
-                            Box(Modifier.width(96.dp), contentAlignment = Alignment.CenterStart) {
-                                Text(channel.number?.toString() ?: "", color = LumioColors.secondaryText, fontSize = 15.sp,
-                                    modifier = Modifier.width(44.dp))
-                                Box(Modifier.padding(start = 46.dp)) { RemoteImage(channel.logo, 40.dp) }
-                            }
-                        },
-                        headlineContent = {
-                            Text(channel.name, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        },
-                        supportingContent = {
-                            Column {
-                                Text(programme?.title ?: if (channel.epg == null || channel.epg in list.nowNext) "No guide information" else "",
-                                    color = LumioColors.secondaryText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                if (programme != null) {
-                                    Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp)
-                                        .background(Color(0x33FFFFFF), RoundedCornerShape(2.dp))) {
-                                        Box(Modifier.fillMaxWidth(programme.progress(now)).height(3.dp)
-                                            .background(LumioColors.accent, RoundedCornerShape(2.dp)))
-                                    }
-                                }
-                            }
-                        },
-                        trailingContent = if (isPlaying) ({ Text("▶", color = LumioColors.accent, fontSize = 14.sp) }) else null,
-                        modifier = Modifier.fillMaxWidth().then(if (index == list.start) Modifier.focusRequester(first) else Modifier),
-                    )
-                }
+            // The panel opens at once; a big group's channels are read meanwhile.
+            if (list.loading) {
+                Text("Loading channels…", color = LumioColors.secondaryText, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
+            } else {
+                ChannelRows(list, playing, onPick, onScroll)
             }
+        }
+    }
+}
+
+/** The channel rows, once they're read: the playing one in view and highlighted. */
+@Composable
+private fun ChannelRows(list: PlayerViewModel.ChannelList, playing: String?, onPick: (Channel) -> Unit, onScroll: (Int) -> Unit) {
+    val first = remember { FocusRequester() }
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = maxOf(0, list.start - 4))
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    // What's on is read for the rows coming into view.
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect { onScroll(it + 5) }
+    }
+    val now = System.currentTimeMillis() / 1000.0
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.focusProperties { onExit = { cancelFocusChange() } }.focusGroup(),
+    ) {
+        itemsIndexed(list.channels, key = { _, channel -> channel.id }) { index, channel ->
+            val programme = channel.epg?.let { list.nowNext[it]?.now }
+            val isPlaying = channel.id == playing
+            LumioListItem(
+                selected = isPlaying,
+                onClick = { onPick(channel) },
+                leadingContent = {
+                    Box(Modifier.width(96.dp), contentAlignment = Alignment.CenterStart) {
+                        Text(channel.number?.toString() ?: "", color = LumioColors.secondaryText, fontSize = 15.sp,
+                            modifier = Modifier.width(44.dp))
+                        Box(Modifier.padding(start = 46.dp)) { RemoteImage(channel.logo, 40.dp) }
+                    }
+                },
+                headlineContent = {
+                    Text(channel.name, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
+                supportingContent = {
+                    Column {
+                        Text(programme?.title ?: if (channel.epg == null || channel.epg in list.nowNext) "No guide information" else "",
+                            color = LumioColors.secondaryText, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (programme != null) {
+                            Box(Modifier.padding(top = 4.dp).fillMaxWidth().height(3.dp)
+                                .background(Color(0x33FFFFFF), RoundedCornerShape(2.dp))) {
+                                Box(Modifier.fillMaxWidth(programme.progress(now)).height(3.dp)
+                                    .background(LumioColors.accent, RoundedCornerShape(2.dp)))
+                            }
+                        }
+                    }
+                },
+                trailingContent = if (isPlaying) ({ Text("▶", color = LumioColors.accent, fontSize = 14.sp) }) else null,
+                modifier = Modifier.fillMaxWidth().then(if (index == list.start) Modifier.focusRequester(first) else Modifier),
+            )
         }
     }
 }
