@@ -73,7 +73,9 @@ import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.multiview.MultiviewScreen
 import com.jackson.lumio.ui.multiview.MultiviewViewModel
+import com.jackson.lumio.ui.player.GuidePreview
 import com.jackson.lumio.ui.player.PlayerScreen
+import com.jackson.lumio.ui.guide.PreviewWidth
 import com.jackson.lumio.ui.player.PlayerViewModel
 import com.jackson.lumio.ui.providers.ProvidersState
 import com.jackson.lumio.ui.providers.ProvidersViewModel
@@ -152,6 +154,12 @@ fun LumioApp() {
     var railFocused by remember { mutableStateOf(false) }
     // Screens return the highlight to where it was when the player or multiview closes.
     val overlay = player.showing || multiview.showing
+    // The guide's preview: only in Live TV, and it stops when you leave it or switch it off.
+    val previewOn = shown == Section.Live && GuidePreview.enabled
+    LaunchedEffect(previewOn) {
+        player.previewAllowed = previewOn
+        if (!previewOn) player.stopPreview()
+    }
     BackHandler(enabled = !railFocused && !overlay) { runCatching { railFocus.requestFocus() } }
     // At launch the remote starts in the guide when Live TV is showing: the guide takes it as soon
     // as its channels are there (see autoFocus), and the rail stays folded. Until then, and for any
@@ -193,6 +201,7 @@ fun LumioApp() {
                     Section.Live -> GuideScreen(
                         GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state),
                         railFocus = railFocus, autoFocus = launchFocus, onAutoFocused = { launchFocus = false },
+                        onPreview = if (previewOn) ({ channel, group -> player.preview(channel, group) }) else null,
                     )
                     Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay, refreshing = refreshName(state))
                     Section.Settings -> SettingsScreen(providers, updates, settings, onWatch = {
@@ -218,7 +227,8 @@ fun LumioApp() {
             if (!overlay && state.syncSummary != null) {
                 SyncPill(
                     listOfNotNull(state.syncSummary, state.syncing.values.singleOrNull()).joinToString(" · "),
-                    Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = 32.dp),
+                    // Left of the guide's preview picture when there is one.
+                    Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = if (previewOn) 32.dp + PreviewWidth else 32.dp),
                 )
             }
         }

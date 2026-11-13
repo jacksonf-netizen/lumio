@@ -67,6 +67,7 @@ import com.jackson.lumio.core.Regions
 import com.jackson.lumio.ui.LumioColors
 import com.jackson.lumio.ui.DisplaySize
 import com.jackson.lumio.ui.DisplaySizes
+import com.jackson.lumio.ui.player.GuidePreview
 import com.jackson.lumio.ui.common.LumioListItem
 import com.jackson.lumio.ui.common.LumioShapes
 import com.jackson.lumio.ui.common.MenuAction
@@ -331,6 +332,13 @@ private fun Playback(model: SettingsViewModel, focus: FocusRequester, pick: (Pic
             SettingRow("Reconnect after", "$seconds s without data") {
                 pick(picker("Reconnect after", listOf(3, 5, 8, 10, 15, 20, 30).map { "$it s" to it.toDouble() },
                     settings.stallTimeoutSeconds) { model.set("stallTimeoutSeconds", it) })
+            }
+        }
+        item {
+            val context = LocalContext.current
+            SwitchRow("Preview in Live TV", GuidePreview.enabled,
+                "The highlighted channel plays in a small picture. OK makes it full screen, Back makes it small again.") {
+                GuidePreview.set(context, !GuidePreview.enabled)
             }
         }
         note("If a channel won't play, Lumio tries the other format, then another provider that has it.")

@@ -42,9 +42,17 @@ final class BridgePlayer {
     ///
     /// The channel starts first; the group's list (for channel up/down and numbers) is read after,
     /// since with tens of thousands of channels that read takes seconds on a TV box.
-    func watch(channelID: String, group: String) async throws {
+    ///
+    /// A `preview` (the small picture in the TV's guide) isn't recorded in Recents. Watching the
+    /// channel that's already playing doesn't reopen it: the preview going full screen carries on
+    /// where it is, and is recorded then.
+    func watch(channelID: String, group: String, preview: Bool = false) async throws {
+        if vod == nil, let current = zap.current, current.id == channelID, Self.isUnderway(controller.phase) {
+            if !preview { record(current) }
+            return
+        }
         if let channel = try await catalog.item(logicalID: channelID) {
-            try play(channel, in: [channel])
+            try play(channel, in: [channel], record: !preview)
             zapListTask = Task { [weak self] in await self?.loadZapList(group: group, current: channelID) }
             return
         }
@@ -53,7 +61,15 @@ final class BridgePlayer {
         guard let found = groups.first(where: { $0.id == group }) else { throw BridgeError("That group no longer exists.") }
         let channels = try await catalog.channels(in: found)
         guard let channel = channels.first(where: { $0.id == channelID }) else { throw BridgeError("That channel no longer exists.") }
-        try play(channel, in: channels)
+        try play(channel, in: channels, record: !preview)
+    }
+
+    /// Playing, or on its way: not stopped, ended or failed.
+    static func isUnderway(_ phase: PlaybackPhase) -> Bool {
+        switch phase {
+        case .idle, .ended, .failed, .preempted, .suspended: false
+        default: true
+        }
     }
 
     /// Reads `group` for zapping, once `current` is playing; dropped if another channel or group
@@ -112,7 +128,8 @@ final class BridgePlayer {
         emitState()
     }
 
-    private func play(_ channel: ChannelListItem, in list: [ChannelListItem]? = nil, debounce: Bool = false) throws {
+    private func play(_ channel: ChannelListItem, in list: [ChannelListItem]? = nil, debounce: Bool = false,
+                      record: Bool = true) throws {
         guard let item = try environment.items.liveItem(providerID: channel.providerID, streamID: channel.streamID) else {
             throw BridgeError("This channel can't be played.")
         }
@@ -121,6 +138,10 @@ final class BridgePlayer {
         zap.watch(channel, in: list)
         controller.play(item, debounce: debounce)
         emitState()
+        if record { self.record(channel) }
+    }
+
+    private func record(_ channel: ChannelListItem) {
         let library = self.library
         Task { try? await library.recordPlayed(providerID: channel.providerID, kind: .channel, itemID: String(channel.streamID)) }
     }

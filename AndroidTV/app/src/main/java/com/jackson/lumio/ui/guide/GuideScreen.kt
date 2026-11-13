@@ -64,8 +64,16 @@ import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.flow.first
 import kotlin.math.floor
+import kotlinx.coroutines.delay
+import com.jackson.lumio.ui.player.MainVideo
+import androidx.compose.ui.draw.clip
 
 private val ChannelColumn = 210.dp
+/** How long the highlight rests on a channel before the preview plays it. */
+private const val PreviewDelayMillis = 1000L
+/** The preview picture's height: the details area's, so the grid keeps its rows. */
+val PreviewHeight = 150.dp
+val PreviewWidth = PreviewHeight * 16 / 9
 private val RowHeight = 54.dp
 /** Width of one minute of the grid; the screen's width sets how many hours show. */
 private const val DP_PER_MINUTE = 5.5f
@@ -102,6 +110,11 @@ fun GuideScreen(
     autoFocus: Boolean = false,
     /** The grid took the remote because of [autoFocus]. */
     onAutoFocused: () -> Unit = {},
+    /**
+     * Plays a channel in the preview picture (channel, group); null for no preview. The highlight
+     * resting on a channel for [PreviewDelayMillis] previews it.
+     */
+    onPreview: ((String, String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope, context) }
@@ -149,6 +162,14 @@ fun GuideScreen(
         }
     }
     BackHandler(enabled = gridFocused && panel == null && !model.atNow) { model.jumpToNow() }
+    // The highlight resting on a channel previews it (not while moving through, or off the grid).
+    val highlighted = model.selectedChannel?.id
+    LaunchedEffect(highlighted, gridFocused, playerShowing, onPreview != null) {
+        val preview = onPreview ?: return@LaunchedEffect
+        if (highlighted == null || !gridFocused || playerShowing) return@LaunchedEffect
+        delay(PreviewDelayMillis)
+        preview(highlighted, model.groupID)
+    }
 
     fun play(channel: Channel) {
         played = true
@@ -199,7 +220,13 @@ fun GuideScreen(
         // them (and not on whatever it last touched, which after picking a group was that button).
         Column(Modifier.fillMaxSize().focusProperties { onEnter = { if (gridAttached) gridFocus.requestFocus() } }.focusGroup()) {
             val empty = model.channels.isEmpty()
-            if (!empty) Details(model.selectedChannel, model.selectedCell, model.now, timeFormat)
+            if (!empty) {
+                Row {
+                    Box(Modifier.weight(1f)) { Details(model.selectedChannel, model.selectedCell, model.now, timeFormat) }
+                    // The player itself, small; while it's full screen, that screen shows the picture.
+                    if (onPreview != null && !playerShowing) PreviewWindow()
+                }
+            }
             Toolbar(model, showHints = !empty, onPickGroup = {
                 panel = Panel("Group", model.groups.map { group ->
                     MenuAction(group.name, selected = group.id == model.groupID) { model.selectGroup(group.id) }
@@ -323,6 +350,21 @@ private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -
         }
         Spacer(Modifier.weight(1f))
         if (showHints) Text("Hold OK for options  ·  ◀◀ ▶▶ change day", color = LumioColors.secondaryText, fontSize = 13.sp)
+    }
+}
+
+/** The preview: the main player's picture, 16:9 at the top right. */
+@Composable
+private fun PreviewWindow() {
+    Box(
+        Modifier
+            .padding(top = 8.dp, end = 24.dp, bottom = 8.dp)
+            .width(PreviewWidth - 16.dp * 16 / 9)
+            .height(PreviewHeight - 16.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(androidx.compose.ui.graphics.Color.Black),
+    ) {
+        MainVideo(Modifier.fillMaxSize())
     }
 }
 

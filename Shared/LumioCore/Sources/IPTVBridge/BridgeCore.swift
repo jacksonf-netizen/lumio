@@ -177,10 +177,11 @@ public actor BridgeCore {
 
         case "player.watch":
             // Plays a channel from a group; channel up/down then moves through that group.
-            struct P: Decodable { var player: String?; var channel: String; var group: String }
+            // `preview`: the guide's small picture, not recorded in Recents.
+            struct P: Decodable { var player: String?; var channel: String; var group: String; var preview: Bool? }
             let p = try params.decode(P.self)
             let player = try await players.player(p.player)
-            try await player.watch(channelID: p.channel, group: p.group)
+            try await player.watch(channelID: p.channel, group: p.group, preview: p.preview ?? false)
             return await player.state
 
         case "player.zap":

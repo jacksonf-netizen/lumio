@@ -160,24 +160,8 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
     LaunchedEffect(bare) { if (bare) runCatching { focus.requestFocus() } }
 }
 
-@OptIn(UnstableApi::class)
 @Composable
-private fun Video() {
-    val engine = remember { PlayerEngines.engine("main") }
-    AndroidView(
-        factory = { context ->
-            PlayerView(context).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                isFocusable = false
-            }
-        },
-        modifier = Modifier.fillMaxSize(),
-        update = { view -> engine.onPlayerChanged = { view.player = it } },
-    )
-    DisposableEffect(Unit) { onDispose { engine.onPlayerChanged = null } }
-}
+private fun Video() = MainVideo(Modifier.fillMaxSize())
 
 /** What's happening, when it isn't simply playing. */
 @Composable

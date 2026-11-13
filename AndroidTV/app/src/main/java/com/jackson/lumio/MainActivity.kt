@@ -47,6 +47,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (BuildConfig.DEBUG) addTestProvider()
         DisplaySizes.load(this)
+        com.jackson.lumio.ui.player.GuidePreview.load(this)
         setContent {
             LumioTheme {
                 LumioApp()

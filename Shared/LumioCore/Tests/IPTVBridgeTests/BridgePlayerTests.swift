@@ -182,4 +182,25 @@ struct BridgePlayerTests {
         #expect(try await recents().map(\.itemID) == ["8"])
         _ = await bridge.handle(#"{"method":"player.stop"}"#)
     }
+
+    @Test func aPreviewIsntRecordedAndGoingFullScreenDoesntReopenIt() async throws {
+        let (bridge, engine, _) = try await makeBridge()
+        let (group, ids) = try await channels(bridge)
+        _ = try await call(bridge, "player.watch", ["channel": ids[1], "group": group, "preview": true])
+        await waitFor { !engine.loads.isEmpty }
+        let database = bridge.environment.database
+        func recents() async throws -> [RecentItem] { try await database.reader.read { try RecentItem.fetchAll($0) } }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(try await recents().isEmpty)
+
+        // Full screen: the same channel carries on, and now counts as watched.
+        _ = try await call(bridge, "player.watch", ["channel": ids[1], "group": group])
+        for _ in 0..<100 {
+            if try await !recents().isEmpty { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(try await recents().map(\.itemID) == ["8"])
+        #expect(engine.loads.count == 1)
+        _ = await bridge.handle(#"{"method":"player.stop"}"#)
+    }
 }

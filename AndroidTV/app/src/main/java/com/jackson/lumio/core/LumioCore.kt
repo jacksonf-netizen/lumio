@@ -213,8 +213,9 @@ object LumioCore {
     // MARK: Playback (the core's PlaybackController; the engine is player/ExoEngine.kt)
 
     /** Plays [channel] from [group]; channel up/down then moves through that group. */
-    suspend fun watch(channel: String, group: String): PlayerState =
-        PlayerState(call("player.watch", "channel" to channel, "group" to group) as JSONObject)
+    /** [preview]: the guide's small picture, not recorded in Recents. Watching the channel already playing doesn't reopen it. */
+    suspend fun watch(channel: String, group: String, preview: Boolean = false): PlayerState =
+        PlayerState(call("player.watch", "channel" to channel, "group" to group, "preview" to preview) as JSONObject)
 
     suspend fun zap(by: Int): PlayerState = PlayerState(call("player.zap", "by" to by) as JSONObject)
 
