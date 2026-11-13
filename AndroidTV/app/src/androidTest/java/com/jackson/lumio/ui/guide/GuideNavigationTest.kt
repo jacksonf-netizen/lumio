@@ -77,6 +77,8 @@ class GuideNavigationTest {
         assertEquals(false, GuideNavigation.leftLeavesGrid(onNow, row, now, catchup = true))
         // A row with no guide is a gap cell that began at or before now: Left leaves too.
         assertEquals(true, GuideNavigation.leftLeavesGrid(onNow, emptyList(), now, catchup = false))
+        // Catch-up with no programmes has nothing to replay: Left leaves.
+        assertEquals(true, GuideNavigation.leftLeavesGrid(onNow, emptyList(), now, catchup = true))
         // Something already over, on a channel with no catch-up: nothing to the left worth showing.
         assertEquals(true, GuideNavigation.leftLeavesGrid(GuideCursor(0, six - 1800, six - hour), row, now, catchup = false))
         // A programme still to come steps back toward now, with or without catch-up.
