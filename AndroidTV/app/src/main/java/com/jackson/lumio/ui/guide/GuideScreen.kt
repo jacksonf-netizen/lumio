@@ -66,16 +66,15 @@ import java.util.Calendar
 import java.util.Date
 import kotlinx.coroutines.flow.first
 import kotlin.math.floor
-import kotlinx.coroutines.delay
 import com.jackson.lumio.ui.player.MainVideo
 import androidx.compose.ui.draw.clip
 
 private val ChannelColumn = 210.dp
-/** How long the highlight rests on a channel before the preview plays it. */
-private const val PreviewDelayMillis = 1000L
-/** The preview picture's height: the details area's, so the grid keeps its rows. */
-val PreviewHeight = 150.dp
-val PreviewWidth = PreviewHeight * 16 / 9
+/** The preview picture, 16:9 at the top right, and the details area beside it (picture plus margins). */
+private val PreviewPictureHeight = 216.dp
+val PreviewWidth = PreviewPictureHeight * 16 / 9
+private val PreviewAreaHeight = PreviewPictureHeight + 16.dp
+private val DetailsHeight = 150.dp
 private val RowHeight = 54.dp
 /** Width of one minute of the grid; the screen's width sets how many hours show. */
 private const val DP_PER_MINUTE = 5.5f
@@ -113,10 +112,12 @@ fun GuideScreen(
     /** The grid took the remote because of [autoFocus]. */
     onAutoFocused: () -> Unit = {},
     /**
-     * Plays a channel in the preview picture (channel, group); null for no preview. The highlight
-     * resting on a channel for [PreviewDelayMillis] previews it.
+     * Plays a channel in the preview picture (channel, group); null for no preview. OK previews a
+     * channel and OK again on it goes full screen; moving the highlight never changes the preview.
      */
     onPreview: ((String, String) -> Unit)? = null,
+    /** The channel in the preview, if any. */
+    previewChannel: String? = null,
     /** The preview picture is still opening or buffering: shows a wheel over it. */
     previewLoading: Boolean = false,
 ) {
@@ -166,16 +167,19 @@ fun GuideScreen(
         }
     }
     BackHandler(enabled = gridFocused && panel == null && !model.atNow) { model.jumpToNow() }
-    // The highlight resting on a channel previews it (not while moving through, or off the grid).
-    val highlighted = model.selectedChannel?.id
-    LaunchedEffect(highlighted, gridFocused, playerShowing, onPreview != null) {
-        val preview = onPreview ?: return@LaunchedEffect
-        if (highlighted == null || !gridFocused || playerShowing) return@LaunchedEffect
-        delay(PreviewDelayMillis)
-        preview(highlighted, model.groupID)
+    /** With the preview on, OK previews a channel and OK again on it goes full screen. */
+    fun play(channel: Channel) {
+        val preview = onPreview
+        if (preview != null && previewChannel != channel.id) {
+            preview(channel.id, model.groupID)
+            return
+        }
+        played = true
+        onPlay(channel.id, channel.name, model.groupID)
     }
 
-    fun play(channel: Channel) {
+    /** Straight to full screen (the options panel's "Watch"). */
+    fun watch(channel: Channel) {
         played = true
         onPlay(channel.id, channel.name, model.groupID)
     }
@@ -183,7 +187,7 @@ fun GuideScreen(
     fun options(channel: Channel, programme: Programme?) {
         val index = model.channels.indexOfFirst { it.id == channel.id }
         val actions = buildList {
-            add(MenuAction("Watch ${channel.name}") { play(channel) })
+            add(MenuAction("Watch ${channel.name}") { watch(channel) })
             add(MenuAction(if (channel.favorite) "Remove from Favorites" else "Add to Favorites") { model.toggleFavorite(channel) })
             when (scope) {
                 GuideScope.Favorites -> {
@@ -225,13 +229,14 @@ fun GuideScreen(
         Column(Modifier.fillMaxSize().focusProperties { onEnter = { if (gridAttached) gridFocus.requestFocus() } }.focusGroup()) {
             val empty = model.channels.isEmpty()
             if (!empty) {
-                Row {
+                val withPreview = onPreview != null
+                Row(Modifier.height(if (withPreview) PreviewAreaHeight else DetailsHeight)) {
                     Box(Modifier.weight(1f)) { Details(model.selectedChannel, model.selectedCell, model.now, timeFormat) }
                     // The player itself, small; while it's full screen, that screen shows the picture.
-                    if (onPreview != null && !playerShowing) PreviewWindow(previewLoading)
+                    if (withPreview) PreviewWindow(previewLoading, empty = previewChannel == null, showVideo = !playerShowing)
                 }
             }
-            Toolbar(model, showHints = !empty, onPickGroup = {
+            Toolbar(model, showHints = !empty, preview = onPreview != null, onPickGroup = {
                 panel = Panel("Group", model.groups.map { group ->
                     MenuAction(group.name, selected = group.id == model.groupID) { model.selectGroup(group.id) }
                 })
@@ -340,7 +345,7 @@ private fun Message(text: String, color: Color, loading: Boolean = false) {
 
 /** The group picker (Guide) or the list's name (Favorites, Recents). */
 @Composable
-private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -> Unit) {
+private fun Toolbar(model: GuideViewModel, showHints: Boolean, preview: Boolean, onPickGroup: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = if (showHints) 6.dp else 32.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -354,30 +359,38 @@ private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -
             GuideScope.Recents -> Text("Recently Watched", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.weight(1f))
-        if (showHints) Text("Hold OK for options  ·  ◀◀ ▶▶ change day", color = LumioColors.secondaryText, fontSize = 13.sp)
+        if (showHints) {
+            Text(listOfNotNull(if (preview) "OK previews, OK again for full screen" else null, "Hold OK for options", "◀◀ ▶▶ change day")
+                .joinToString("  ·  "), color = LumioColors.secondaryText, fontSize = 13.sp)
+        }
     }
 }
 
 /** The preview: the main player's picture, 16:9 at the top right. */
 @Composable
-private fun PreviewWindow(loading: Boolean) {
+private fun PreviewWindow(loading: Boolean, empty: Boolean, showVideo: Boolean) {
     Box(
         Modifier
             .padding(top = 8.dp, end = 24.dp, bottom = 8.dp)
-            .width(PreviewWidth - 16.dp * 16 / 9)
-            .height(PreviewHeight - 16.dp)
+            .width(PreviewWidth)
+            .height(PreviewPictureHeight)
             .clip(RoundedCornerShape(8.dp))
             .background(androidx.compose.ui.graphics.Color.Black),
+        contentAlignment = Alignment.Center,
     ) {
-        MainVideo(Modifier.fillMaxSize())
-        if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(32.dp) }
+        // While the player is full screen, that screen has the picture.
+        if (showVideo) MainVideo(Modifier.fillMaxSize())
+        when {
+            loading -> Spinner(40.dp)
+            empty -> Text("Press OK on a channel to preview it", color = LumioColors.secondaryText, fontSize = 15.sp)
+        }
     }
 }
 
 /** The highlighted programme, above the grid. */
 @Composable
 private fun Details(channel: Channel?, cell: GuideCell?, now: Double, timeFormat: java.text.DateFormat) {
-    Column(Modifier.fillMaxWidth().height(150.dp).padding(start = 24.dp, end = 24.dp, top = 22.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, top = 22.dp)) {
         if (channel == null) return@Column
         Text(listOfNotNull(channel.number?.toString(), channel.name).joinToString("  "),
             color = LumioColors.secondaryText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

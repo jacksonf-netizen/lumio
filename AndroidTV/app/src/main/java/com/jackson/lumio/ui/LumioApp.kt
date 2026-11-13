@@ -192,6 +192,7 @@ fun LumioApp() {
                         GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state),
                         railFocus = railFocus, autoFocus = launchFocus, onAutoFocused = { launchFocus = false },
                         onPreview = if (previewOn) ({ channel, group -> player.preview(channel, group) }) else null,
+                        previewChannel = player.previewChannel.takeIf { player.previewing },
                         // `state` stays null for a moment after a preview starts, until the core answers.
                         previewLoading = player.previewing && (player.opening != null || player.state == null ||
                             player.state?.phase in setOf("connecting", "buffering", "reconnecting", "waitingForNetwork")),

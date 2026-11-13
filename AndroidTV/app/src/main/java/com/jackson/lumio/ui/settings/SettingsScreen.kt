@@ -343,7 +343,7 @@ private fun Playback(model: SettingsViewModel, focus: FocusRequester, pick: (Pic
         item {
             val context = LocalContext.current
             SwitchRow("Preview in Live TV", GuidePreview.enabled,
-                "The highlighted channel plays in a small picture. OK makes it full screen, Back makes it small again.") {
+                "OK plays a channel in a small picture above the guide. OK again makes it full screen, Back makes it small again.") {
                 GuidePreview.set(context, !GuidePreview.enabled)
             }
         }

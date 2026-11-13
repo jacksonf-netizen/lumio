@@ -25,9 +25,9 @@ offers the update. The list below it appears on the release page.
   preview, multiview tiles, lists and pages. A stall mid-programme now says "Buffering…".
 - Android TV: channels that the provider's guide file leaves out get their programmes by asking
   the provider, channel by channel, for those on screen.
-- Android TV: Live TV shows a preview. The channel the highlight rests on plays in a small
-  picture at the top right. OK makes it full screen without reconnecting, and Back from full
-  screen makes it small again. It can be switched off in Settings → Playback. Previews aren't
+- Android TV: Live TV shows a preview. OK on a channel plays it in a picture at the top right,
+  and moving the highlight doesn't change it. OK again makes it full screen without
+  reconnecting, and Back from full screen makes it small again. It can be switched off in Settings → Playback. Previews aren't
   added to Recently Watched.
 - Mac: refreshing a big provider is faster too. Otherwise the Mac works as before.
 
