@@ -153,10 +153,15 @@ fun LumioApp() {
     // Screens return the highlight to where it was when the player or multiview closes.
     val overlay = player.showing || multiview.showing
     BackHandler(enabled = !railFocused && !overlay) { runCatching { railFocus.requestFocus() } }
-    // At launch the remote starts on the section that's showing, not the rail's first icon.
+    // At launch the remote starts in the guide when Live TV is showing: the guide takes it as soon
+    // as its channels are there (see autoFocus), and the rail stays folded. Until then, and for any
+    // other section, it starts on the rail's item for the section that's showing, not its first icon.
+    // Any key press ends the wait, so the guide never takes the remote from someone already moving.
+    var launchFocus by remember { mutableStateOf(true) }
+    LaunchedEffect(shown) { if (shown != Section.Live) launchFocus = false }
     LaunchedEffect(Unit) {
         delay(50)
-        runCatching { railFocus.requestFocus() }
+        if (launchFocus || shown != Section.Live) runCatching { railFocus.requestFocus() }
     }
     // Moving along the rail only moves the highlight. OK (or Right) on a section opens it and goes
     // in: to where the remote last was there, else its first row, rather than whatever happens to
@@ -171,7 +176,10 @@ fun LumioApp() {
 
     // A Surface gives everything inside the theme's text colour.
     Surface(colors = SurfaceDefaults.colors(containerColor = LumioColors.background, contentColor = LumioColors.text)) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown) launchFocus = false
+            false
+        }) {
             Box(Modifier.fillMaxSize().padding(start = RailFolded).focusRequester(contentFocus).focusRestorer().focusGroup()) {
                 val play = { channel: String, group: String -> player.watch(channel, group) }
                 // The guide knows the channel's name, so the player can say "Opening <name>…" at once.
@@ -182,7 +190,10 @@ fun LumioApp() {
                 }
                 when (shown) {
                     Section.Search -> SearchScreen(onWatch = play, onPlay = playVOD, playerShowing = overlay)
-                    Section.Live -> GuideScreen(GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state))
+                    Section.Live -> GuideScreen(
+                        GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state),
+                        railFocus = railFocus, autoFocus = launchFocus, onAutoFocused = { launchFocus = false },
+                    )
                     Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay, refreshing = refreshName(state))
                     Section.Settings -> SettingsScreen(providers, updates, settings, onWatch = {
                         section = Section.Live

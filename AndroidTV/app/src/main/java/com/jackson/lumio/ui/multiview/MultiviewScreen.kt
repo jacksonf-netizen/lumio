@@ -95,6 +95,9 @@ fun MultiviewScreen(
         if (channel != null) onFullScreen(channel.id, tile.group ?: "all") else onClose()
     }
     BackHandler(enabled = panel == null && picking == null) { leave() }
+    // Awake while any tile is playing or opening.
+    com.jackson.lumio.ui.player.KeepScreenOn(
+        state?.tiles?.any { it.channel != null && it.phase in com.jackson.lumio.ui.player.AwakePhases } == true)
     LaunchedEffect(Unit) {
         delay(6000)
         hint = false

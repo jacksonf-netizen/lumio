@@ -267,7 +267,17 @@ class GuideViewModel(val scope: GuideScope, context: Context) : ViewModel() {
 
     fun right() = update(GuideNavigation.right(cursor, rowProgrammes(cursor.row), window, maxTime))
 
-    fun left() = update(GuideNavigation.left(cursor, rowProgrammes(cursor.row), window, minTime))
+    /**
+     * Steps the highlight back. False when Left shouldn't be used up by the grid: nothing earlier to
+     * show, or no catch-up and already on now, so the remote goes on to the sidebar.
+     */
+    fun left(): Boolean {
+        val programmes = rowProgrammes(cursor.row)
+        if (GuideNavigation.leftLeavesGrid(cursor, programmes, now, selectedChannel?.catchup == true)) return false
+        val next = GuideNavigation.left(cursor, programmes, window, minTime) ?: return false
+        update(next)
+        return true
+    }
 
     fun move(by: Int) = update(GuideNavigation.move(cursor, by, channels.size))
 

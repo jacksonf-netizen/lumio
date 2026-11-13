@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -44,6 +45,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +62,7 @@ import com.jackson.lumio.ui.common.MenuAction
 import com.jackson.lumio.ui.common.OptionsPanel
 import java.util.Calendar
 import java.util.Date
+import kotlinx.coroutines.flow.first
 import kotlin.math.floor
 
 private val ChannelColumn = 210.dp
@@ -78,7 +81,8 @@ private data class Panel(val title: String, val actions: List<MenuAction>, val p
  *
  * Keys: OK watches what's on (or shows a later programme's details), Hold OK or Menu opens the
  * channel's options, CH+/CH- page, rewind and fast-forward go a day back or on, digits jump to a
- * channel number, Back returns to now (and then to the sidebar).
+ * channel number, Back returns to now (and then to the sidebar). Left on what's on now (a channel
+ * with no catch-up has nothing earlier) goes on to the sidebar.
  */
 @Composable
 fun GuideScreen(
@@ -92,11 +96,20 @@ fun GuideScreen(
     onEmptied: () -> Unit = {},
     /** What a provider refresh in progress is doing ("Updating channels… from TREX"), or null. */
     refreshText: String? = null,
+    /** The sidebar's item for this section: where Left goes from the grid's left edge. */
+    railFocus: FocusRequester? = null,
+    /** At launch: take the remote as soon as the grid is there (until the app says otherwise). */
+    autoFocus: Boolean = false,
+    /** The grid took the remote because of [autoFocus]. */
+    onAutoFocused: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope, context) }
     val gridFocus = remember { FocusRequester() }
     var gridFocused by remember { mutableStateOf(false) }
+    // Asking a FocusRequester whose node isn't in the tree yet only prints "FocusRequester is not
+    // initialized" to the log, so the grid is only asked once it's placed.
+    var gridAttached by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<Panel?>(null) }
     var played by remember { mutableStateOf(false) }
     val press = remember { PressTracker() }
@@ -106,8 +119,14 @@ fun GuideScreen(
     LaunchedEffect(playerShowing) {
         if (!playerShowing && played) {
             playingChannel?.let(model::moveTo)
-            runCatching { gridFocus.requestFocus() }
+            if (gridAttached) gridFocus.requestFocus()
         }
+    }
+    LaunchedEffect(autoFocus) {
+        if (!autoFocus) return@LaunchedEffect
+        snapshotFlow { gridAttached }.first { it }
+        gridFocus.requestFocus()
+        onAutoFocused()
     }
     // When the list empties under the remote (the grid goes, and the remote with it), the remote goes
     // to the sidebar. Removing the grid may or may not report its focus lost, so both cases count.
@@ -126,7 +145,7 @@ fun GuideScreen(
         if (panel != null) hadPanel = true
         else if (hadPanel) {
             hadPanel = false
-            runCatching { gridFocus.requestFocus() }
+            if (gridAttached) gridFocus.requestFocus()
         }
     }
     BackHandler(enabled = gridFocused && panel == null && !model.atNow) { model.jumpToNow() }
@@ -178,7 +197,7 @@ fun GuideScreen(
     Box(Modifier.fillMaxSize()) {
         // Coming in from the sidebar, the remote lands on the channels, not the Group button above
         // them (and not on whatever it last touched, which after picking a group was that button).
-        Column(Modifier.fillMaxSize().focusProperties { onEnter = { runCatching { gridFocus.requestFocus() } } }.focusGroup()) {
+        Column(Modifier.fillMaxSize().focusProperties { onEnter = { if (gridAttached) gridFocus.requestFocus() } }.focusGroup()) {
             val empty = model.channels.isEmpty()
             if (!empty) Details(model.selectedChannel, model.selectedCell, model.now, timeFormat)
             Toolbar(model, showHints = !empty, onPickGroup = {
@@ -197,10 +216,13 @@ fun GuideScreen(
                         .weight(1f)
                         .fillMaxWidth()
                         .focusRequester(gridFocus)
+                        .onPlaced { gridAttached = true }
                         .onFocusChanged {
                             if (!it.isFocused && gridFocused && model.channels.isEmpty()) lostWithList = true
                             gridFocused = it.isFocused
                         }
+                        // Left on the grid's edge goes to the sidebar item (the key isn't used up, see left()).
+                        .focusProperties { left = railFocus ?: FocusRequester.Default }
                         .focusable()
                         .onPreviewKeyEvent { event ->
                             val code = event.key.nativeKeyCode
@@ -222,7 +244,7 @@ fun GuideScreen(
                             when (code) {
                                 AndroidKeyEvent.KEYCODE_DPAD_UP -> if (model.cursor.row == 0) return@onPreviewKeyEvent false else model.move(-1)
                                 AndroidKeyEvent.KEYCODE_DPAD_DOWN -> model.move(1)
-                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> model.left()
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> if (!model.left()) return@onPreviewKeyEvent false
                                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> model.right()
                                 AndroidKeyEvent.KEYCODE_CHANNEL_UP, AndroidKeyEvent.KEYCODE_PAGE_DOWN -> model.move(page)
                                 AndroidKeyEvent.KEYCODE_CHANNEL_DOWN, AndroidKeyEvent.KEYCODE_PAGE_UP -> model.move(-page)
@@ -239,6 +261,7 @@ fun GuideScreen(
                     val timeline = maxWidth - ChannelColumn
                     // Whole half hours that fit, at least an hour.
                     val minutes = maxOf(60, (floor(timeline.value / DP_PER_MINUTE / 30) * 30).toInt())
+                    DisposableEffect(Unit) { onDispose { gridAttached = false } }
                     LaunchedEffect(minutes) { model.useWindow(minutes * 60.0) }
                     Grid(model, listState, timeline, gridFocused, timeFormat)
                 }
@@ -312,7 +335,12 @@ private fun Details(channel: Channel?, cell: GuideCell?, now: Double, timeFormat
             color = LumioColors.secondaryText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val programme = cell?.programme
         if (programme == null) {
-            Text(if (cell == null && channel.epg != null) "Loading the guide…" else "No guide information for this channel",
+            val text = when {
+                channel.epg == null -> "Your provider gives no guide for this channel"
+                cell == null -> "Loading the guide…"
+                else -> "No guide information for this channel"
+            }
+            Text(text,
                 fontSize = 24.sp, color = LumioColors.secondaryText, modifier = Modifier.padding(top = 4.dp))
             return@Column
         }

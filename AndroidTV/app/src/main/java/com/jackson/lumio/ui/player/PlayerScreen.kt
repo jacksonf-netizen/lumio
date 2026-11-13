@@ -79,6 +79,8 @@ fun PlayerScreen(model: PlayerViewModel, onMultiview: (() -> Unit)? = null) {
         }
     }
     LaunchedEffect(Unit) { focus.requestFocus() }
+    // Awake while opening or playing; a pause, an error or the end lets the box sleep again.
+    KeepScreenOn(model.openError == null && (state == null || state.phase in AwakePhases))
 
     Box(
         Modifier

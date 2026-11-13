@@ -18,19 +18,34 @@ import GRDB
 enum CatalogRelinker {
     /// One catalog item, reduced to what identifies it across panels.
     struct Item: Sendable {
-        var id: String
-        var name: String
-        var epgID: String? = nil
+        let id: String
+        let name: String
+        let epgID: String?
         /// Name of its category ("UK | Sports"), for the region and to break ties.
-        var group: String? = nil
-        var year: Int? = nil
-        var tmdbID: String? = nil
+        let group: String?
+        let year: Int?
+        let tmdbID: String?
 
-        fileprivate var normalized: String { ChannelMatcher.normalizedName(name) }
-        fileprivate var region: String? { RegionPrefix.detect(name) ?? group.flatMap { RegionPrefix.detect($0) } }
-        fileprivate var plainGroup: String? { group.map { RegionPrefix.strip($0).lowercased() } }
-        fileprivate var exact: String { name.trimmingCharacters(in: .whitespaces).lowercased() }
-        fileprivate var guide: String? { epgID.flatMap { $0.isEmpty ? nil : $0.lowercased() } }
+        // Worked out once: a sync compares hundreds of thousands of these several times over.
+        fileprivate let normalized: String
+        fileprivate let region: String?
+        fileprivate let plainGroup: String?
+        fileprivate let exact: String
+        fileprivate let guide: String?
+
+        init(id: String, name: String, epgID: String? = nil, group: String? = nil, year: Int? = nil, tmdbID: String? = nil) {
+            self.id = id
+            self.name = name
+            self.epgID = epgID
+            self.group = group
+            self.year = year
+            self.tmdbID = tmdbID
+            normalized = ChannelMatcher.normalizedName(name)
+            region = RegionPrefix.detect(name) ?? group.flatMap { RegionPrefix.detect($0) }
+            plainGroup = group.map { RegionPrefix.strip($0).lowercased() }
+            exact = name.trimmingCharacters(in: .whitespaces).lowercased()
+            guide = epgID.flatMap { $0.isEmpty ? nil : $0.lowercased() }
+        }
     }
 
     struct Plan: Sendable, Equatable {
@@ -62,7 +77,8 @@ enum CatalogRelinker {
         // Renumbered: most of the old catalog no longer sits under the same IDs.
         let stable = old.filter { item in newByID[item.id].map { same(item, $0) } ?? false }.count
         let renumbered = old.count >= 10 && stable * 2 < old.count
-        let index = Index(new)
+        // Only built when some ID needs looking for (usually none).
+        var index: Index?
 
         if renumbered {
             plan.reused = Set(old.filter { item in newByID[item.id].map { !same(item, $0) } ?? false }.map(\.id))
@@ -73,7 +89,8 @@ enum CatalogRelinker {
                 // Same panel: a rename keeps its ID, so only a renumbered catalog is checked.
                 if same(item, current) || !renumbered { continue }
             }
-            let match = index.match(item)
+            if index == nil { index = Index(new) }
+            let match = index?.match(item)
             if let match, match != id {
                 plan.moves[id] = match
             } else if match == nil, newByID[id] != nil {

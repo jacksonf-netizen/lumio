@@ -116,7 +116,7 @@ private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick:
                     provider.problem != null -> "Problem" to LumioColors.warning
                     else -> "On" to LumioColors.accent
                 }
-                val counts = listOfNotNull(plural(provider.channels, "channel"), plural(provider.movies, "movie"), "${provider.series} series",
+                val counts = listOfNotNull(plural(provider.channels, "channel"), plural(provider.movies, "movie"), "${number(provider.series)} series",
                     // Only a note: everything plays without a guide.
                     "no guide".takeIf { provider.guideProblem != null && provider.programmes == 0 },
                     provider.lastRefreshAt?.let { "updated ${updated(it)}" })
@@ -157,7 +157,7 @@ private fun options(
 }
 
 private fun details(provider: ProviderInfo): String = buildList {
-    add("${plural(provider.channels, "channel")}  ·  ${plural(provider.movies, "movie")}  ·  ${provider.series} series  ·  ${plural(provider.programmes, "programme")}")
+    add("${plural(provider.channels, "channel")}  ·  ${plural(provider.movies, "movie")}  ·  ${number(provider.series)} series  ·  ${plural(provider.programmes, "programme")}")
     add("Connections: ${provider.connectionsInUse} of ${provider.connectionLimit}")
     provider.expiresAt?.let { add("Expires ${date(it)}") }
     provider.lastRefreshAt?.let { add("Updated ${updated(it)}") }
@@ -175,7 +175,9 @@ private fun updated(seconds: Double): String = android.text.format.DateUtils.get
     (seconds * 1000).toLong(), System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS,
 ).toString().replaceFirstChar { it.lowercase() }
 
-private fun plural(count: Int, one: String) = "${NumberFormat.getIntegerInstance().format(count)} $one${if (count == 1) "" else "s"}"
+private fun number(count: Int): String = NumberFormat.getIntegerInstance().format(count)
+
+private fun plural(count: Int, one: String) = "${number(count)} $one${if (count == 1) "" else "s"}"
 
 /**
  * Add or change a provider. An empty password keeps the saved one. Back asks before throwing away
@@ -362,7 +364,7 @@ private fun ProviderSetup(model: ProvidersViewModel, providerId: String, focus: 
         },
         row("live", "Channels") { provider?.let { plural(it.channels, "channel") } },
         row("movies", "Movies") { provider?.let { plural(it.movies, "movie") } },
-        row("series", "Series") { provider?.let { "${NumberFormat.getIntegerInstance().format(it.series)} series" } },
+        row("series", "Series") { provider?.let { "${number(it.series)} series" } },
         row("guide", "TV guide") { provider?.let { plural(it.programmes, "programme") } },
     )
 
