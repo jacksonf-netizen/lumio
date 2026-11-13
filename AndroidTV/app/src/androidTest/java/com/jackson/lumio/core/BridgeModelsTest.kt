@@ -40,6 +40,11 @@ class BridgeModelsTest {
         assertTrue(!first.failedOutright)
         assertTrue(providers[1].failedOutright)
         assertEquals("live", providers[1].syncStep)
+        // Guide links: a count and a note, never the link's query.
+        assertEquals(1, first.guideLinks)
+        assertEquals("epg.example.com/us.xml.gz: not found", first.guideLinksProblem)
+        assertEquals(0, providers[1].guideLinks)
+        assertNull(providers[1].guideLinksProblem)
     }
 
     @Test fun channelsAndGroups() {
