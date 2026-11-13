@@ -8,6 +8,23 @@ offers the update. The list below it appears on the release page.
 
 ## Unreleased
 
+- Android TV: very large providers work on 32-bit TV boxes such as the onn 4K Pro. The guide
+  download no longer fails there, and numbers too big for 32 bits no longer stop a refresh.
+- Android TV: loading shows its progress everywhere. A pill at the top right says what's
+  updating, and Live TV and On Demand show what they're waiting for instead of a blank screen.
+- Android TV: refreshing a big provider is much faster. Storing its lists and matching your
+  favourites to a renumbered provider used to take minutes on a TV box.
+- Android TV: a channel starts at once even from a group of thousands. The player opens straight
+  away with "Opening <channel>…".
+- Android TV: the TV stays awake while a channel or movie plays. Paused, or in the guide, the
+  box's screensaver and sleep work as usual.
+- Android TV: Live TV opens in the guide, on the group you last used. Left on what's on now goes
+  to the sidebar instead of scrolling back in time. A channel your provider gives no guide for
+  says so.
+- Android TV: channels that the provider's guide file leaves out get their programmes by asking
+  the provider, channel by channel, for those on screen.
+- Mac: refreshing a big provider is faster too. Otherwise the Mac works as before.
+
 ## 0.5.0 — 2026-11-11
 
 On Android TV, adding a provider now shows it loading step by step and keeps what you typed, and
