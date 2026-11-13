@@ -26,12 +26,9 @@ enum CatalogRelinker {
         let year: Int?
         let tmdbID: String?
 
-        // Worked out once: a sync compares hundreds of thousands of these several times over.
-        fileprivate let normalized: String
-        fileprivate let region: String?
-        fileprivate let plainGroup: String?
-        fileprivate let exact: String
-        fileprivate let guide: String?
+        /// Worked out when first needed, then kept: a sync can compare hundreds of thousands of
+        /// these several times over, or (with nothing in the library to carry over) not at all.
+        private let keys = Keys()
 
         init(id: String, name: String, epgID: String? = nil, group: String? = nil, year: Int? = nil, tmdbID: String? = nil) {
             self.id = id
@@ -40,12 +37,30 @@ enum CatalogRelinker {
             self.group = group
             self.year = year
             self.tmdbID = tmdbID
-            normalized = ChannelMatcher.normalizedName(name)
-            region = RegionPrefix.detect(name) ?? group.flatMap { RegionPrefix.detect($0) }
-            plainGroup = group.map { RegionPrefix.strip($0).lowercased() }
-            exact = name.trimmingCharacters(in: .whitespaces).lowercased()
-            guide = epgID.flatMap { $0.isEmpty ? nil : $0.lowercased() }
         }
+
+        fileprivate var normalized: String {
+            if let known = keys.normalized { return known }
+            let value = ChannelMatcher.normalizedName(name)
+            keys.normalized = value
+            return value
+        }
+        fileprivate var region: String? {
+            if let known = keys.region { return known }
+            let value = RegionPrefix.detect(name) ?? group.flatMap { RegionPrefix.detect($0) }
+            keys.region = .some(value)
+            return value
+        }
+        fileprivate var plainGroup: String? { group.map { RegionPrefix.strip($0).lowercased() } }
+        fileprivate var exact: String { name.trimmingCharacters(in: .whitespaces).lowercased() }
+        fileprivate var guide: String? { epgID.flatMap { $0.isEmpty ? nil : $0.lowercased() } }
+    }
+
+    /// An item's derived keys, filled in on first use. Only ever used within one `plan` call, on
+    /// one thread, hence unchecked.
+    private final class Keys: @unchecked Sendable {
+        var normalized: String?
+        var region: String??
     }
 
     struct Plan: Sendable, Equatable {
@@ -63,7 +78,8 @@ enum CatalogRelinker {
     static func same(_ old: Item, _ new: Item) -> Bool {
         if let a = old.tmdbID, let b = new.tmdbID, !a.isEmpty, !b.isEmpty { return a == b }
         if let a = old.guide, a == new.guide { return true }
-        guard old.normalized == new.normalized, !old.normalized.isEmpty else { return false }
+        // The same name cleans up the same way: only one side needs the work (most items keep their name).
+        guard old.name == new.name || old.normalized == new.normalized, !old.normalized.isEmpty else { return false }
         if let a = old.year, let b = new.year, a != b { return false }
         return true
     }
