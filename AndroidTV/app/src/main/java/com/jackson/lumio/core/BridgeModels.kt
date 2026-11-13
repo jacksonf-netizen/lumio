@@ -35,6 +35,9 @@ data class ProviderInfo(
     val guideProblem: String? = null,
     /** The parts that failed; empty when the whole refresh did (a refused login, say). */
     val failedParts: List<String> = emptyList(),
+    /** How many extra guide links the user added, and what went wrong with them. */
+    val guideLinks: Int = 0,
+    val guideLinksProblem: String? = null,
 ) {
     /** The last refresh stopped before loading anything. */
     val failedOutright: Boolean get() = problem != null && failedParts.isEmpty()
@@ -61,7 +64,14 @@ data class ProviderInfo(
         problem = json.text("problem"),
         guideProblem = json.text("guideProblem"),
         failedParts = json.optJSONArray("failedParts")?.let { array -> List(array.length()) { array.getString(it) } }.orEmpty(),
+        guideLinks = json.optInt("guideLinks", 0),
+        guideLinksProblem = json.text("guideLinksProblem"),
     )
+}
+
+/** A provider's extra guide links as shown (host and path only), and what went wrong with them. */
+data class GuideLinks(val links: List<String>, val problem: String?) {
+    constructor(json: JSONObject) : this(json.optJSONArray("links")?.strings().orEmpty(), json.text("problem"))
 }
 
 data class ServerLink(val url: String, val inUse: Boolean, val down: Boolean, val lastCheckedAt: Double?) {

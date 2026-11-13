@@ -28,6 +28,8 @@ Fault injection (curl these while the app plays):
 Add --region-prefixes to name the groups like many real providers do ("UK | News", "US | Entertainment"),
 or --region-prefixes=alt for another provider's spellings of the same regions ("GB: News", "NA - Entertainment").
 Add --no-guide to answer xmltv.php with 404, like the many providers that have no guide download.
+Add --scale to list a provider as big as a real one: about 55,000 channels in 400 groups across 30
+regions, 200,000 movies and 47,000 series (every extra channel plays one of the three test streams).
 
 Run two of these on different ports to simulate two providers:
   python3 Tools/StreamHarness/harness.py --port 8088 --name "Harness A"
@@ -268,9 +270,47 @@ def short_epg(stream_id, limit, now):
     return {"epg_listings": listings}
 
 
+# --scale: extra items, as large as a real provider's lists. Built once, then served as bytes.
+SCALE_REGIONS = ["UK", "US", "DE", "FR", "IT", "ES", "NL", "PT", "PL", "TR", "AR", "IN", "PK", "CA", "AU",
+                 "BE", "SE", "NO", "DK", "FI", "GR", "RO", "AL", "EX-YU", "RU", "IR", "AF", "LAT", "BR", "MX"]
+SCALE_FIRST_ID = 10_000
+
+
+def scale_lists(base_url, now):
+    """(live categories, live streams, vod categories, vod streams, series categories, series) as JSON bytes."""
+    groups = [{"category_id": str(100 + g), "category_name": f"{SCALE_REGIONS[g % 30]} | Group {g}", "parent_id": 0}
+              for g in range(400)]
+    live = [{"num": 100 + i, "name": f"{SCALE_REGIONS[(i // 138) % 30]} | Channel {i} HD", "stream_type": "live",
+             "stream_id": SCALE_FIRST_ID + i, "stream_icon": f"{base_url}/logo/{i % 3 + 1}.png",
+             "epg_channel_id": f"scale{i}.tv" if i % 2 == 0 else "", "added": str(now - i),
+             "category_id": str(100 + (i // 138) % 400), "tv_archive": 0, "tv_archive_duration": 0}
+            for i in range(55_000)]
+    vod_groups = [{"category_id": str(1000 + g), "category_name": f"{SCALE_REGIONS[g % 30]} - Movies {g}", "parent_id": 0}
+                  for g in range(200)]
+    movies = [{"num": i + 2, "name": f"{SCALE_REGIONS[i % 30]} - Scale Movie {i} ({1950 + i % 76})", "stream_type": "movie",
+               "stream_id": 100_000 + i, "stream_icon": "", "rating": str(i % 10), "rating_5based": (i % 10) / 2,
+               "added": str(now - i * 60), "category_id": str(1000 + i % 200), "container_extension": "mp4",
+               "custom_sid": "", "direct_source": ""}
+              for i in range(200_000)]
+    series_groups = [{"category_id": str(2000 + g), "category_name": f"{SCALE_REGIONS[g % 30]} - Series {g}", "parent_id": 0}
+                     for g in range(100)]
+    series = [{"num": i + 2, "name": f"{SCALE_REGIONS[i % 30]} - Scale Series {i}", "series_id": 600_000 + i,
+               "cover": "", "plot": "Generated for --scale.", "cast": "", "director": "", "genre": "Drama",
+               "releaseDate": "2020-01-01", "last_modified": str(now - i * 60), "rating": "7",
+               "category_id": str(2000 + i % 100)}
+              for i in range(47_000)]
+    return [json.dumps(x).encode() for x in (groups, live, vod_groups, movies, series_groups, series)]
+
+
 def make_handler(args, faults, hls, relay, movie_path):
     # --renumber: the same catalog as another panel would list it (new IDs, other name style).
     R = 500 if args.renumber else 0
+    scale = {}  # base URL → the --scale lists as bytes
+
+    def scale_bytes(base_url, index):
+        if base_url not in scale:
+            scale[base_url] = scale_lists(base_url, int(time.time()))
+        return scale[base_url][index]
 
     def label(name):
         return name.upper().replace(" HD", "") + " FHD" if args.renumber else name
@@ -374,6 +414,20 @@ def make_handler(args, faults, hls, relay, movie_path):
                     "server_info": {"url": "127.0.0.1", "port": str(args.port), "server_protocol": "http",
                                     "timezone": "UTC", "timestamp_now": now},
                 })
+            if args.scale and action in ("get_live_categories", "get_live_streams", "get_vod_categories",
+                                         "get_vod_streams", "get_series_categories", "get_series"):
+                base_url = f"http://{self.headers.get('Host') or f'127.0.0.1:{args.port}'}"
+                index = ["get_live_categories", "get_live_streams", "get_vod_categories", "get_vod_streams",
+                         "get_series_categories", "get_series"].index(action)
+                body = scale_bytes(base_url, index)
+                if index == 1:  # the three test channels first, as a real list starts with its own
+                    base = json.dumps([
+                        {"num": cid, "name": c["name"], "stream_type": "live", "stream_id": cid + R,
+                         "stream_icon": f"{base_url}/logo/{cid}.png", "epg_channel_id": c["epg"], "added": str(now),
+                         "category_id": "100", "tv_archive": 0, "tv_archive_duration": 0}
+                        for cid, c in CHANNELS.items()]).encode()
+                    body = base[:-1] + b", " + body[1:]
+                return self.send_bytes(body, "application/json")
             if action in ("get_live_categories", "get_vod_categories", "get_series_categories"):
                 news, entertainment = {
                     "standard": ("UK | News", "US | Entertainment"),
@@ -465,6 +519,8 @@ def make_handler(args, faults, hls, relay, movie_path):
                 return self.send_status(code)
             try:
                 channel = int(stem) - R if stem.isdigit() else None
+                if args.scale and channel is not None and channel >= SCALE_FIRST_ID:
+                    channel = (channel - SCALE_FIRST_ID) % 3 + 1
                 if kind == "live" and ext == "ts" and channel in CHANNELS:
                     self.live_ts(channel)
                 elif kind == "live" and ext == "m3u8" and channel in CHANNELS:
@@ -553,6 +609,8 @@ def main():
                         help='name groups "UK | News" / "US | Entertainment" (or with "alt": "GB: News" / "NA - Entertainment")')
     parser.add_argument("--renumber", action="store_true",
                         help="serve the same catalog under different IDs and name styles, like a provider that moved to another panel")
+    parser.add_argument("--scale", action="store_true",
+                        help="list about 55,000 channels, 200,000 movies and 47,000 series, like a big real provider")
     parser.add_argument("--no-guide", action="store_true", help="answer xmltv.php with 404 (a provider without a guide)")
     args = parser.parse_args()
     args.media = args.media or os.path.join(HERE, "media", str(args.port))

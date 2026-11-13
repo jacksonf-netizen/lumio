@@ -85,8 +85,9 @@ public struct LiveCatalog: Sendable {
 
     /// Calls `onChange` (on a database thread) after every change that can change the Live TV lists.
     /// Keep the returned value for as long as the calls are wanted.
-    public func observeListChanges(_ onChange: @escaping @Sendable () -> Void) -> AnyDatabaseCancellable {
-        DatabaseRegionObservation(tracking: Self.listTables.map { Table($0) })
+    public func observeListChanges(tables: [String] = listTables,
+                                   _ onChange: @escaping @Sendable () -> Void) -> AnyDatabaseCancellable {
+        DatabaseRegionObservation(tracking: tables.map { Table($0) })
             .start(in: database.writer, onError: { error in
                 Log.app.error("Live TV observation failed: \(String(describing: error), privacy: .public)")
             }, onChange: { _ in onChange() })
@@ -231,6 +232,10 @@ public struct LiveCatalog: Sendable {
         var logicalID: String
         var priority: Int
         var override: ChannelOverride?
+        /// The merged channel's name and logo (read in the same query: loading every logical
+        /// channel for each request took seconds with 55,000 channels on a TV box).
+        var logicalName: String? = nil
+        var logicalLogo: URL? = nil
     }
 
     /// Per-query lookups shared by all rows.
@@ -238,7 +243,6 @@ public struct LiveCatalog: Sendable {
         var favorites: Set<String>
         var mappings: [String: EPGMappingOverride]
         var logicalEPG: [String: LogicalEPGOverride]
-        var logicalNames: [String: (String, URL?)]
 
         init(_ db: Database, filter: ProviderFilter) throws {
             favorites = Set(try Row.fetchAll(db, sql: "SELECT providerID, itemID FROM favorite WHERE itemKind = 'channel'")
@@ -246,7 +250,6 @@ public struct LiveCatalog: Sendable {
             mappings = Dictionary(try EPGMappingOverride.fetchAll(db).map { ("\($0.providerID.rawValue)|\($0.streamID)", $0) },
                                   uniquingKeysWith: { a, _ in a })
             logicalEPG = Dictionary(try LogicalEPGOverride.fetchAll(db).map { ($0.logicalChannelID, $0) }, uniquingKeysWith: { a, _ in a })
-            logicalNames = Dictionary(try LogicalChannel.fetchAll(db).map { ($0.id, ($0.name, $0.logoURL)) }, uniquingKeysWith: { a, _ in a })
         }
     }
 
@@ -254,12 +257,14 @@ public struct LiveCatalog: Sendable {
                             filter: ProviderFilter) throws -> [ChannelRow] {
         let sql = """
             SELECT c.*, COALESCE(m.logicalChannelID, 'solo:' || c.providerID || ':' || c.streamID) AS lid,
+                   lc.name AS lName, lc.logoURL AS lLogo,
                    p.priority AS ppriority,
                    o.isHidden AS oHidden, o.customName AS oName, o.sortIndex AS oSort, o.engine AS oEngine,
                    o.preferredFormat AS oFormat
             FROM channel c
             JOIN provider p ON p.id = c.providerID AND p.isEnabled
             LEFT JOIN logicalChannelMember m ON m.providerID = c.providerID AND m.streamID = c.streamID
+            LEFT JOIN logicalChannel lc ON lc.id = m.logicalChannelID
             LEFT JOIN channelOverride o ON o.providerID = c.providerID AND o.streamID = c.streamID
             WHERE \(condition) \(filter.sqlCondition(column: "c.providerID"))
             ORDER BY COALESCE(o.sortIndex, 1000000000), p.priority, c.sortIndex
@@ -274,7 +279,8 @@ public struct LiveCatalog: Sendable {
                 customName: row["oName"], sortIndex: row["oSort"],
                 engine: (row["oEngine"] as String?).flatMap(EngineKind.init(rawValue:)),
                 preferredFormat: (row["oFormat"] as String?).flatMap(StreamFormat.init(rawValue:))) : nil
-            return ChannelRow(channel: channel, logicalID: row["lid"], priority: row["ppriority"], override: override)
+            return ChannelRow(channel: channel, logicalID: row["lid"], priority: row["ppriority"], override: override,
+                              logicalName: row["lName"], logicalLogo: (row["lLogo"] as String?).flatMap(URL.init(string:)))
         }
     }
 
@@ -294,8 +300,9 @@ public struct LiveCatalog: Sendable {
             if hidden && !includeHidden { continue }
             let channel = primary.channel
             let byPriority = members.sorted { $0.priority < $1.priority }
-            let logical = context.logicalNames[id]
-            let name = primary.override?.customName ?? logical?.0 ?? ChannelMatcher.displayName(channel.name)
+            let logicalName = members.lazy.compactMap(\.logicalName).first
+            let logicalLogo = members.lazy.compactMap(\.logicalLogo).first
+            let name = primary.override?.customName ?? logicalName ?? ChannelMatcher.displayName(channel.name)
 
             var epg: EPGRef?
             if let override = context.logicalEPG[id] {
@@ -307,7 +314,7 @@ public struct LiveCatalog: Sendable {
             }
 
             items.append(ChannelListItem(
-                id: id, name: name, logoURL: channel.logoURL ?? logical?.1 ?? members.lazy.compactMap(\.channel.logoURL).first,
+                id: id, name: name, logoURL: channel.logoURL ?? logicalLogo ?? members.lazy.compactMap(\.channel.logoURL).first,
                 number: channel.number, providerID: channel.providerID, streamID: channel.streamID,
                 sourceProviders: byPriority.map(\.channel.providerID).uniqued(),
                 epg: epg,

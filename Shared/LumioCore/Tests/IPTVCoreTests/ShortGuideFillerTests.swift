@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import IPTVCore
 
-@Suite("Short guide for providers without a guide file")
+@Suite("Short guide for channels without a guide file")
 struct ShortGuideFillerTests {
     /// Before the fixture's programmes (18:00–19:00 UTC on 17 October 2026).
     let clock = ManualClock(Date(timeIntervalSince1970: 1_792_250_000))
@@ -52,15 +52,23 @@ struct ShortGuideFillerTests {
         #expect(shortRequests() == 0)
     }
 
-    @Test func aProviderWithAWorkingGuideFileIsNeverAsked() async throws {
-        // Programmes from a guide file (importedAt > 0) and no guide problem.
+    @Test func aWorkingGuideFileIsAskedOnlyForChannelsItLeavesOut() async throws {
+        // A guide file (importedAt > 0, no guide problem) that covers BBC One, though nothing is
+        // left to come: BBC One isn't asked for.
         try await database.writer.write { db in
             try db.execute(sql: """
-                INSERT INTO programme (providerID, epgID, start, stop, title, importedAt) VALUES (?, 'other.uk', 0, 1, 'Old', 5)
+                INSERT INTO programme (providerID, epgID, start, stop, title, importedAt) VALUES (?, 'bbcone.uk', 0, 1, 'Old', 5)
                 """, arguments: [provider.id])
         }
         #expect(await filler.fill([bbcOne]) == false)
         #expect(shortRequests() == 0)
+
+        // A file that leaves BBC One out: it is asked for.
+        try await database.writer.write { db in
+            try db.execute(sql: "UPDATE programme SET epgID = 'other.uk'")
+        }
+        #expect(await filler.fill([bbcOne]))
+        #expect(shortRequests() == 1)
     }
 
     @Test func theNextGuideFileReplacesWhatItStored() async throws {

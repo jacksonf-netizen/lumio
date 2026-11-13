@@ -11,6 +11,8 @@ public struct RefreshProblems: Equatable, Sendable {
     public var serious: String?
     /// Why the guide didn't load, or nil.
     public var guide: String?
+    /// What went wrong with the guide links the user added, or nil. A note, like `guide`.
+    public var guideLinks: String?
     /// The parts that failed, by `SyncStep` raw value ("live", "guide"…). Empty when the whole
     /// refresh failed (see `failedOutright`) or nothing did.
     public var failedParts: [String]
@@ -21,6 +23,7 @@ public struct RefreshProblems: Equatable, Sendable {
     public init(lastError: String?) {
         serious = nil
         guide = nil
+        guideLinks = nil
         failedParts = []
         guard let lastError, !lastError.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
@@ -39,7 +42,13 @@ public struct RefreshProblems: Equatable, Sendable {
         for entry in entries {
             if let part = entry.part {
                 failedParts.append(part)
-                if part == SyncStep.guide.rawValue { guide = entry.text } else { serious.append(entry.text) }
+                if part == SyncStep.guide.rawValue {
+                    guide = entry.text
+                } else if part == SyncStep.guideLinks.rawValue {
+                    guideLinks = entry.text
+                } else {
+                    serious.append(entry.text)
+                }
             } else {
                 serious.append(entry.text)
             }
@@ -49,7 +58,7 @@ public struct RefreshProblems: Equatable, Sendable {
 
     /// The part a "part: message" line is about, or nil for any other line.
     private static func part(of line: String) -> String? {
-        let steps: [SyncStep] = [.account, .live, .movies, .series, .guide, .matching]
+        let steps: [SyncStep] = [.account, .live, .movies, .series, .guideLinks, .guide, .matching]
         return steps.map(\.rawValue).first { line.hasPrefix($0 + ": ") }
     }
 }

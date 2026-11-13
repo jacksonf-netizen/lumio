@@ -1,7 +1,7 @@
 import Foundation
 import GRDB
 
-/// Fills in the guide for channels on screen when their provider has no guide download.
+/// Fills in the guide for channels on screen that their provider's guide download leaves out.
 ///
 /// Many providers don't offer the XMLTV guide file (or it fails), but still answer
 /// `get_short_epg`: the next few programmes of one channel. Asking for every channel would be
@@ -10,8 +10,9 @@ import GRDB
 /// programmes (marked `importedAt = 0`), so the guide, now/next and search read them as usual; the
 /// next guide file that imports replaces them.
 ///
-/// Only providers whose guide download failed, or that have no guide programmes at all, are
-/// asked: a provider with a working guide file is never sent these requests.
+/// Providers whose guide download failed, or that have no guide programmes at all, are asked for
+/// any channel on screen with nothing to come. A provider with a working guide file is asked only
+/// for channels its file leaves out (big providers' files often cover a tenth of their channels).
 public actor ShortGuideFiller {
     private let database: AppDatabase
     private let sources: any SourceFactory
@@ -34,8 +35,8 @@ public actor ShortGuideFiller {
         self.clock = clock
     }
 
-    /// Asks the providers of `refs` that have no guide file for what's on, for the channels that
-    /// have nothing from now on. Returns true when it stored anything (the guide should re-read).
+    /// Asks the providers of `refs` what's on, for the channels that have nothing from now on and
+    /// that their guide file (if any) leaves out. Returns true when it stored anything (the guide should re-read).
     @discardableResult
     public func fill(_ refs: [EPGRef]) async -> Bool {
         let now = clock.now()
@@ -67,18 +68,20 @@ public actor ShortGuideFiller {
         var key: String { "\(provider.id.rawValue)\u{1F}\(epgID)" }
     }
 
-    /// The channels worth asking for: a provider without a guide file, no programme from now on,
-    /// and not asked for recently.
+    /// The channels worth asking for: no programme from now on, not in the provider's guide file
+    /// (when it has one), and not asked for recently.
     func work(for refs: [EPGRef], now: Date) async throws -> [Item] {
         let recent = asked.filter { now.timeIntervalSince($0.value) < Self.retryAfter }
         asked = recent
         return try await database.reader.read { db in
-            var eligible: [ProviderID: Provider?] = [:]
-            func provider(_ id: ProviderID) throws -> Provider? {
+            /// The provider, if enabled, and whether it has a working guide file.
+            var eligible: [ProviderID: (provider: Provider, hasGuideFile: Bool)?] = [:]
+            func provider(_ id: ProviderID) throws -> (provider: Provider, hasGuideFile: Bool)? {
                 if let known = eligible[id] { return known }
-                var found = try Provider.fetchOne(db, key: id)
-                if let candidate = found, !(try Self.lacksGuide(candidate, db)) { found = nil }
-                if found?.isEnabled == false { found = nil }
+                var found: (Provider, Bool)?
+                if let candidate = try Provider.fetchOne(db, key: id), candidate.isEnabled {
+                    found = (candidate, !(try Self.lacksGuide(candidate, db)))
+                }
                 eligible[id] = found
                 return found
             }
@@ -86,13 +89,17 @@ public actor ShortGuideFiller {
             var seen = Set<String>()
             for ref in refs {
                 for id in ref.providers {
-                    guard items.count < Self.perCall, let p = try provider(id) else { continue }
+                    guard items.count < Self.perCall, let found = try provider(id) else { continue }
+                    let p = found.provider
                     let item = Item(provider: p, streamID: 0, epgID: ref.epgID)
                     guard recent[item.key] == nil, seen.insert(item.key).inserted else { continue }
                     let upcoming = try Bool.fetchOne(db, sql: """
                         SELECT EXISTS(SELECT 1 FROM programme WHERE providerID = ? AND epgID = ? AND stop > ?)
                         """, arguments: [id, ref.epgID, now.timeIntervalSince1970]) ?? false
                     if upcoming { continue }
+                    if found.hasGuideFile, try Bool.fetchOne(db, sql: """
+                        SELECT EXISTS(SELECT 1 FROM programme WHERE providerID = ? AND epgID = ? AND importedAt > 0)
+                        """, arguments: [id, ref.epgID]) == true { continue } // the file covers it
                     guard let stream = try Int.fetchOne(db, sql: """
                         SELECT streamID FROM channel WHERE providerID = ? AND lower(trim(epgChannelID)) = ?
                         ORDER BY sortIndex LIMIT 1

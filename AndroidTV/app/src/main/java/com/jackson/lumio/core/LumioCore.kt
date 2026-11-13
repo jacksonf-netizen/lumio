@@ -68,6 +68,16 @@ object LumioCore {
     /** Reads typed or pasted server links as the Mac's link box does; throws with a message when it can't. */
     suspend fun parseLinks(text: String): ParsedLinks = ParsedLinks(call("providers.parseLinks", "text" to text).asObject())
 
+    suspend fun guideLinks(id: String): GuideLinks = GuideLinks(call("providers.guideLinks", "id" to id).asObject())
+
+    /** Throws with a message when [text] isn't a link. The core refreshes the guide after adding. */
+    suspend fun addGuideLink(id: String, text: String): GuideLinks =
+        GuideLinks(call("providers.addGuideLink", "id" to id, "text" to text).asObject())
+
+    /** [index] is a position in [GuideLinks.links]. */
+    suspend fun removeGuideLink(id: String, index: Int): GuideLinks =
+        GuideLinks(call("providers.removeGuideLink", "id" to id, "index" to index).asObject())
+
     suspend fun removeProvider(id: String) { call("providers.remove", "id" to id) }
 
     suspend fun setProviderEnabled(id: String, enabled: Boolean) { call("providers.setEnabled", "id" to id, "enabled" to enabled) }
@@ -213,8 +223,9 @@ object LumioCore {
     // MARK: Playback (the core's PlaybackController; the engine is player/ExoEngine.kt)
 
     /** Plays [channel] from [group]; channel up/down then moves through that group. */
-    suspend fun watch(channel: String, group: String): PlayerState =
-        PlayerState(call("player.watch", "channel" to channel, "group" to group) as JSONObject)
+    /** [preview]: the guide's small picture, not recorded in Recents. Watching the channel already playing doesn't reopen it. */
+    suspend fun watch(channel: String, group: String, preview: Boolean = false): PlayerState =
+        PlayerState(call("player.watch", "channel" to channel, "group" to group, "preview" to preview) as JSONObject)
 
     suspend fun zap(by: Int): PlayerState = PlayerState(call("player.zap", "by" to by) as JSONObject)
 

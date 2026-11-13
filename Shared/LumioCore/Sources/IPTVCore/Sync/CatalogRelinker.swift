@@ -18,19 +18,49 @@ import GRDB
 enum CatalogRelinker {
     /// One catalog item, reduced to what identifies it across panels.
     struct Item: Sendable {
-        var id: String
-        var name: String
-        var epgID: String? = nil
+        let id: String
+        let name: String
+        let epgID: String?
         /// Name of its category ("UK | Sports"), for the region and to break ties.
-        var group: String? = nil
-        var year: Int? = nil
-        var tmdbID: String? = nil
+        let group: String?
+        let year: Int?
+        let tmdbID: String?
 
-        fileprivate var normalized: String { ChannelMatcher.normalizedName(name) }
-        fileprivate var region: String? { RegionPrefix.detect(name) ?? group.flatMap { RegionPrefix.detect($0) } }
+        /// Worked out when first needed, then kept: a sync can compare hundreds of thousands of
+        /// these several times over, or (with nothing in the library to carry over) not at all.
+        private let keys = Keys()
+
+        init(id: String, name: String, epgID: String? = nil, group: String? = nil, year: Int? = nil, tmdbID: String? = nil) {
+            self.id = id
+            self.name = name
+            self.epgID = epgID
+            self.group = group
+            self.year = year
+            self.tmdbID = tmdbID
+        }
+
+        fileprivate var normalized: String {
+            if let known = keys.normalized { return known }
+            let value = ChannelMatcher.normalizedName(name)
+            keys.normalized = value
+            return value
+        }
+        fileprivate var region: String? {
+            if let known = keys.region { return known }
+            let value = RegionPrefix.detect(name) ?? group.flatMap { RegionPrefix.detect($0) }
+            keys.region = .some(value)
+            return value
+        }
         fileprivate var plainGroup: String? { group.map { RegionPrefix.strip($0).lowercased() } }
         fileprivate var exact: String { name.trimmingCharacters(in: .whitespaces).lowercased() }
         fileprivate var guide: String? { epgID.flatMap { $0.isEmpty ? nil : $0.lowercased() } }
+    }
+
+    /// An item's derived keys, filled in on first use. Only ever used within one `plan` call, on
+    /// one thread, hence unchecked.
+    private final class Keys: @unchecked Sendable {
+        var normalized: String?
+        var region: String??
     }
 
     struct Plan: Sendable, Equatable {
@@ -48,7 +78,8 @@ enum CatalogRelinker {
     static func same(_ old: Item, _ new: Item) -> Bool {
         if let a = old.tmdbID, let b = new.tmdbID, !a.isEmpty, !b.isEmpty { return a == b }
         if let a = old.guide, a == new.guide { return true }
-        guard old.normalized == new.normalized, !old.normalized.isEmpty else { return false }
+        // The same name cleans up the same way: only one side needs the work (most items keep their name).
+        guard old.name == new.name || old.normalized == new.normalized, !old.normalized.isEmpty else { return false }
         if let a = old.year, let b = new.year, a != b { return false }
         return true
     }
@@ -62,7 +93,8 @@ enum CatalogRelinker {
         // Renumbered: most of the old catalog no longer sits under the same IDs.
         let stable = old.filter { item in newByID[item.id].map { same(item, $0) } ?? false }.count
         let renumbered = old.count >= 10 && stable * 2 < old.count
-        let index = Index(new)
+        // Only built when some ID needs looking for (usually none).
+        var index: Index?
 
         if renumbered {
             plan.reused = Set(old.filter { item in newByID[item.id].map { !same(item, $0) } ?? false }.map(\.id))
@@ -73,7 +105,8 @@ enum CatalogRelinker {
                 // Same panel: a rename keeps its ID, so only a renumbered catalog is checked.
                 if same(item, current) || !renumbered { continue }
             }
-            let match = index.match(item)
+            if index == nil { index = Index(new) }
+            let match = index?.match(item)
             if let match, match != id {
                 plan.moves[id] = match
             } else if match == nil, newByID[id] != nil {

@@ -15,6 +15,10 @@ final class BridgePlayer {
     private let catalog: LiveCatalog
     private let emit: @Sendable (BridgeEvent) -> Void
     private var zap = ZapList<ChannelListItem>()
+    /// The group (and channel) whose zap list is being read after a watch.
+    private var loadingGroup: (String, String)?
+    /// That read: zapping waits for it, so channel up right after a watch goes through the group.
+    private var zapListTask: Task<Void, Never>?
     /// The movie or episode playing, or nil for live TV.
     private var vod: VODNowDTO?
     private let tracker = VODProgressTracker()
@@ -35,26 +39,66 @@ final class BridgePlayer {
     // MARK: Watching
 
     /// Plays `channelID` from `group`, zapping through that group from now on.
-    func watch(channelID: String, group: String) async throws {
+    ///
+    /// The channel starts first; the group's list (for channel up/down and numbers) is read after,
+    /// since with tens of thousands of channels that read takes seconds on a TV box.
+    ///
+    /// A `preview` (the small picture in the TV's guide) isn't recorded in Recents. Watching the
+    /// channel that's already playing doesn't reopen it: the preview going full screen carries on
+    /// where it is, and is recorded then.
+    func watch(channelID: String, group: String, preview: Bool = false) async throws {
+        if vod == nil, let current = zap.current, current.id == channelID, Self.isUnderway(controller.phase) {
+            if !preview { record(current) }
+            return
+        }
+        if let channel = try await catalog.item(logicalID: channelID) {
+            try play(channel, in: [channel], record: !preview)
+            zapListTask = Task { [weak self] in await self?.loadZapList(group: group, current: channelID) }
+            return
+        }
+        // A channel that isn't one logical channel's member yet (before matching has run).
         let groups = try await catalog.groups()
         guard let found = groups.first(where: { $0.id == group }) else { throw BridgeError("That group no longer exists.") }
         let channels = try await catalog.channels(in: found)
         guard let channel = channels.first(where: { $0.id == channelID }) else { throw BridgeError("That channel no longer exists.") }
-        try play(channel, in: channels)
+        try play(channel, in: channels, record: !preview)
+    }
+
+    /// Playing, or on its way: not stopped, ended or failed.
+    static func isUnderway(_ phase: PlaybackPhase) -> Bool {
+        switch phase {
+        case .idle, .ended, .failed, .preempted, .suspended: false
+        default: true
+        }
+    }
+
+    /// Reads `group` for zapping, once `current` is playing; dropped if another channel or group
+    /// has been chosen meanwhile.
+    private func loadZapList(group: String, current: String) async {
+        loadingGroup = (group, current)
+        guard let found = try? await catalog.groups().first(where: { $0.id == group }),
+              let channels = try? await catalog.channels(in: found),
+              loadingGroup.map({ $0 == (group, current) }) == true, let playing = zap.current, playing.id == current,
+              channels.contains(where: { $0.id == current }) else { return }
+        zap.watch(playing, in: channels)
+        emitState()
     }
 
     /// A one-channel list doesn't reopen the stream. Zapping is for live TV only.
-    func zap(by offset: Int) throws {
+    func zap(by offset: Int) async throws {
+        await zapListTask?.value
         guard vod == nil else { return }
         if let next = zap.channel(by: offset), next.id != zap.current?.id { try play(next, debounce: true) }
     }
 
-    func jump(toNumber number: Int) throws {
+    func jump(toNumber number: Int) async throws {
+        await zapListTask?.value
         guard vod == nil else { return }
         if let match = zap.channel(number: number, numberOf: \.number) { try play(match) }
     }
 
-    func previous() throws {
+    func previous() async throws {
+        await zapListTask?.value
         guard vod == nil else { return }
         if let previous = zap.previous { try play(previous) }
     }
@@ -84,7 +128,8 @@ final class BridgePlayer {
         emitState()
     }
 
-    private func play(_ channel: ChannelListItem, in list: [ChannelListItem]? = nil, debounce: Bool = false) throws {
+    private func play(_ channel: ChannelListItem, in list: [ChannelListItem]? = nil, debounce: Bool = false,
+                      record: Bool = true) throws {
         guard let item = try environment.items.liveItem(providerID: channel.providerID, streamID: channel.streamID) else {
             throw BridgeError("This channel can't be played.")
         }
@@ -93,6 +138,10 @@ final class BridgePlayer {
         zap.watch(channel, in: list)
         controller.play(item, debounce: debounce)
         emitState()
+        if record { self.record(channel) }
+    }
+
+    private func record(_ channel: ChannelListItem) {
         let library = self.library
         Task { try? await library.recordPlayed(providerID: channel.providerID, kind: .channel, itemID: String(channel.streamID)) }
     }

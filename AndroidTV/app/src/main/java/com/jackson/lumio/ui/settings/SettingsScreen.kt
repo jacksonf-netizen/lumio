@@ -67,6 +67,8 @@ import com.jackson.lumio.core.Regions
 import com.jackson.lumio.ui.LumioColors
 import com.jackson.lumio.ui.DisplaySize
 import com.jackson.lumio.ui.DisplaySizes
+import com.jackson.lumio.ui.player.GuidePreview
+import com.jackson.lumio.ui.common.LoadingText
 import com.jackson.lumio.ui.common.LumioListItem
 import com.jackson.lumio.ui.common.LumioShapes
 import com.jackson.lumio.ui.common.MenuAction
@@ -281,6 +283,8 @@ fun SettingRow(
     detail: String? = null,
     valueColor: Color = LumioColors.secondaryText,
     onLongClick: (() -> Unit)? = null,
+    /** Work is under way (checking, downloading…): a small wheel goes before the value. */
+    busy: Boolean = false,
     onClick: () -> Unit,
 ) {
     LumioListItem(
@@ -289,7 +293,10 @@ fun SettingRow(
         onLongClick = onLongClick,
         headlineContent = { Text(title, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) },
         supportingContent = detail?.let { { Text(it, color = LumioColors.secondaryText, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis) } },
-        trailingContent = if (value.isEmpty()) null else ({ Text(value, color = valueColor, fontSize = 17.sp, maxLines = 1) }),
+        trailingContent = if (value.isEmpty()) null else ({
+            if (busy) LoadingText(value, color = valueColor, fontSize = 17.sp, spinner = 18.dp)
+            else Text(value, color = valueColor, fontSize = 17.sp, maxLines = 1)
+        }),
         modifier = Modifier.fillMaxWidth(),
     )
 }
@@ -331,6 +338,13 @@ private fun Playback(model: SettingsViewModel, focus: FocusRequester, pick: (Pic
             SettingRow("Reconnect after", "$seconds s without data") {
                 pick(picker("Reconnect after", listOf(3, 5, 8, 10, 15, 20, 30).map { "$it s" to it.toDouble() },
                     settings.stallTimeoutSeconds) { model.set("stallTimeoutSeconds", it) })
+            }
+        }
+        item {
+            val context = LocalContext.current
+            SwitchRow("Preview in Live TV", GuidePreview.enabled,
+                "OK plays a channel in a small picture above the guide. OK again makes it full screen, Back makes it small again.") {
+                GuidePreview.set(context, !GuidePreview.enabled)
             }
         }
         note("If a channel won't play, Lumio tries the other format, then another provider that has it.")
@@ -408,7 +422,9 @@ private fun Content(model: SettingsViewModel, focus: FocusRequester, pick: (Pick
     val regions = model.regions
     SettingsPane("Regions and categories", focus, model.message) {
         when {
-            regions == null -> note("Loading…")
+            regions == null -> item {
+                LoadingText("Loading…", Modifier.padding(start = 16.dp, top = 10.dp), fontSize = 14.sp, spinner = 16.dp)
+            }
             regions.regions.isEmpty() -> note("Your providers haven't listed any groups yet.")
             else -> {
                 val shownCount = regions.regions.count { it.shown }
@@ -484,7 +500,8 @@ private fun About(updates: UpdateViewModel, focus: FocusRequester) {
             }
             val detail = (updates.state as? UpdateState.Failed)?.message
             SettingRow("Check for updates", status, detail,
-                valueColor = if (updates.state is UpdateState.Available) LumioColors.accent else LumioColors.secondaryText) {
+                valueColor = if (updates.state is UpdateState.Available) LumioColors.accent else LumioColors.secondaryText,
+                busy = updates.state.let { it is UpdateState.Checking || it is UpdateState.Downloading || it is UpdateState.Installing }) {
                 updates.check(userInitiated = true)
             }
         }

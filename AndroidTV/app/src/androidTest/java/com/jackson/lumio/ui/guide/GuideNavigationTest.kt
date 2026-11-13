@@ -69,6 +69,28 @@ class GuideNavigationTest {
         assertNull(GuideNavigation.left(GuideCursor(0, six, six), row, window, minTime = six))
     }
 
+    @Test fun leftLeavesTheGridOnWhatIsOnNowUnlessThereIsCatchUp() {
+        val now = six + 600 // Film is on
+        val onNow = GuideCursor(0, now, six)
+        assertEquals(true, GuideNavigation.leftLeavesGrid(onNow, row, now, catchup = false))
+        // With catch-up, Left goes on stepping into the past.
+        assertEquals(false, GuideNavigation.leftLeavesGrid(onNow, row, now, catchup = true))
+        // A row with no guide is a gap cell that began at or before now: Left leaves too.
+        assertEquals(true, GuideNavigation.leftLeavesGrid(onNow, emptyList(), now, catchup = false))
+        // Catch-up with no programmes has nothing to replay: Left leaves.
+        assertEquals(true, GuideNavigation.leftLeavesGrid(onNow, emptyList(), now, catchup = true))
+        // Something already over, on a channel with no catch-up: nothing to the left worth showing.
+        assertEquals(true, GuideNavigation.leftLeavesGrid(GuideCursor(0, six - 1800, six - hour), row, now, catchup = false))
+        // A programme still to come steps back toward now, with or without catch-up.
+        val news = GuideCursor(0, six + hour, six)
+        assertEquals(false, GuideNavigation.leftLeavesGrid(news, row, now, catchup = false))
+        assertEquals(false, GuideNavigation.leftLeavesGrid(news, row, now, catchup = true))
+        // A gap still to come too (the half hour before Late).
+        assertEquals(false, GuideNavigation.leftLeavesGrid(GuideCursor(0, six + 2.6 * hour, six), row, now, catchup = false))
+        // The cell that started at now exactly counts as on now.
+        assertEquals(true, GuideNavigation.leftLeavesGrid(news, row, six + hour, catchup = false))
+    }
+
     @Test fun upAndDownKeepTheTimeAndStopAtTheEnds() {
         val cursor = GuideCursor(3, six + 600, six)
         assertEquals(GuideCursor(4, six + 600, six), GuideNavigation.move(cursor, 1, rows = 5))

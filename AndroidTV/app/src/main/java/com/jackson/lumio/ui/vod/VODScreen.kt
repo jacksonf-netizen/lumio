@@ -1,6 +1,7 @@
 package com.jackson.lumio.ui.vod
 
 import androidx.activity.compose.BackHandler
+import com.jackson.lumio.ui.common.LoadingText
 import com.jackson.lumio.ui.common.LumioListItem
 import com.jackson.lumio.ui.common.LumioButton
 import com.jackson.lumio.ui.common.ButtonStyle
@@ -148,11 +149,17 @@ class VODHostScope(
  * opens over it.
  */
 @Composable
-fun OnDemandScreen(kinds: List<String>, onPlay: PlayVOD, playerShowing: Boolean) {
+fun OnDemandScreen(
+    kinds: List<String>,
+    onPlay: PlayVOD,
+    playerShowing: Boolean,
+    /** The provider being refreshed right now (its name), or null when none is. */
+    refreshing: String? = null,
+) {
     var chosen by rememberSaveable { mutableStateOf("movie") }
     val kind = if (chosen in kinds) chosen else kinds.first()
     VODHost(onPlay, playerShowing) {
-        Home(model(kind), kind, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
+        Home(model(kind), kind, refreshing, onOpen = ::openItem, onCategory = { open(VODPage.Category(kind, it)) },
             onCategoryOptions = { categoryOptions(kind, it) },
             onRecent = ::openRecent, onRecentOptions = { recentOptions(it, kind) }, onItemOptions = ::itemOptions,
             header = {
@@ -286,6 +293,7 @@ private fun Layer(covered: Boolean, focus: FocusRequester, content: @Composable 
 private fun Home(
     model: VODViewModel,
     kind: String,
+    refreshing: String?,
     onOpen: (VODItem) -> Unit,
     onCategory: (VODCategory) -> Unit,
     onCategoryOptions: (VODCategory) -> Unit,
@@ -301,8 +309,9 @@ private fun Home(
     header()
     when {
         home == null && model.message != null -> Message(model.message!!, LumioColors.error)
+        empty && refreshing != null -> LoadingText("$title are loading from $refreshing…", Modifier.padding(24.dp))
         empty -> Message("No ${title.lowercase()} yet. They appear here once your provider has loaded.", LumioColors.secondaryText)
-        home == null -> Message("Loading…", LumioColors.secondaryText)
+        home == null -> Message("Loading…", LumioColors.secondaryText, loading = true)
         else -> LazyColumn(
             Modifier.fillMaxSize().focusRestorer(),
             contentPadding = PaddingValues(top = 20.dp, bottom = 48.dp),
@@ -363,8 +372,9 @@ fun Shelf(title: String, content: androidx.compose.foundation.lazy.LazyListScope
 }
 
 @Composable
-private fun Message(text: String, color: Color) {
-    Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(32.dp))
+private fun Message(text: String, color: Color, loading: Boolean = false) {
+    if (loading) LoadingText(text, Modifier.padding(32.dp), color)
+    else Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(32.dp))
 }
 
 // MARK: Cards
@@ -455,7 +465,8 @@ private fun CategoryGrid(model: VODViewModel, category: VODCategory, onOpen: (VO
         Text(category.name, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 32.dp, top = 28.dp, bottom = 12.dp))
         val items = page?.items.orEmpty()
         if (items.isEmpty()) {
-            Message(if (page?.loading != false) "Loading…" else "Nothing in this category.", LumioColors.secondaryText)
+            val loading = page?.loading != false
+            Message(if (loading) "Loading…" else "Nothing in this category.", LumioColors.secondaryText, loading = loading)
         } else {
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(PosterWidth + 16.dp),
@@ -480,7 +491,7 @@ private fun MoviePage(model: VODViewModel, page: VODPage.Movie, onPlay: PlayVOD)
     val first = remember { FocusRequester() }
     LaunchedEffect(movie != null) { if (movie != null) runCatching { first.requestFocus() } }
     if (movie == null) {
-        Message("Loading…", LumioColors.secondaryText)
+        Message("Loading…", LumioColors.secondaryText, loading = true)
         return
     }
     Row(Modifier.fillMaxSize().padding(start = 32.dp, end = 32.dp, top = 36.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
@@ -549,7 +560,7 @@ private fun SeriesPage(model: VODViewModel, page: VODPage.Series, onPlay: PlayVO
     // The episodes often arrive just after the page opens: Play takes the remote once it's there.
     LaunchedEffect(series != null, next != null) { if (series != null) runCatching { first.requestFocus() } }
     if (series == null) {
-        Message("Loading…", LumioColors.secondaryText)
+        Message("Loading…", LumioColors.secondaryText, loading = true)
         return
     }
     val shownSeason = season ?: next?.season ?: series.seasons.firstOrNull()?.number
@@ -606,7 +617,10 @@ private fun SeriesPage(model: VODViewModel, page: VODPage.Series, onPlay: PlayVO
             }
         }
         if (series.episodes.isEmpty()) {
-            item { Message(if (model.detailErrors[key] == null) "Loading episodes…" else "No episodes listed.", LumioColors.secondaryText) }
+            item {
+                val loading = model.detailErrors[key] == null
+                Message(if (loading) "Loading episodes…" else "No episodes listed.", LumioColors.secondaryText, loading = loading)
+            }
         }
         items(series.episodes.filter { it.season == shownSeason }, key = { it.id }) { episode ->
             EpisodeRow(episode, onClick = { playEpisode(episode) }, onLongClick = {

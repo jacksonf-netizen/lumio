@@ -12,7 +12,9 @@ public struct XtreamClient: Sendable {
     /// For `player_api.php` requests. Link checks use a few seconds, so a dead server is noticed fast.
     public var requestTimeout: TimeInterval = 30
 
-    static let maxGuideDownloadBytes = 2 << 30
+    /// Int64: 2 GB doesn't fit a 32-bit `Int` (Android on armv7), where it wrapped to a negative
+    /// limit and every guide download failed.
+    static let maxGuideDownloadBytes: Int64 = 2 << 30
     public static let defaultUserAgent = "Lumio/0.1 (Macintosh; Apple silicon)"
 
     public init(serverURL: URL, credentials: ProviderCredentials, transport: any HTTPTransport,
@@ -89,7 +91,7 @@ public struct XtreamClient: Sendable {
                 throw error
             }
             // Real guides are tens to a few hundred megabytes; refuse anything absurd.
-            let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            let size = ((try? FileManager.default.attributesOfItem(atPath: file.path))?[.size] as? NSNumber)?.int64Value ?? 0
             if size > Self.maxGuideDownloadBytes {
                 try? FileManager.default.removeItem(at: file)
                 throw XtreamError.invalidResponse("the guide file is \(size >> 20) MB, over the \(Self.maxGuideDownloadBytes >> 20) MB limit")

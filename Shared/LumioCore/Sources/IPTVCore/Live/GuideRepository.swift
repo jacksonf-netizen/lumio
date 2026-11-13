@@ -37,15 +37,18 @@ public struct GuideRepository: Sendable {
         let to = window.end.addingTimeInterval(maxShift).timeIntervalSince1970
 
         let ids = Array(Set(refs.map(\.epgID)))
-        var byKey: [String: [ProviderID: [Programme]]] = [:]
+        // Each programme with whether the provider's offset applies (not to a guide link's, `source` 1).
+        var byKey: [String: [ProviderID: [(Programme, Bool)]]] = [:]
         for chunk in stride(from: 0, to: ids.count, by: 400).map({ Array(ids[$0..<min($0 + 400, ids.count)]) }) {
-            let rows = try Programme.fetchAll(db, sql: """
+            let rows = try Row.fetchAll(db, sql: """
                 SELECT * FROM programme INDEXED BY programme_on_epgID_start
                 WHERE epgID IN (\(databaseQuestionMarks(count: chunk.count))) AND start < ? AND stop > ?
                 ORDER BY epgID, start
                 """, arguments: StatementArguments(chunk + [to, from]))
-            for programme in rows {
-                byKey[programme.epgID, default: [:]][programme.providerID, default: []].append(programme)
+            for row in rows {
+                let programme = try Programme(row: row)
+                let shifted = (row["source"] as Int? ?? 0) == 0
+                byKey[programme.epgID, default: [:]][programme.providerID, default: []].append((programme, shifted))
             }
         }
 
@@ -55,9 +58,9 @@ public struct GuideRepository: Sendable {
             let provider = ref.providers.first { candidates[$0]?.isEmpty == false }
                 ?? candidates.max { $0.value.count < $1.value.count }!.key
             let shift = offsets[provider] ?? 0
-            result[ref] = (candidates[provider] ?? []).compactMap { programme in
+            result[ref] = (candidates[provider] ?? []).compactMap { programme, shifted in
                 var programme = programme
-                if shift != 0 {
+                if shift != 0, shifted {
                     programme.start.addTimeInterval(shift)
                     programme.stop.addTimeInterval(shift)
                 }

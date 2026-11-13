@@ -65,6 +65,15 @@ object GuideNavigation {
         return cursor.copy(time = maxOf(previous.start, start), windowStart = start)
     }
 
+    /**
+     * True when Left should go on out of the grid, to the sidebar, instead of stepping back in time:
+     * the highlight is on what's on now (or something earlier) and the channel has no catch-up (or
+     * no programmes to replay), so there's nothing to the left worth showing. A programme still to
+     * come steps back toward now.
+     */
+    fun leftLeavesGrid(cursor: GuideCursor, programmes: List<Programme>, now: Double, catchup: Boolean): Boolean =
+        (!catchup || programmes.isEmpty()) && cell(programmes, cursor.time).start <= now
+
     /** Up or down by [by] rows (a page with CH+/CH-), staying at the same time. */
     fun move(cursor: GuideCursor, by: Int, rows: Int): GuideCursor =
         cursor.copy(row = (cursor.row + by).coerceIn(0, maxOf(0, rows - 1)))

@@ -16,8 +16,9 @@ Start with `Docs/Mac/development.md` (building, testing, releasing) and `Docs/An
   (credentials test/test).
 - Logins are stored only in the macOS Keychain / Android Keystore, never in plain files, settings
   or logs. Never log credentials (`CredentialRedactor`).
-- Network calls only to the user's own providers, their logo/poster hosts, and GitHub (update
-  checks). No analytics, telemetry or third-party services.
+- Network calls only to the user's own providers, their logo/poster hosts, guide links the user
+  adds (Jackson allowed these on 2026-11-13; optional, never preset), and GitHub (update checks).
+  No analytics, telemetry or third-party services.
 - Ask before adding any third-party dependency. Approved: GRDB, MPVKit (LGPL), Media3, AndroidX /
   Compose for TV, swift-crypto (and swift-java, unused).
 - The Mac app is the priority; Android must not change how the Mac behaves unless intended (and

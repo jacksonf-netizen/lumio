@@ -1,13 +1,6 @@
 package com.jackson.lumio.ui.providers
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,9 +8,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,7 +26,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +36,7 @@ import com.jackson.lumio.ui.LumioColors
 import com.jackson.lumio.ui.common.ButtonStyle
 import com.jackson.lumio.ui.common.LumioButton
 import com.jackson.lumio.ui.common.MenuAction
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.common.RemoteTextField
 import com.jackson.lumio.ui.settings.Picker
 import com.jackson.lumio.ui.settings.SettingRow
@@ -68,6 +61,7 @@ fun ProvidersPane(model: ProvidersViewModel, focus: FocusRequester, pick: (Picke
         ProviderScreen.List -> ProviderList(model, focus, pick)
         ProviderScreen.Form -> model.form?.let { ProviderEditor(model, it, focus, pick) }
         is ProviderScreen.Setup -> ProviderSetup(model, screen.providerId, focus, onWatch)
+        is ProviderScreen.GuideLinks -> model.guide?.let { GuideLinksPage(model, it, focus, pick) }
     }
 }
 
@@ -116,7 +110,7 @@ private fun ProviderList(model: ProvidersViewModel, focus: FocusRequester, pick:
                     provider.problem != null -> "Problem" to LumioColors.warning
                     else -> "On" to LumioColors.accent
                 }
-                val counts = listOfNotNull(plural(provider.channels, "channel"), plural(provider.movies, "movie"), "${provider.series} series",
+                val counts = listOfNotNull(plural(provider.channels, "channel"), plural(provider.movies, "movie"), "${number(provider.series)} series",
                     // Only a note: everything plays without a guide.
                     "no guide".takeIf { provider.guideProblem != null && provider.programmes == 0 },
                     provider.lastRefreshAt?.let { "updated ${updated(it)}" })
@@ -143,6 +137,7 @@ private fun options(
     val actions = buildList {
         add(MenuAction("Refresh now") { model.refresh(provider.id) })
         add(MenuAction("Edit") { model.startEditing(provider) })
+        add(MenuAction("Guide links: ${if (provider.guideLinks == 0) "None" else plural(provider.guideLinks, "link")}") { model.openGuideLinks(provider.id) })
         add(MenuAction(if (provider.enabled) "Switch off" else "Switch on") { model.setEnabled(provider.id, !provider.enabled) })
         if (index > 0) add(MenuAction("Move up") { model.move(provider.id, -1) })
         if (index in 0 until all.lastIndex) add(MenuAction("Move down") { model.move(provider.id, 1) })
@@ -157,7 +152,7 @@ private fun options(
 }
 
 private fun details(provider: ProviderInfo): String = buildList {
-    add("${plural(provider.channels, "channel")}  ·  ${plural(provider.movies, "movie")}  ·  ${provider.series} series  ·  ${plural(provider.programmes, "programme")}")
+    add("${plural(provider.channels, "channel")}  ·  ${plural(provider.movies, "movie")}  ·  ${number(provider.series)} series  ·  ${plural(provider.programmes, "programme")}")
     add("Connections: ${provider.connectionsInUse} of ${provider.connectionLimit}")
     provider.expiresAt?.let { add("Expires ${date(it)}") }
     provider.lastRefreshAt?.let { add("Updated ${updated(it)}") }
@@ -166,6 +161,7 @@ private fun details(provider: ProviderInfo): String = buildList {
     }
     provider.problem?.let { add(it) }
     provider.guideProblem?.let { add("Guide: $it Channels and films play without one.") }
+    add("Guide links are optional: an extra guide (XMLTV) address for channels your provider has no guide for.")
 }.joinToString("\n")
 
 private fun date(seconds: Double): String = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date((seconds * 1000).toLong()))
@@ -175,7 +171,9 @@ private fun updated(seconds: Double): String = android.text.format.DateUtils.get
     (seconds * 1000).toLong(), System.currentTimeMillis(), android.text.format.DateUtils.MINUTE_IN_MILLIS,
 ).toString().replaceFirstChar { it.lowercase() }
 
-private fun plural(count: Int, one: String) = "${NumberFormat.getIntegerInstance().format(count)} $one${if (count == 1) "" else "s"}"
+private fun number(count: Int): String = NumberFormat.getIntegerInstance().format(count)
+
+private fun plural(count: Int, one: String) = "${number(count)} $one${if (count == 1) "" else "s"}"
 
 /**
  * Add or change a provider. An empty password keeps the saved one. Back asks before throwing away
@@ -299,6 +297,56 @@ private fun Field(
     RemoteTextField(label, value, secret = secret, keyboard = keyboard, modifier = modifier.fillMaxWidth(), onChange = onChange)
 }
 
+// MARK: Guide links
+
+/**
+ * A provider's extra guide links: each can be removed, and a new one typed or pasted. Back goes to
+ * the provider list. What's typed stays in the view model, so Back and returning lose nothing.
+ */
+@Composable
+private fun GuideLinksPage(model: ProvidersViewModel, form: GuideLinksForm, focus: FocusRequester, pick: (Picker) -> Unit) {
+    val first = remember { FocusRequester() }
+    BackHandler(onBack = model::closeGuideLinks)
+    TakeFocus(model, first)
+    val name = model.state.providers.firstOrNull { it.id == form.providerId }?.name
+    val links = form.links?.links.orEmpty()
+
+    SettingsPane(if (name != null) "Guide links: $name" else "Guide links", focus) {
+        note("Optional. An extra guide (XMLTV) address for channels your provider has no guide for.")
+        if (links.isEmpty()) {
+            note(if (form.links == null) "Loading…" else "No guide links yet.")
+        }
+        itemsIndexed(links) { index, link ->
+            SettingRow(link, "Remove", valueColor = LumioColors.secondaryText) {
+                pick(Picker("Remove this guide link?", listOf(
+                    MenuAction("Remove this link") { model.removeGuideLink(index) },
+                    MenuAction("Cancel") {},
+                ), detail = link))
+            }
+        }
+        item {
+            Box(Modifier.padding(start = 16.dp, top = 16.dp).fillMaxWidth()) {
+                RemoteTextField(
+                    "Add a guide link", form.text, placeholder = "http://…/guide.xml.gz",
+                    keyboard = KeyboardType.Uri, modifier = Modifier.fillMaxWidth().focusRequester(first),
+                    onEditingDone = { model.addGuideLink() },
+                ) {
+                    form.text = it
+                    form.message = null
+                }
+            }
+        }
+        form.message?.let { message ->
+            item { Text(message, color = LumioColors.error, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp)) }
+        }
+        if (form.busy) item { Text("Adding…", color = LumioColors.secondaryText, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp)) }
+        form.links?.problem?.let { problem ->
+            item { Text("Last update: $problem", color = LumioColors.secondaryText, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp)) }
+        }
+        note("Lumio matches its channels to yours by guide ID or name and region, and uses them only where your provider has no guide. They update with the guide; the first time can take a minute or two.")
+    }
+}
+
 // MARK: Setup
 
 /** One line of the setup screen. */
@@ -362,7 +410,7 @@ private fun ProviderSetup(model: ProvidersViewModel, providerId: String, focus: 
         },
         row("live", "Channels") { provider?.let { plural(it.channels, "channel") } },
         row("movies", "Movies") { provider?.let { plural(it.movies, "movie") } },
-        row("series", "Series") { provider?.let { "${NumberFormat.getIntegerInstance().format(it.series)} series" } },
+        row("series", "Series") { provider?.let { "${number(it.series)} series" } },
         row("guide", "TV guide") { provider?.let { plural(it.programmes, "programme") } },
     )
 
@@ -433,17 +481,5 @@ private fun StepRow(step: SetupStep) {
             }
             step.extra?.let { Text(it, fontSize = 13.sp, color = LumioColors.secondaryText, maxLines = 3) }
         }
-    }
-}
-
-/** A small turning arc: work in progress. */
-@Composable
-private fun Spinner() {
-    val turn by rememberInfiniteTransition(label = "spinner").animateFloat(
-        0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "turn",
-    )
-    val color = LumioColors.accent
-    Canvas(Modifier.size(20.dp)) {
-        drawArc(color, startAngle = turn, sweepAngle = 270f, useCenter = false, style = Stroke(width = 2.5.dp.toPx()))
     }
 }

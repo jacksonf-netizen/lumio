@@ -56,6 +56,7 @@ import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.core.MultiviewState
 import com.jackson.lumio.core.Tile
 import com.jackson.lumio.player.PlayerEngines
@@ -95,6 +96,9 @@ fun MultiviewScreen(
         if (channel != null) onFullScreen(channel.id, tile.group ?: "all") else onClose()
     }
     BackHandler(enabled = panel == null && picking == null) { leave() }
+    // Awake while any tile is playing or opening.
+    com.jackson.lumio.ui.player.KeepScreenOn(
+        state?.tiles?.any { it.channel != null && it.phase in com.jackson.lumio.ui.player.AwakePhases } == true)
     LaunchedEffect(Unit) {
         delay(6000)
         hint = false
@@ -306,11 +310,12 @@ private fun TileView(
     }
 }
 
-/** Opening, reconnecting, or why it failed. Nothing while it plays. */
+/** Opening, buffering, reconnecting, or why it failed. Nothing while it plays. */
 @Composable
 private fun TileStatus(tile: Tile, modifier: Modifier) {
     val text = when (tile.phase) {
-        "connecting", "buffering" -> "Opening…"
+        "connecting" -> "Opening…"
+        "buffering" -> "Buffering…"
         "reconnecting" -> "Reconnecting…"
         "waitingForNetwork" -> "Waiting for the network…"
         "suspended" -> "Paused while the TV sleeps"
@@ -319,11 +324,19 @@ private fun TileStatus(tile: Tile, modifier: Modifier) {
         "idle" -> if (tile.providerID == null) "No free connection" else return
         else -> return
     }
-    Text(
-        text, color = Color.White, fontSize = 15.sp, textAlign = TextAlign.Center,
+    // A wheel while the tile is waiting on something; the other notes are text only.
+    val waiting = tile.phase in setOf("connecting", "buffering", "reconnecting", "waitingForNetwork")
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.padding(16.dp).widthIn(max = 420.dp)
             .background(Color(0xAA000000), RoundedCornerShape(8.dp)).padding(horizontal = 14.dp, vertical = 8.dp),
-    )
+    ) {
+        if (waiting) {
+            Spinner(32.dp)
+            Spacer(Modifier.height(8.dp))
+        }
+        Text(text, color = Color.White, fontSize = 15.sp, textAlign = TextAlign.Center)
+    }
 }
 
 @OptIn(UnstableApi::class)

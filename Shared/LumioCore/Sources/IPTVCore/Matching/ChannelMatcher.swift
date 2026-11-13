@@ -188,7 +188,7 @@ public enum ChannelMatcher {
     public static func normalizedName(_ name: String) -> String {
         var text = stripCountryPrefix(name)
         // Bracketed tags: "[VIP]", "(Backup)", "{UK}".
-        text = text.replacing(/[\[\(\{][^\]\)\}]*[\]\)\}]/, with: " ")
+        text = removingBracketed(text)
         text = text.replacingOccurrences(of: "+", with: " plus")
         text = text.folding(options: [.diacriticInsensitive, .caseInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
         text = text.lowercased()
@@ -238,10 +238,46 @@ public enum ChannelMatcher {
     /// Broadcaster names such as "BBC: One" are left alone.
     static func stripCountryPrefix(_ name: String) -> String {
         let trimmed = name.trimmingCharacters(in: .whitespaces)
-        guard let match = trimmed.prefixMatch(of: /^[\[\(\|]?\s*([A-Z]{2,4})\s*[\]\)\|:\-►»]+\s*/) else { return trimmed }
-        let code = String(match.output.1)
+        // An optional "[", "(" or "|", 2–4 capital letters, then at least one of "]", ")", "|", ":",
+        // "-", "►", "»", and spaces. Scanned by hand: a Regex here took minutes over a big provider's
+        // channels on a TV box.
+        var index = trimmed.startIndex
+        func skipSpaces() { while index < trimmed.endIndex, trimmed[index].isWhitespace { index = trimmed.index(after: index) } }
+        if index < trimmed.endIndex, "[(|".contains(trimmed[index]) { index = trimmed.index(after: index) }
+        skipSpaces()
+        let codeStart = index
+        while index < trimmed.endIndex, let ascii = trimmed[index].asciiValue, (65...90).contains(ascii) {
+            index = trimmed.index(after: index)
+        }
+        let code = String(trimmed[codeStart..<index])
+        guard (2...4).contains(code.count) else { return trimmed }
+        skipSpaces()
+        let separatorsStart = index
+        while index < trimmed.endIndex, "])|:-►»".contains(trimmed[index]) { index = trimmed.index(after: index) }
+        guard index > separatorsStart else { return trimmed }
+        skipSpaces()
         guard code.count == 2 || longRegionPrefixes.contains(code) else { return trimmed }
-        let rest = trimmed[match.range.upperBound...]
+        let rest = trimmed[index...]
         return rest.isEmpty ? trimmed : String(rest)
+    }
+
+    /// Each "[…]", "(…)" or "{…}" (to the first closing bracket of any kind) becomes a space.
+    static func removingBracketed(_ text: String) -> String {
+        let openers: Set<Character> = ["[", "(", "{"], closers: Set<Character> = ["]", ")", "}"]
+        guard text.contains(where: openers.contains) else { return text }
+        var result = ""
+        var index = text.startIndex
+        while index < text.endIndex {
+            let character = text[index]
+            if openers.contains(character),
+               let close = text[text.index(after: index)...].firstIndex(where: closers.contains) {
+                result.append(" ")
+                index = text.index(after: close)
+            } else {
+                result.append(character)
+                index = text.index(after: index)
+            }
+        }
+        return result
     }
 }

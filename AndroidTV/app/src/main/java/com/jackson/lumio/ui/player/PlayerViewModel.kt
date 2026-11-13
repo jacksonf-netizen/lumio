@@ -72,20 +72,108 @@ class PlayerViewModel : ViewModel() {
     var group: String? = null
         private set
 
-    fun watch(channel: String, group: String) {
+    /** What is being opened ("Opening <name>…" on screen) while the core's answer is awaited, else null. */
+    var opening by mutableStateOf<String?>(null)
+        private set
+    /** Why the last channel or movie couldn't be opened, shown with a Close button. */
+    var openError by mutableStateOf<String?>(null)
+        private set
+    /** Counts opens, so a late answer to an older one (or to one closed with Back) is ignored. */
+    private var openCount = 0
+
+    /**
+     * Playing small in the guide's preview (see [GuidePreview]) rather than full screen. The
+     * channel is [previewChannel], set as soon as it's asked for, before the core answers.
+     */
+    var previewing by mutableStateOf(false)
+        private set
+    var previewChannel by mutableStateOf<String?>(null)
+        private set
+    /** Whether Back keeps a channel playing in the guide's preview (Live TV showing, preview on). */
+    var previewAllowed = false
+
+    /** [name] is the channel's name, if the caller has it, for the "Opening…" line. */
+    fun watch(channel: String, group: String, name: String? = null) {
+        if (previewing && previewChannel == channel) {
+            // The preview goes full screen as it is: the core carries on with the same stream and
+            // records it as watched now.
+            previewing = false
+            previewChannel = null
+            showing = true
+            viewModelScope.launch { runCatching { LumioCore.watch(channel, group) } }
+            return
+        }
+        previewing = false
+        previewChannel = null
         this.group = group
-        run { LumioCore.watch(channel, group).also { showing = true } }
+        open(name?.let { "Opening $it…" } ?: "Opening…") { LumioCore.watch(channel, group) }
+    }
+
+    /** Plays [channel] in the guide's preview; nothing if it's already there or the player is full screen. */
+    fun preview(channel: String, group: String) {
+        if (showing || (previewing && previewChannel == channel)) return
+        previewing = true
+        previewChannel = channel
+        this.group = group
+        open(null, show = false) { LumioCore.watch(channel, group, preview = true) }
+    }
+
+    /** Ends the preview (leaving Live TV, or the preview switched off). */
+    fun stopPreview() {
+        if (!previewing || showing) return
+        previewing = false
+        previewChannel = null
+        openCount++
+        opening = null
+        viewModelScope.launch { runCatching { LumioCore.stopPlayer() } }
     }
 
     /** Hides the player without stopping it: multiview stops it before its tiles start. */
     fun dismiss() {
+        previewing = false
+        previewChannel = null
         tracks = null
+        openCount++
+        opening = null
         showing = false
     }
 
     /** A movie or episode; see [LumioCore.playVOD]. */
     fun playVOD(kind: String, provider: String, id: String, position: Double?, title: String, subtitle: String?) =
-        run { LumioCore.playVOD(kind, provider, id, position, title, subtitle).also { showing = true } }
+        open("Opening $title…".also { previewing = false; previewChannel = null }) { LumioCore.playVOD(kind, provider, id, position, title, subtitle) }
+
+    /**
+     * Shows the player at once, with [label], then waits for the core (which can take seconds on a
+     * big provider). If it fails, the screen says why instead of staying black.
+     */
+    private fun open(label: String?, show: Boolean = true, work: suspend () -> PlayerState) {
+        val token = ++openCount
+        error = null
+        openError = null
+        opening = label
+        if (!showing) {
+            // Nothing from the last time (a stale "failed", the old channel) shows meanwhile.
+            state = null
+            nowNext = null
+        }
+        if (show) showing = true
+        viewModelScope.launch {
+            try {
+                val previousChannel = state?.channel?.id
+                val before = eventsSeen
+                val reply = work()
+                if (token != openCount) return@launch
+                if (eventsSeen == before) state = reply
+                if (state?.channel?.id != previousChannel) channelChanged()
+            } catch (failure: CoreException) {
+                // A preview that can't open just shows nothing; OK then opens it full screen and says why.
+                if (token == openCount && show) openError = failure.message ?: "Something went wrong."
+                if (token == openCount && !show) previewChannel = null
+            } finally {
+                if (token == openCount) opening = null
+            }
+        }
+    }
 
     /** Where a skip is heading while the remote is still being pressed (seconds), or null. */
     var seekTarget by mutableStateOf<Double?>(null)
@@ -143,6 +231,17 @@ class PlayerViewModel : ViewModel() {
         tracks = null
         seekJob?.cancel()
         seekTarget = null
+        val live = state?.channel
+        if (previewAllowed && live != null && openError == null && state?.phase in AwakePhases) {
+            // Back to the guide with the channel carrying on in its preview.
+            showing = false
+            previewing = true
+            previewChannel = live.id
+            return
+        }
+        openCount++
+        opening = null
+        openError = null
         showing = false
         viewModelScope.launch { runCatching { LumioCore.stopPlayer() } }
     }
@@ -176,13 +275,20 @@ class PlayerViewModel : ViewModel() {
     var channelList by mutableStateOf<ChannelList?>(null)
         private set
 
-    data class ChannelList(val channels: List<Channel>, val nowNext: Map<EPGRef, NowNext>, val start: Int)
+    /** [loading]: the panel is open but the channels haven't been read yet. */
+    data class ChannelList(val channels: List<Channel>, val nowNext: Map<EPGRef, NowNext>, val start: Int, val loading: Boolean = false)
 
     fun openChannels() {
         val current = state?.channel?.id
+        // The panel opens at once with a "Loading channels…" row; a big group takes a while.
+        val waiting = ChannelList(emptyList(), emptyMap(), 0, loading = true)
+        channelList = waiting
         viewModelScope.launch {
             val channels = runCatching { LumioCore.channels(group ?: "all") }.getOrNull().orEmpty()
+            // Closed with Back meanwhile: leave it closed.
+            if (channelList !== waiting) return@launch
             if (channels.isEmpty()) {
+                channelList = null
                 showBanner()
                 return@launch
             }

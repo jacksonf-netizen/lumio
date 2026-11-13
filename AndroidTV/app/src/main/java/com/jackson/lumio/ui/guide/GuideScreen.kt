@@ -3,7 +3,6 @@ package com.jackson.lumio.ui.guide
 import android.view.KeyEvent as AndroidKeyEvent
 import com.jackson.lumio.ui.common.LumioButton
 import androidx.activity.compose.BackHandler
-import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
@@ -25,6 +24,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -36,6 +36,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -44,6 +45,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,13 +58,23 @@ import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.Programme
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.common.LoadingText
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.common.MenuAction
 import com.jackson.lumio.ui.common.OptionsPanel
 import java.util.Calendar
 import java.util.Date
+import kotlinx.coroutines.flow.first
 import kotlin.math.floor
+import com.jackson.lumio.ui.player.MainVideo
+import androidx.compose.ui.draw.clip
 
 private val ChannelColumn = 210.dp
+/** The preview picture, 16:9 at the top right, and the details area beside it (picture plus margins). */
+private val PreviewPictureHeight = 216.dp
+val PreviewWidth = PreviewPictureHeight * 16 / 9
+private val PreviewAreaHeight = PreviewPictureHeight + 16.dp
+private val DetailsHeight = 150.dp
 private val RowHeight = 54.dp
 /** Width of one minute of the grid; the screen's width sets how many hours show. */
 private const val DP_PER_MINUTE = 5.5f
@@ -78,33 +90,61 @@ private data class Panel(val title: String, val actions: List<MenuAction>, val p
  *
  * Keys: OK watches what's on (or shows a later programme's details), Hold OK or Menu opens the
  * channel's options, CH+/CH- page, rewind and fast-forward go a day back or on, digits jump to a
- * channel number, Back returns to now (and then to the sidebar).
+ * channel number, Back returns to now (and then to the sidebar). Left on what's on now (a channel
+ * with no catch-up has nothing earlier) goes on to the sidebar.
  */
 @Composable
 fun GuideScreen(
     scope: GuideScope,
-    onPlay: (channel: String, group: String) -> Unit,
+    /** Plays a channel (its ID, its name for the "Opening…" line, and the group it was picked from). */
+    onPlay: (channel: String, name: String, group: String) -> Unit,
     playerShowing: Boolean,
     /** The channel the player is on, so closing the player brings the highlight to it. */
     playingChannel: String?,
     /** The list emptied while the grid had the remote (Recents cleared): the remote goes back to the sidebar. */
     onEmptied: () -> Unit = {},
+    /** What a provider refresh in progress is doing ("Updating channels… from TREX"), or null. */
+    refreshText: String? = null,
+    /** The sidebar's item for this section: where Left goes from the grid's left edge. */
+    railFocus: FocusRequester? = null,
+    /** At launch: take the remote as soon as the grid is there (until the app says otherwise). */
+    autoFocus: Boolean = false,
+    /** The grid took the remote because of [autoFocus]. */
+    onAutoFocused: () -> Unit = {},
+    /**
+     * Plays a channel in the preview picture (channel, group); null for no preview. OK previews a
+     * channel and OK again on it goes full screen; moving the highlight never changes the preview.
+     */
+    onPreview: ((String, String) -> Unit)? = null,
+    /** The channel in the preview, if any. */
+    previewChannel: String? = null,
+    /** The preview picture is still opening or buffering: shows a wheel over it. */
+    previewLoading: Boolean = false,
 ) {
-    val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope) }
+    val context = LocalContext.current
+    val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope, context) }
     val gridFocus = remember { FocusRequester() }
     var gridFocused by remember { mutableStateOf(false) }
+    // Asking a FocusRequester whose node isn't in the tree yet only prints "FocusRequester is not
+    // initialized" to the log, so the grid is only asked once it's placed.
+    var gridAttached by remember { mutableStateOf(false) }
     var panel by remember { mutableStateOf<Panel?>(null) }
     var played by remember { mutableStateOf(false) }
     val press = remember { PressTracker() }
     val listState = rememberLazyListState()
-    val context = LocalContext.current
     val timeFormat = remember { android.text.format.DateFormat.getTimeFormat(context) }
 
     LaunchedEffect(playerShowing) {
         if (!playerShowing && played) {
             playingChannel?.let(model::moveTo)
-            runCatching { gridFocus.requestFocus() }
+            if (gridAttached) gridFocus.requestFocus()
         }
+    }
+    LaunchedEffect(autoFocus) {
+        if (!autoFocus) return@LaunchedEffect
+        snapshotFlow { gridAttached }.first { it }
+        gridFocus.requestFocus()
+        onAutoFocused()
     }
     // When the list empties under the remote (the grid goes, and the remote with it), the remote goes
     // to the sidebar. Removing the grid may or may not report its focus lost, so both cases count.
@@ -123,20 +163,31 @@ fun GuideScreen(
         if (panel != null) hadPanel = true
         else if (hadPanel) {
             hadPanel = false
-            runCatching { gridFocus.requestFocus() }
+            if (gridAttached) gridFocus.requestFocus()
         }
     }
     BackHandler(enabled = gridFocused && panel == null && !model.atNow) { model.jumpToNow() }
-
+    /** With the preview on, OK previews a channel and OK again on it goes full screen. */
     fun play(channel: Channel) {
+        val preview = onPreview
+        if (preview != null && previewChannel != channel.id) {
+            preview(channel.id, model.groupID)
+            return
+        }
         played = true
-        onPlay(channel.id, model.groupID)
+        onPlay(channel.id, channel.name, model.groupID)
+    }
+
+    /** Straight to full screen (the options panel's "Watch"). */
+    fun watch(channel: Channel) {
+        played = true
+        onPlay(channel.id, channel.name, model.groupID)
     }
 
     fun options(channel: Channel, programme: Programme?) {
         val index = model.channels.indexOfFirst { it.id == channel.id }
         val actions = buildList {
-            add(MenuAction("Watch ${channel.name}") { play(channel) })
+            add(MenuAction("Watch ${channel.name}") { watch(channel) })
             add(MenuAction(if (channel.favorite) "Remove from Favorites" else "Add to Favorites") { model.toggleFavorite(channel) })
             when (scope) {
                 GuideScope.Favorites -> {
@@ -173,11 +224,19 @@ fun GuideScreen(
     }
 
     Box(Modifier.fillMaxSize()) {
-        // Coming in from the sidebar, the remote lands on the channels, not the Group button above them.
-        Column(Modifier.fillMaxSize().focusRestorer(gridFocus).focusGroup()) {
+        // Coming in from the sidebar, the remote lands on the channels, not the Group button above
+        // them (and not on whatever it last touched, which after picking a group was that button).
+        Column(Modifier.fillMaxSize().focusProperties { onEnter = { if (gridAttached) gridFocus.requestFocus() } }.focusGroup()) {
             val empty = model.channels.isEmpty()
-            if (!empty) Details(model.selectedChannel, model.selectedCell, model.now, timeFormat)
-            Toolbar(model, showHints = !empty, onPickGroup = {
+            if (!empty) {
+                val withPreview = onPreview != null
+                Row(Modifier.height(if (withPreview) PreviewAreaHeight else DetailsHeight)) {
+                    Box(Modifier.weight(1f)) { Details(model.selectedChannel, model.selectedCell, model.now, timeFormat) }
+                    // The player itself, small; while it's full screen, that screen shows the picture.
+                    if (withPreview) PreviewWindow(previewLoading, empty = previewChannel == null, showVideo = !playerShowing)
+                }
+            }
+            Toolbar(model, showHints = !empty, preview = onPreview != null, onPickGroup = {
                 panel = Panel("Group", model.groups.map { group ->
                     MenuAction(group.name, selected = group.id == model.groupID) { model.selectGroup(group.id) }
                 })
@@ -185,16 +244,21 @@ fun GuideScreen(
             when {
                 model.message != null && model.channels.isEmpty() ->
                     Message(model.message!!, LumioColors.error)
-                model.loaded && model.channels.isEmpty() -> Message(emptyText(scope), LumioColors.secondaryText)
+                !model.loaded -> Loading()
+                model.channels.isEmpty() && refreshText != null -> Message(refreshText, LumioColors.secondaryText)
+                model.channels.isEmpty() -> Message(emptyText(scope), LumioColors.secondaryText)
                 else -> BoxWithConstraints(
                     Modifier
                         .weight(1f)
                         .fillMaxWidth()
                         .focusRequester(gridFocus)
+                        .onPlaced { gridAttached = true }
                         .onFocusChanged {
                             if (!it.isFocused && gridFocused && model.channels.isEmpty()) lostWithList = true
                             gridFocused = it.isFocused
                         }
+                        // Left on the grid's edge goes to the sidebar item (the key isn't used up, see left()).
+                        .focusProperties { left = railFocus ?: FocusRequester.Default }
                         .focusable()
                         .onPreviewKeyEvent { event ->
                             val code = event.key.nativeKeyCode
@@ -216,7 +280,7 @@ fun GuideScreen(
                             when (code) {
                                 AndroidKeyEvent.KEYCODE_DPAD_UP -> if (model.cursor.row == 0) return@onPreviewKeyEvent false else model.move(-1)
                                 AndroidKeyEvent.KEYCODE_DPAD_DOWN -> model.move(1)
-                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> model.left()
+                                AndroidKeyEvent.KEYCODE_DPAD_LEFT -> if (!model.left()) return@onPreviewKeyEvent false
                                 AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> model.right()
                                 AndroidKeyEvent.KEYCODE_CHANNEL_UP, AndroidKeyEvent.KEYCODE_PAGE_DOWN -> model.move(page)
                                 AndroidKeyEvent.KEYCODE_CHANNEL_DOWN, AndroidKeyEvent.KEYCODE_PAGE_UP -> model.move(-page)
@@ -233,6 +297,7 @@ fun GuideScreen(
                     val timeline = maxWidth - ChannelColumn
                     // Whole half hours that fit, at least an hour.
                     val minutes = maxOf(60, (floor(timeline.value / DP_PER_MINUTE / 30) * 30).toInt())
+                    DisposableEffect(Unit) { onDispose { gridAttached = false } }
                     LaunchedEffect(minutes) { model.useWindow(minutes * 60.0) }
                     Grid(model, listState, timeline, gridFocused, timeFormat)
                 }
@@ -259,14 +324,28 @@ private fun emptyText(scope: GuideScope) = when (scope) {
     GuideScope.All -> "No channels yet. They appear here once your provider has loaded."
 }
 
+/** While the channel list loads: a line saying so and a few grey rows where the channels will be. */
 @Composable
-private fun Message(text: String, color: Color) {
-    Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(24.dp))
+private fun Loading() {
+    Column {
+        Message("Loading channels…", LumioColors.secondaryText, loading = true)
+        Column(Modifier.padding(horizontal = 24.dp)) {
+            repeat(7) {
+                Box(Modifier.fillMaxWidth().height(RowHeight).padding(vertical = 2.dp).background(LumioColors.surface, RoundedCornerShape(4.dp)))
+            }
+        }
+    }
+}
+
+@Composable
+private fun Message(text: String, color: Color, loading: Boolean = false) {
+    if (loading) LoadingText(text, Modifier.padding(24.dp), color)
+    else Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(24.dp))
 }
 
 /** The group picker (Guide) or the list's name (Favorites, Recents). */
 @Composable
-private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -> Unit) {
+private fun Toolbar(model: GuideViewModel, showHints: Boolean, preview: Boolean, onPickGroup: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = if (showHints) 6.dp else 32.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -274,26 +353,56 @@ private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -
     ) {
         when (model.scope) {
             GuideScope.All -> LumioButton(onClick = onPickGroup) {
-                Text("Group: ${model.groups.firstOrNull { it.id == model.groupID }?.name ?: "All"}", maxLines = 1)
+                Text(model.groups.firstOrNull { it.id == model.groupID }?.name?.let { "Group: $it" } ?: "Group", maxLines = 1)
             }
             GuideScope.Favorites -> Text("Favorites", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             GuideScope.Recents -> Text("Recently Watched", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         }
         Spacer(Modifier.weight(1f))
-        if (showHints) Text("Hold OK for options  ·  ◀◀ ▶▶ change day", color = LumioColors.secondaryText, fontSize = 13.sp)
+        if (showHints) {
+            Text(listOfNotNull(if (preview) "OK previews, OK again for full screen" else null, "Hold OK for options", "◀◀ ▶▶ change day")
+                .joinToString("  ·  "), color = LumioColors.secondaryText, fontSize = 13.sp)
+        }
+    }
+}
+
+/** The preview: the main player's picture, 16:9 at the top right. */
+@Composable
+private fun PreviewWindow(loading: Boolean, empty: Boolean, showVideo: Boolean) {
+    Box(
+        Modifier
+            .padding(top = 8.dp, end = 24.dp, bottom = 8.dp)
+            .width(PreviewWidth)
+            .height(PreviewPictureHeight)
+            .clip(RoundedCornerShape(8.dp))
+            .background(androidx.compose.ui.graphics.Color.Black),
+        contentAlignment = Alignment.Center,
+    ) {
+        // While the player is full screen, that screen has the picture.
+        if (showVideo) MainVideo(Modifier.fillMaxSize())
+        when {
+            loading -> Spinner(40.dp)
+            empty -> Text("Press OK on a channel to preview it", color = LumioColors.secondaryText, fontSize = 15.sp)
+        }
     }
 }
 
 /** The highlighted programme, above the grid. */
 @Composable
 private fun Details(channel: Channel?, cell: GuideCell?, now: Double, timeFormat: java.text.DateFormat) {
-    Column(Modifier.fillMaxWidth().height(150.dp).padding(start = 24.dp, end = 24.dp, top = 22.dp)) {
+    Column(Modifier.fillMaxSize().padding(start = 24.dp, end = 24.dp, top = 22.dp)) {
         if (channel == null) return@Column
         Text(listOfNotNull(channel.number?.toString(), channel.name).joinToString("  "),
             color = LumioColors.secondaryText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val programme = cell?.programme
         if (programme == null) {
-            Text(if (cell == null && channel.epg != null) "Loading the guide…" else "No guide information for this channel",
+            if (channel.epg != null && cell == null) {
+                LoadingText("Loading the guide…", Modifier.padding(top = 4.dp), fontSize = 24.sp, spinner = 24.dp)
+                return@Column
+            }
+            val text = if (channel.epg == null) "Your provider gives no guide for this channel"
+                else "No guide information for this channel"
+            Text(text,
                 fontSize = 24.sp, color = LumioColors.secondaryText, modifier = Modifier.padding(top = 4.dp))
             return@Column
         }

@@ -269,6 +269,19 @@ public struct CatalogRepository: Sendable {
     ) throws -> ReplaceStats {
         var stats = ReplaceStats()
         var old = Dictionary(existing.map { ($0[keyPath: key], $0) }, uniquingKeysWith: { a, _ in a })
+        let inserts = incoming.reduce(0) { $0 + (old[$1[keyPath: key]] == nil ? 1 : 0) }
+        try withSearchIndexRebuiltOnce(R.databaseTableName, when: inserts >= bulkInserts, in: db) {
+            try apply(incoming, to: &old, key: key, stats: &stats, in: db)
+        }
+        return stats
+    }
+
+    /// From this many new rows, the search index is rebuilt once instead of row by row.
+    static let bulkInserts = 1_000
+
+    private static func apply<R: PersistableRecord & Hashable, K: Hashable>(
+        _ incoming: [R], to old: inout [K: R], key: KeyPath<R, K>, stats: inout ReplaceStats, in db: Database
+    ) throws {
         for row in incoming {
             let id = row[keyPath: key]
             if let previous = old.removeValue(forKey: id) {
@@ -287,7 +300,23 @@ public struct CatalogRepository: Sendable {
             try row.delete(db)
             stats.deleted += 1
         }
-        return stats
+    }
+
+    /// Runs `work` (inside the caller's transaction) with `table`'s full-text search trigger for
+    /// inserts switched off, then rebuilds the search index in one pass and puts the trigger back.
+    /// The index ends up the same; storing a big provider's 200,000 movies row by row through the
+    /// trigger took minutes on a TV box. Without such a trigger, or below `when`, it just runs `work`.
+    static func withSearchIndexRebuiltOnce(_ table: String, when bulk: Bool, in db: Database,
+                                           _ work: () throws -> Void) throws {
+        let trigger = "__\(table)FTS_ai"
+        guard bulk, let sql = try String.fetchOne(db, sql: "SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?",
+                                                  arguments: [trigger]) else { return try work() }
+        // A failure rolls the whole transaction back, the dropped trigger included.
+        try db.execute(sql: "DROP TRIGGER \(trigger.quotedDatabaseIdentifier)")
+        try work()
+        let index = "\(table)FTS".quotedDatabaseIdentifier
+        try db.execute(sql: "INSERT INTO \(index)(\(index)) VALUES('rebuild')")
+        try db.execute(sql: sql)
     }
 }
 

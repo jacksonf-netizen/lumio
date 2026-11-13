@@ -70,6 +70,13 @@ extension AppDatabase {
             }
             try db.execute(sql: "INSERT INTO providerServer (providerID, position, url) SELECT id, 0, serverURL FROM provider")
         }
+        migrator.registerMigration("v10-programme-source") { db in
+            // Where a programme came from: 0 the provider's own guide (or its short guide), 1 a guide
+            // link the user added (GuideLinkStore). A provider's own import never removes the links' rows.
+            try db.alter(table: "programme") { t in
+                t.add(column: "source", .integer).notNull().defaults(to: 0)
+            }
+        }
         return migrator
     }
 

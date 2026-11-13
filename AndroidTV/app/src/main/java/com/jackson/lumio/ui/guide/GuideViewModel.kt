@@ -1,5 +1,6 @@
 package com.jackson.lumio.ui.guide
 
+import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -34,7 +35,8 @@ enum class GuideScope(val group: String?) {
  * for everything). The highlight's movement rules are in [GuideNavigation].
  */
 @OptIn(FlowPreview::class)
-class GuideViewModel(val scope: GuideScope) : ViewModel() {
+class GuideViewModel(val scope: GuideScope, context: Context) : ViewModel() {
+    private val preferences = context.applicationContext.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
     var groups by mutableStateOf<List<ChannelGroup>>(emptyList())
         private set
     var groupID by mutableStateOf(scope.group ?: "all")
@@ -75,6 +77,8 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
     private var channelJob: Job? = null
     private var digitsJob: Job? = null
     private var visibleRows = 0..0
+    /** The first group has been picked (the one kept from last time, or the fallback). */
+    private var groupChecked = false
     /** Keeps the highlight on the same channel when the list changes. */
     private var cursorChannel: String? = null
 
@@ -82,6 +86,12 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
         reload()
         viewModelScope.launch {
             LumioCore.events.filter { it.type == "live" }.debounce(400).collect { reload() }
+        }
+        viewModelScope.launch {
+            // Favorites or Recently Watched changed: only those two lists need reading again.
+            LumioCore.events.filter { it.type == "library" }.debounce(400).collect {
+                if (groupID == "favorites" || groupID == "recents") reloadChannels()
+            }
         }
         viewModelScope.launch {
             LumioCore.events.filter { it.type == "guide" }.debounce(1000).collect { forgetProgrammes() }
@@ -99,6 +109,7 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
     fun selectGroup(id: String) {
         if (scope != GuideScope.All || id == groupID) return
         groupID = id
+        preferences.edit().putString(KEY_GROUP, id).apply()
         cursorChannel = null
         cursor = cursor.copy(row = 0)
         reloadChannels()
@@ -108,8 +119,17 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
         viewModelScope.launch {
             try {
                 if (scope == GuideScope.All) {
-                    groups = LumioCore.groups()
-                    if (groups.none { it.id == groupID }) groupID = "all"
+                    val all = LumioCore.groups()
+                    // All Channels goes last: with a huge provider it's the slowest group to open.
+                    groups = all.filter { it.id != "all" } + all.filter { it.id == "all" }
+                    if (!groupChecked) {
+                        // First time: the group chosen last time, if it's still there.
+                        groupChecked = true
+                        val saved = preferences.getString(KEY_GROUP, null)
+                        groupID = saved?.takeIf { id -> groups.any { it.id == id } } ?: fallbackGroup()
+                    } else if (groups.none { it.id == groupID }) {
+                        groupID = fallbackGroup()
+                    }
                 }
                 reloadChannels()
             } catch (error: CoreException) {
@@ -117,6 +137,13 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
                 loaded = true
             }
         }
+    }
+
+    /** Favorites if it has channels, else the first ordinary category, else All Channels. */
+    private suspend fun fallbackGroup(): String {
+        val favorites = runCatching { LumioCore.channels("favorites") }.getOrNull().orEmpty()
+        if (favorites.isNotEmpty()) return "favorites"
+        return groups.firstOrNull { it.kind == "category" }?.id ?: "all"
     }
 
     private fun reloadChannels() {
@@ -240,7 +267,17 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
 
     fun right() = update(GuideNavigation.right(cursor, rowProgrammes(cursor.row), window, maxTime))
 
-    fun left() = update(GuideNavigation.left(cursor, rowProgrammes(cursor.row), window, minTime))
+    /**
+     * Steps the highlight back. False when Left shouldn't be used up by the grid: nothing earlier to
+     * show, or no catch-up and already on now, so the remote goes on to the sidebar.
+     */
+    fun left(): Boolean {
+        val programmes = rowProgrammes(cursor.row)
+        if (GuideNavigation.leftLeavesGrid(cursor, programmes, now, selectedChannel?.catchup == true)) return false
+        val next = GuideNavigation.left(cursor, programmes, window, minTime) ?: return false
+        update(next)
+        return true
+    }
 
     fun move(by: Int) = update(GuideNavigation.move(cursor, by, channels.size))
 
@@ -281,7 +318,11 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
 
     // MARK: Favorites and Recents
 
-    fun toggleFavorite(channel: Channel) = library { LumioCore.toggleFavorite(channel.id) }
+    fun toggleFavorite(channel: Channel) = library {
+        LumioCore.toggleFavorite(channel.id)
+        // Other groups don't re-read on a library event, so the star changes here.
+        channels = channels.map { if (it.id == channel.id) it.copy(favorite = !it.favorite) else it }
+    }
 
     /** In Favorites: moves the channel to [index] (the highlight goes with it). */
     fun moveFavorite(channel: Channel, index: Int) = library {
@@ -304,6 +345,8 @@ class GuideViewModel(val scope: GuideScope) : ViewModel() {
     }
 
     companion object {
+        private const val PREFERENCES = "guide"
+        private const val KEY_GROUP = "group"
         const val BLOCK = 4 * 3600.0
         /** Programme blocks kept (each a few kilobytes); the least recently shown go first. */
         const val MAX_BLOCKS = 600

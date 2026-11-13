@@ -58,12 +58,16 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.R
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.multiview.MultiviewScreen
 import com.jackson.lumio.ui.multiview.MultiviewViewModel
+import com.jackson.lumio.ui.player.GuidePreview
 import com.jackson.lumio.ui.player.PlayerScreen
+import com.jackson.lumio.ui.guide.PreviewWidth
 import com.jackson.lumio.ui.player.PlayerViewModel
+import com.jackson.lumio.ui.providers.ProvidersState
 import com.jackson.lumio.ui.providers.ProvidersViewModel
 import com.jackson.lumio.ui.search.SearchScreen
 import com.jackson.lumio.ui.settings.SettingsScreen
@@ -140,11 +144,22 @@ fun LumioApp() {
     var railFocused by remember { mutableStateOf(false) }
     // Screens return the highlight to where it was when the player or multiview closes.
     val overlay = player.showing || multiview.showing
+    // The guide's preview: only in Live TV, and it stops when you leave it or switch it off.
+    val previewOn = shown == Section.Live && GuidePreview.enabled
+    LaunchedEffect(previewOn) {
+        player.previewAllowed = previewOn
+        if (!previewOn) player.stopPreview()
+    }
     BackHandler(enabled = !railFocused && !overlay) { runCatching { railFocus.requestFocus() } }
-    // At launch the remote starts on the section that's showing, not the rail's first icon.
+    // At launch the remote starts in the guide when Live TV is showing: the guide takes it as soon
+    // as its channels are there (see autoFocus), and the rail stays folded. Until then, and for any
+    // other section, it starts on the rail's item for the section that's showing, not its first icon.
+    // Any key press ends the wait, so the guide never takes the remote from someone already moving.
+    var launchFocus by remember { mutableStateOf(true) }
+    LaunchedEffect(shown) { if (shown != Section.Live) launchFocus = false }
     LaunchedEffect(Unit) {
         delay(50)
-        runCatching { railFocus.requestFocus() }
+        if (launchFocus || shown != Section.Live) runCatching { railFocus.requestFocus() }
     }
     // Moving along the rail only moves the highlight. OK (or Right) on a section opens it and goes
     // in: to where the remote last was there, else its first row, rather than whatever happens to
@@ -159,17 +174,30 @@ fun LumioApp() {
 
     // A Surface gives everything inside the theme's text colour.
     Surface(colors = SurfaceDefaults.colors(containerColor = LumioColors.background, contentColor = LumioColors.text)) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().onPreviewKeyEvent { event ->
+            if (event.type == KeyEventType.KeyDown) launchFocus = false
+            false
+        }) {
             Box(Modifier.fillMaxSize().padding(start = RailFolded).focusRequester(contentFocus).focusRestorer().focusGroup()) {
                 val play = { channel: String, group: String -> player.watch(channel, group) }
+                // The guide knows the channel's name, so the player can say "Opening <name>…" at once.
+                val playNamed = { channel: String, name: String, group: String -> player.watch(channel, group, name) }
                 val playing = player.state?.channel?.id
                 val playVOD = { k: String, provider: String, id: String, position: Double?, title: String, subtitle: String? ->
                     player.playVOD(k, provider, id, position, title, subtitle)
                 }
                 when (shown) {
                     Section.Search -> SearchScreen(onWatch = play, onPlay = playVOD, playerShowing = overlay)
-                    Section.Live -> GuideScreen(GuideScope.All, play, overlay, playing)
-                    Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay)
+                    Section.Live -> GuideScreen(
+                        GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state),
+                        railFocus = railFocus, autoFocus = launchFocus, onAutoFocused = { launchFocus = false },
+                        onPreview = if (previewOn) ({ channel, group -> player.preview(channel, group) }) else null,
+                        previewChannel = player.previewChannel.takeIf { player.previewing },
+                        // `state` stays null for a moment after a preview starts, until the core answers.
+                        previewLoading = player.previewing && (player.opening != null || player.state == null ||
+                            player.state?.phase in setOf("connecting", "buffering", "reconnecting", "waitingForNetwork")),
+                    )
+                    Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay, refreshing = refreshName(state))
                     Section.Settings -> SettingsScreen(providers, updates, settings, onWatch = {
                         section = Section.Live
                         enter++
@@ -189,6 +217,14 @@ fun LumioApp() {
                     enter++
                 },
             )
+            // Progress stays in view on every screen except the full-screen player and multiview.
+            if (!overlay && state.syncSummary != null) {
+                SyncPill(
+                    listOfNotNull(state.syncSummary, state.syncing.values.singleOrNull()).joinToString(" · "),
+                    // Left of the guide's preview picture when there is one.
+                    Modifier.align(Alignment.TopEnd).padding(top = 20.dp, end = if (previewOn) 32.dp + PreviewWidth else 32.dp),
+                )
+            }
         }
         if (player.showing) {
             PlayerScreen(player, onMultiview = if (multiview.available) ({
@@ -208,6 +244,33 @@ fun LumioApp() {
                 onClose = { multiview.stop() },
             )
         }
+    }
+}
+
+/** "Updating channels… from TREX" while one provider refreshes (its step and its name), or null. */
+private fun refreshText(state: ProvidersState): String? {
+    val (id, label) = state.syncing.entries.firstOrNull() ?: return null
+    val name = state.providers.firstOrNull { it.id == id }?.name
+    return if (name == null) label else "$label from $name"
+}
+
+/** The name of the provider refreshing, "2 providers" for several, or null when none is. */
+private fun refreshName(state: ProvidersState): String? = when (state.syncing.size) {
+    0 -> null
+    1 -> state.providers.firstOrNull { it.id == state.syncing.keys.first() }?.name ?: "your provider"
+    else -> "${state.syncing.size} providers"
+}
+
+/** A small pill in the top-right corner: a spinner and what's updating. Not focusable. */
+@Composable
+private fun SyncPill(text: String, modifier: Modifier) {
+    Row(
+        modifier.background(Color(0xCC000000), RoundedCornerShape(20.dp)).padding(horizontal = 14.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spinner(16.dp)
+        Text(text, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(start = 10.dp))
     }
 }
 
