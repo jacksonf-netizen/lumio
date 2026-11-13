@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,6 +61,7 @@ fun ProvidersPane(model: ProvidersViewModel, focus: FocusRequester, pick: (Picke
         ProviderScreen.List -> ProviderList(model, focus, pick)
         ProviderScreen.Form -> model.form?.let { ProviderEditor(model, it, focus, pick) }
         is ProviderScreen.Setup -> ProviderSetup(model, screen.providerId, focus, onWatch)
+        is ProviderScreen.GuideLinks -> model.guide?.let { GuideLinksPage(model, it, focus, pick) }
     }
 }
 
@@ -135,6 +137,7 @@ private fun options(
     val actions = buildList {
         add(MenuAction("Refresh now") { model.refresh(provider.id) })
         add(MenuAction("Edit") { model.startEditing(provider) })
+        add(MenuAction("Guide links: ${if (provider.guideLinks == 0) "None" else plural(provider.guideLinks, "link")}") { model.openGuideLinks(provider.id) })
         add(MenuAction(if (provider.enabled) "Switch off" else "Switch on") { model.setEnabled(provider.id, !provider.enabled) })
         if (index > 0) add(MenuAction("Move up") { model.move(provider.id, -1) })
         if (index in 0 until all.lastIndex) add(MenuAction("Move down") { model.move(provider.id, 1) })
@@ -158,6 +161,7 @@ private fun details(provider: ProviderInfo): String = buildList {
     }
     provider.problem?.let { add(it) }
     provider.guideProblem?.let { add("Guide: $it Channels and films play without one.") }
+    add("Guide links are optional: an extra guide (XMLTV) address for channels your provider has no guide for.")
 }.joinToString("\n")
 
 private fun date(seconds: Double): String = DateFormat.getDateInstance(DateFormat.MEDIUM).format(Date((seconds * 1000).toLong()))
@@ -291,6 +295,56 @@ private fun Field(
     onChange: (String) -> Unit,
 ) = Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth()) {
     RemoteTextField(label, value, secret = secret, keyboard = keyboard, modifier = modifier.fillMaxWidth(), onChange = onChange)
+}
+
+// MARK: Guide links
+
+/**
+ * A provider's extra guide links: each can be removed, and a new one typed or pasted. Back goes to
+ * the provider list. What's typed stays in the view model, so Back and returning lose nothing.
+ */
+@Composable
+private fun GuideLinksPage(model: ProvidersViewModel, form: GuideLinksForm, focus: FocusRequester, pick: (Picker) -> Unit) {
+    val first = remember { FocusRequester() }
+    BackHandler(onBack = model::closeGuideLinks)
+    TakeFocus(model, first)
+    val name = model.state.providers.firstOrNull { it.id == form.providerId }?.name
+    val links = form.links?.links.orEmpty()
+
+    SettingsPane(if (name != null) "Guide links: $name" else "Guide links", focus) {
+        note("Optional. An extra guide (XMLTV) address for channels your provider has no guide for.")
+        if (links.isEmpty()) {
+            note(if (form.links == null) "Loading…" else "No guide links yet.")
+        }
+        itemsIndexed(links) { index, link ->
+            SettingRow(link, "Remove", valueColor = LumioColors.secondaryText) {
+                pick(Picker("Remove this guide link?", listOf(
+                    MenuAction("Remove this link") { model.removeGuideLink(index) },
+                    MenuAction("Cancel") {},
+                ), detail = link))
+            }
+        }
+        item {
+            Box(Modifier.padding(start = 16.dp, top = 16.dp).fillMaxWidth()) {
+                RemoteTextField(
+                    "Add a guide link", form.text, placeholder = "http://…/guide.xml.gz",
+                    keyboard = KeyboardType.Uri, modifier = Modifier.fillMaxWidth().focusRequester(first),
+                    onEditingDone = { model.addGuideLink() },
+                ) {
+                    form.text = it
+                    form.message = null
+                }
+            }
+        }
+        form.message?.let { message ->
+            item { Text(message, color = LumioColors.error, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp)) }
+        }
+        if (form.busy) item { Text("Adding…", color = LumioColors.secondaryText, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp)) }
+        form.links?.problem?.let { problem ->
+            item { Text("Last update: $problem", color = LumioColors.secondaryText, fontSize = 15.sp, modifier = Modifier.padding(start = 16.dp, top = 10.dp)) }
+        }
+        note("Lumio matches its channels to yours by guide ID or name and region, and uses them only where your provider has no guide. They update with the guide; the first time can take a minute or two.")
+    }
 }
 
 // MARK: Setup

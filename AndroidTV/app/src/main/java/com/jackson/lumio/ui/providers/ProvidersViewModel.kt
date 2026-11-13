@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.jackson.lumio.core.CoreException
+import com.jackson.lumio.core.GuideLinks
 import com.jackson.lumio.core.LumioCore
 import com.jackson.lumio.core.ProviderEditor
 import com.jackson.lumio.core.ParsedLinks
@@ -44,6 +45,17 @@ sealed interface ProviderScreen {
     data object Form : ProviderScreen
     /** A new provider loading for the first time, step by step. */
     data class Setup(val providerId: String) : ProviderScreen
+    /** A provider's extra guide links. */
+    data class GuideLinks(val providerId: String) : ProviderScreen
+}
+
+/** The guide links page: what's saved, and the address being typed (kept while the page is away). */
+class GuideLinksForm(val providerId: String) {
+    var links by mutableStateOf<GuideLinks?>(null)
+    var text by mutableStateOf("")
+    /** Why the last Add didn't work. */
+    var message by mutableStateOf<String?>(null)
+    var busy by mutableStateOf(false)
 }
 
 /**
@@ -87,6 +99,9 @@ class ProvidersViewModel : ViewModel() {
      * to Settings), so browsing Settings' pages never has the form snatch the remote.
      */
     var takeFocus by mutableStateOf(false)
+    /** The guide links page's contents. */
+    var guide by mutableStateOf<GuideLinksForm?>(null)
+        private set
     /** The provider whose row the list highlights when it comes back (the one edited or added). */
     var returnTo by mutableStateOf<String?>(null)
         private set
@@ -107,6 +122,8 @@ class ProvidersViewModel : ViewModel() {
                         // setup screen never shows the outcome with the figures from before.
                         load()
                         state = state.copy(finished = state.finished + id)
+                        // The guide links page shows the guide's last problem.
+                        if (guide?.providerId == id) readGuideLinks()
                     } else {
                         val stepChanged = event.step != state.steps[id]
                         event.label?.let { syncing[id] = it }
@@ -197,6 +214,61 @@ class ProvidersViewModel : ViewModel() {
                 if (current.message == null) discardForm()
             }
             current.saving = false
+        }
+    }
+
+    // MARK: Guide links
+
+    /** Opens the guide links page for [providerId]; what was typed for another provider is dropped. */
+    fun openGuideLinks(providerId: String) {
+        if (guide?.providerId != providerId) guide = GuideLinksForm(providerId)
+        returnTo = providerId
+        show(ProviderScreen.GuideLinks(providerId))
+        readGuideLinks()
+    }
+
+    /** Back from the page: the list highlights the provider again. */
+    fun closeGuideLinks() {
+        returnTo = guide?.providerId
+        show(ProviderScreen.List)
+    }
+
+    private fun readGuideLinks() {
+        val current = guide ?: return
+        viewModelScope.launch {
+            runCatching { LumioCore.guideLinks(current.providerId) }.getOrNull()?.let { current.links = it }
+        }
+    }
+
+    /** Adds what's typed; the core refreshes the guide with it. A message says why it wasn't a link. */
+    fun addGuideLink() {
+        val current = guide ?: return
+        val text = current.text.trim()
+        if (text.isEmpty() || current.busy) return
+        current.busy = true
+        current.message = null
+        viewModelScope.launch {
+            try {
+                current.links = LumioCore.addGuideLink(current.providerId, text)
+                current.text = ""
+            } catch (error: CoreException) {
+                current.message = error.message ?: "Something went wrong."
+            }
+            current.busy = false
+            reload()
+        }
+    }
+
+    fun removeGuideLink(index: Int) {
+        val current = guide ?: return
+        viewModelScope.launch {
+            try {
+                current.links = LumioCore.removeGuideLink(current.providerId, index)
+                current.message = null
+            } catch (error: CoreException) {
+                current.message = error.message ?: "Something went wrong."
+            }
+            reload()
         }
     }
 
