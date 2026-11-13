@@ -21,6 +21,8 @@ offers the update. The list below it appears on the release page.
 - Android TV: Live TV opens in the guide, on the group you last used. Left on what's on now goes
   to the sidebar instead of scrolling back in time. A channel your provider gives no guide for
   says so.
+- Android TV: a loading wheel shows whenever something is loading: opening a channel, the
+  preview, multiview tiles, lists and pages. A stall mid-programme now says "Buffering…".
 - Android TV: channels that the provider's guide file leaves out get their programmes by asking
   the provider, channel by channel, for those on screen.
 - Android TV: Live TV shows a preview. The channel the highlight rests on plays in a small

@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
+import com.jackson.lumio.ui.common.LoadingText
 import com.jackson.lumio.core.Channel
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
@@ -53,7 +54,7 @@ fun ChannelListPanel(list: PlayerViewModel.ChannelList, playing: String?, onPick
                 modifier = Modifier.padding(start = 12.dp, bottom = 12.dp))
             // The panel opens at once; a big group's channels are read meanwhile.
             if (list.loading) {
-                Text("Loading channels…", color = LumioColors.secondaryText, fontSize = 18.sp, modifier = Modifier.padding(start = 12.dp, top = 8.dp))
+                LoadingText("Loading channels…", Modifier.padding(start = 12.dp, top = 8.dp))
             } else {
                 ChannelRows(list, playing, onPick, onScroll)
             }

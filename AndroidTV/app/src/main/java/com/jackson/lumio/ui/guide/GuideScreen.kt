@@ -58,6 +58,8 @@ import com.jackson.lumio.core.Channel
 import com.jackson.lumio.core.Programme
 import com.jackson.lumio.images.RemoteImage
 import com.jackson.lumio.ui.LumioColors
+import com.jackson.lumio.ui.common.LoadingText
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.common.MenuAction
 import com.jackson.lumio.ui.common.OptionsPanel
 import java.util.Calendar
@@ -115,6 +117,8 @@ fun GuideScreen(
      * resting on a channel for [PreviewDelayMillis] previews it.
      */
     onPreview: ((String, String) -> Unit)? = null,
+    /** The preview picture is still opening or buffering: shows a wheel over it. */
+    previewLoading: Boolean = false,
 ) {
     val context = LocalContext.current
     val model: GuideViewModel = viewModel(key = "guide-${scope.name}") { GuideViewModel(scope, context) }
@@ -224,7 +228,7 @@ fun GuideScreen(
                 Row {
                     Box(Modifier.weight(1f)) { Details(model.selectedChannel, model.selectedCell, model.now, timeFormat) }
                     // The player itself, small; while it's full screen, that screen shows the picture.
-                    if (onPreview != null && !playerShowing) PreviewWindow()
+                    if (onPreview != null && !playerShowing) PreviewWindow(previewLoading)
                 }
             }
             Toolbar(model, showHints = !empty, onPickGroup = {
@@ -319,7 +323,7 @@ private fun emptyText(scope: GuideScope) = when (scope) {
 @Composable
 private fun Loading() {
     Column {
-        Message("Loading channels…", LumioColors.secondaryText)
+        Message("Loading channels…", LumioColors.secondaryText, loading = true)
         Column(Modifier.padding(horizontal = 24.dp)) {
             repeat(7) {
                 Box(Modifier.fillMaxWidth().height(RowHeight).padding(vertical = 2.dp).background(LumioColors.surface, RoundedCornerShape(4.dp)))
@@ -329,8 +333,9 @@ private fun Loading() {
 }
 
 @Composable
-private fun Message(text: String, color: Color) {
-    Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(24.dp))
+private fun Message(text: String, color: Color, loading: Boolean = false) {
+    if (loading) LoadingText(text, Modifier.padding(24.dp), color)
+    else Text(text, color = color, fontSize = 18.sp, modifier = Modifier.padding(24.dp))
 }
 
 /** The group picker (Guide) or the list's name (Favorites, Recents). */
@@ -355,7 +360,7 @@ private fun Toolbar(model: GuideViewModel, showHints: Boolean, onPickGroup: () -
 
 /** The preview: the main player's picture, 16:9 at the top right. */
 @Composable
-private fun PreviewWindow() {
+private fun PreviewWindow(loading: Boolean) {
     Box(
         Modifier
             .padding(top = 8.dp, end = 24.dp, bottom = 8.dp)
@@ -365,6 +370,7 @@ private fun PreviewWindow() {
             .background(androidx.compose.ui.graphics.Color.Black),
     ) {
         MainVideo(Modifier.fillMaxSize())
+        if (loading) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner(32.dp) }
     }
 }
 
@@ -377,11 +383,12 @@ private fun Details(channel: Channel?, cell: GuideCell?, now: Double, timeFormat
             color = LumioColors.secondaryText, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         val programme = cell?.programme
         if (programme == null) {
-            val text = when {
-                channel.epg == null -> "Your provider gives no guide for this channel"
-                cell == null -> "Loading the guide…"
-                else -> "No guide information for this channel"
+            if (channel.epg != null && cell == null) {
+                LoadingText("Loading the guide…", Modifier.padding(top = 4.dp), fontSize = 24.sp, spinner = 24.dp)
+                return@Column
             }
+            val text = if (channel.epg == null) "Your provider gives no guide for this channel"
+                else "No guide information for this channel"
             Text(text,
                 fontSize = 24.sp, color = LumioColors.secondaryText, modifier = Modifier.padding(top = 4.dp))
             return@Column

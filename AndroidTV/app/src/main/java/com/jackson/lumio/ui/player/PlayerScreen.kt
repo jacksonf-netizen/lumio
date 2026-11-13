@@ -52,6 +52,7 @@ import com.jackson.lumio.player.PlayerEngines
 import com.jackson.lumio.ui.LumioColors
 import com.jackson.lumio.ui.common.MenuAction
 import com.jackson.lumio.ui.common.OptionsPanel
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.guide.PressTracker
 import com.jackson.lumio.ui.vod.clock
 import kotlinx.coroutines.delay
@@ -174,7 +175,8 @@ private fun Status(model: PlayerViewModel) {
     // "Opening <channel>…" from the moment OK was pressed, until the core has answered.
     val text = model.opening ?: when (state?.phase) {
         null -> return
-        "connecting", "buffering" -> "Opening…"
+        "connecting" -> "Opening…"
+        "buffering" -> "Buffering…"
         "reconnecting" -> "Reconnecting…"
         "waitingForNetwork" -> "Waiting for the network…"
         "suspended" -> "Paused while the TV sleeps"
@@ -182,10 +184,21 @@ private fun Status(model: PlayerViewModel) {
         "failed" -> null
         else -> return
     }
+    // A wheel whenever we're waiting on something; the sleep and "another player" notes stay text only.
+    val waiting = model.opening != null ||
+        state?.phase in setOf("connecting", "buffering", "reconnecting", "waitingForNetwork")
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         if (text != null) {
-            Text(text, color = Color.White, fontSize = 22.sp,
-                modifier = Modifier.background(Color(0x99000000), RoundedCornerShape(10.dp)).padding(horizontal = 22.dp, vertical = 12.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.background(Color(0x99000000), RoundedCornerShape(10.dp)).padding(horizontal = 26.dp, vertical = 18.dp),
+            ) {
+                if (waiting) {
+                    Spinner(56.dp)
+                    Spacer(Modifier.height(12.dp))
+                }
+                Text(text, color = Color.White, fontSize = 22.sp)
+            }
         } else {
             val retry = remember { FocusRequester() }
             LaunchedEffect(Unit) { runCatching { retry.requestFocus() } }

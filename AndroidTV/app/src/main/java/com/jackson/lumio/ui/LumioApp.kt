@@ -1,13 +1,8 @@
 package com.jackson.lumio.ui
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusGroup
@@ -42,12 +37,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -56,7 +46,6 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -69,6 +58,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
 import androidx.tv.material3.Text
 import com.jackson.lumio.R
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.guide.GuideScope
 import com.jackson.lumio.ui.guide.GuideScreen
 import com.jackson.lumio.ui.multiview.MultiviewScreen
@@ -202,6 +192,9 @@ fun LumioApp() {
                         GuideScope.All, playNamed, overlay, playing, refreshText = refreshText(state),
                         railFocus = railFocus, autoFocus = launchFocus, onAutoFocused = { launchFocus = false },
                         onPreview = if (previewOn) ({ channel, group -> player.preview(channel, group) }) else null,
+                        // `state` stays null for a moment after a preview starts, until the core answers.
+                        previewLoading = player.previewing && (player.opening != null || player.state == null ||
+                            player.state?.phase in setOf("connecting", "buffering", "reconnecting", "waitingForNetwork")),
                     )
                     Section.OnDemand -> OnDemandScreen(vodKinds, onPlay = playVOD, playerShowing = overlay, refreshing = refreshName(state))
                     Section.Settings -> SettingsScreen(providers, updates, settings, onWatch = {
@@ -277,24 +270,6 @@ private fun SyncPill(text: String, modifier: Modifier) {
         Spinner(16.dp)
         Text(text, color = Color.White, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(start = 10.dp))
-    }
-}
-
-/** A turning arc, to show something is loading. */
-@Composable
-internal fun Spinner(diameter: Dp = 20.dp, color: Color = LumioColors.accent) {
-    val turn by rememberInfiniteTransition(label = "spinner")
-        .animateFloat(0f, 360f, infiniteRepeatable(tween(1000, easing = LinearEasing)), label = "turn")
-    Canvas(Modifier.size(diameter)) {
-        val width = diameter.toPx() / 8
-        rotate(turn) {
-            drawArc(
-                color = color, startAngle = 0f, sweepAngle = 270f, useCenter = false,
-                topLeft = Offset(width / 2, width / 2),
-                size = Size(size.width - width, size.height - width),
-                style = Stroke(width = width, cap = StrokeCap.Round),
-            )
-        }
     }
 }
 

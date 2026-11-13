@@ -1,13 +1,6 @@
 package com.jackson.lumio.ui.providers
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -33,7 +25,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -44,6 +35,7 @@ import com.jackson.lumio.ui.LumioColors
 import com.jackson.lumio.ui.common.ButtonStyle
 import com.jackson.lumio.ui.common.LumioButton
 import com.jackson.lumio.ui.common.MenuAction
+import com.jackson.lumio.ui.common.Spinner
 import com.jackson.lumio.ui.common.RemoteTextField
 import com.jackson.lumio.ui.settings.Picker
 import com.jackson.lumio.ui.settings.SettingRow
@@ -435,17 +427,5 @@ private fun StepRow(step: SetupStep) {
             }
             step.extra?.let { Text(it, fontSize = 13.sp, color = LumioColors.secondaryText, maxLines = 3) }
         }
-    }
-}
-
-/** A small turning arc: work in progress. */
-@Composable
-private fun Spinner() {
-    val turn by rememberInfiniteTransition(label = "spinner").animateFloat(
-        0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart), label = "turn",
-    )
-    val color = LumioColors.accent
-    Canvas(Modifier.size(20.dp)) {
-        drawArc(color, startAngle = turn, sweepAngle = 270f, useCenter = false, style = Stroke(width = 2.5.dp.toPx()))
     }
 }
